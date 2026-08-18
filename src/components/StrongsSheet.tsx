@@ -1,0 +1,375 @@
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useAppStore } from "../store/app";
+import { api, type StrongsEntry } from "../lib/tauri";
+
+function useDraggableHeight(initial: number, onCommit: (h: number) => void) {
+  const [height, setHeight] = useState(initial);
+  const dragging = useRef(false);
+
+  useEffect(() => { setHeight(initial); }, [initial]);
+
+  function onPointerDown(e: React.PointerEvent) {
+    e.preventDefault();
+    dragging.current = true;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!dragging.current) return;
+    const next = Math.min(
+      Math.max(180, window.innerHeight - e.clientY),
+      Math.round(window.innerHeight * 0.9),
+    );
+    setHeight(next);
+  }
+
+  function onPointerUp() {
+    if (!dragging.current) return;
+    dragging.current = false;
+    onCommit(height);
+  }
+
+  return { height, onPointerDown, onPointerMove, onPointerUp };
+}
+
+// Regex for numeric cross-references in lexicon text
+const REF_RE = /\b([HG]?\d{1,5}[a-z]?)\b/g;
+const FROM_CONTEXT = /(?:from|same\s+as|see\s+\w+\s+for|akin\s+to|derivative\s+of)\s+/gi;
+
+function TextWithLinks({
+  text,
+  prefix,
+  onLookup,
+}: {
+  text: string;
+  prefix: "H" | "G";
+  onLookup: (num: string) => void;
+}) {
+  // Split on patterns like "from 3667", "from H3667", "see HEBREW for 3667"
+  const parts = text.split(
+    /((?:(?:from|same\s+as|see\s+\w+\s+for|akin\s+to|derivative\s+of)\s+)[HG]?\d+[a-z]?)/gi
+  );
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        // Does this part contain a reference-like pattern?
+        const numMatch = part.match(/([HG]?\d+[a-z]?)$/i);
+        if (numMatch && FROM_CONTEXT.test(part)) {
+          FROM_CONTEXT.lastIndex = 0; // reset stateful regex
+          const rawNum = numMatch[1];
+          const isAlreadyPrefixed = /^[HG]/i.test(rawNum);
+          const fullNum = isAlreadyPrefixed
+            ? rawNum.toUpperCase()
+            : prefix + rawNum;
+          return (
+            <span key={i}>
+              {part.replace(/[HG]?\d+[a-z]?$/i, "")}
+              <button
+                className="underline decoration-dotted text-primary hover:text-primary/80 font-medium transition-colors"
+                onClick={() => onLookup(fullNum)}
+              >
+                {rawNum}
+              </button>
+            </span>
+          );
+        }
+        FROM_CONTEXT.lastIndex = 0;
+        // Also linkify bare "H1234" / "G1234" patterns in remaining text
+        const pieces = part.split(REF_RE);
+        if (pieces.length === 1) return <span key={i}>{part}</span>;
+        return (
+          <span key={i}>
+            {pieces.map((piece, j) => {
+              if (j % 2 === 1) {
+                // Matched group
+                const isAlreadyPrefixed = /^[HG]/i.test(piece);
+                const fullNum = isAlreadyPrefixed
+                  ? piece.toUpperCase()
+                  : prefix + piece;
+                return (
+                  <button
+                    key={j}
+                    className="underline decoration-dotted text-primary hover:text-primary/80 font-medium transition-colors"
+                    onClick={() => onLookup(fullNum)}
+                  >
+                    {piece}
+                  </button>
+                );
+              }
+              return <span key={j}>{piece}</span>;
+            })}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+const FONT_FAMILY_CSS: Record<string, string> = {
+  system: `-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`,
+  serif:  `Georgia, "Palatino Linotype", Palatino, serif`,
+  times:  `"Times New Roman", Times, serif`,
+  mono:   `"Courier New", Courier, monospace`,
+};
+
+export default function StrongsSheet() {
+  const { selectedStrongs, setSelectedStrongs, primaryModule, readingFontSize, isFullscreen, displayPrefs, setDisplayPrefs } = useAppStore();
+  const fontFamily = FONT_FAMILY_CSS[displayPrefs.fontFamily] ?? FONT_FAMILY_CSS.system;
+  const [entry, setEntry] = useState<StrongsEntry | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<string[]>([]);
+  const [visible, setVisible] = useState(false);
+  const rafRef = useRef<number>(0);
+
+  const drag = useDraggableHeight(
+    displayPrefs.strongsSheetHeight,
+    (h) => setDisplayPrefs({ strongsSheetHeight: h }),
+  );
+
+  const isOpen = selectedStrongs !== null;
+  const prefix: "H" | "G" = selectedStrongs?.startsWith("H") ? "H" : "G";
+
+  // Slide-up animation: set visible one frame after mount
+  useEffect(() => {
+    if (isOpen) {
+      rafRef.current = requestAnimationFrame(() => setVisible(true));
+    } else {
+      setVisible(false);
+    }
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [isOpen]);
+
+  const lookup = useCallback(
+    (num: string) => {
+      setHistory((h) => [num, ...h.filter((x) => x !== num)]);
+      setSelectedStrongs(num);
+    },
+    [setSelectedStrongs]
+  );
+
+  useEffect(() => {
+    if (!selectedStrongs || !primaryModule) return;
+    setLoading(true);
+    setError(null);
+    setEntry(null);
+    const lexModule = selectedStrongs.startsWith("G")
+      ? "StrongsGreek"
+      : "StrongsHebrew";
+    api
+      .getStrongsEntry(lexModule, selectedStrongs, primaryModule)
+      .then(setEntry)
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, [selectedStrongs, primaryModule]);
+
+  // Escape key closes sheet
+  useEffect(() => {
+    if (!isOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setSelectedStrongs(null);
+      }
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [isOpen, setSelectedStrongs]);
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
+        onClick={() => setSelectedStrongs(null)}
+      />
+
+      {/* Sheet */}
+      <div
+        className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full rounded-t-2xl shadow-2xl bg-surface border border-outline-variant flex flex-col transition-all duration-300 ease-out ${
+          visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
+        }`}
+        style={{ maxWidth: isFullscreen ? "90%" : "56rem", height: drag.height }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Drag-to-resize strip */}
+        <div
+          className="flex justify-center pt-2 pb-1 shrink-0 cursor-ns-resize select-none group"
+          onPointerDown={drag.onPointerDown}
+          onPointerMove={drag.onPointerMove}
+          onPointerUp={drag.onPointerUp}
+          title="Drag to resize"
+        >
+          <div className="w-10 h-1 rounded-full bg-outline-variant group-hover:bg-primary transition-colors" />
+        </div>
+
+        {/* Header */}
+        <div className="px-6 pt-2 pb-4 border-b border-outline-variant shrink-0">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              {loading ? (
+                <div className="h-7 w-32 bg-surface-container-low rounded animate-pulse" />
+              ) : entry ? (
+                <div>
+                  <div className="flex items-baseline gap-3 flex-wrap mb-1.5">
+                    <span className="font-body-reading text-[28px] font-semibold text-primary leading-tight">
+                      {entry.lemma}
+                    </span>
+                    {entry.transliteration && (
+                      <span className="font-metadata-mono text-[14px] text-on-surface-variant">
+                        {entry.transliteration}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant font-metadata-mono text-[11px] tracking-wide">
+                      Strong's {entry.number}
+                    </span>
+                    {entry.part_of_speech && (
+                      <span className="font-body-ui text-[12px] text-on-surface-variant italic">
+                        {entry.part_of_speech}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <span className="font-metadata-mono text-[13px] text-on-surface-variant">
+                  {selectedStrongs}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Back in lookup history */}
+              {history.length > 0 && (
+                <button
+                  className="p-1.5 rounded text-secondary hover:bg-surface-container-low transition-colors"
+                  title="Back to previous word"
+                  onClick={() => {
+                    const [, ...rest] = history;
+                    setHistory(rest);
+                    setSelectedStrongs(rest[0] ?? null);
+                  }}
+                >
+                  <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                </button>
+              )}
+              <button
+                className="p-1.5 rounded text-secondary hover:bg-surface-container-low transition-colors"
+                onClick={() => setSelectedStrongs(null)}
+                title="Close (Esc)"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
+          {loading && (
+            <div className="flex items-center justify-center h-32">
+              <span className="font-body-ui text-body-ui text-on-surface-variant">
+                Loading…
+              </span>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-6">
+              {error.includes("Module not found") || error.includes("not found") ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
+                  <span className="material-symbols-outlined text-[40px] text-on-surface-variant">
+                    menu_book
+                  </span>
+                  <p className="font-body-ui text-[14px] text-on-surface-variant">
+                    {selectedStrongs?.startsWith("G")
+                      ? "Strong's Greek Dictionary"
+                      : "Strong's Hebrew Dictionary"}{" "}
+                    not installed.
+                  </p>
+                </div>
+              ) : (
+                <p className="font-body-ui text-body-ui text-error">{error}</p>
+              )}
+            </div>
+          )}
+
+          {!loading && !error && entry && (
+            <div className="px-6 py-5 grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-6">
+              {/* Left: Definition + Full entry */}
+              <div className="space-y-5">
+                <section>
+                  <p className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-2">
+                    Definition
+                  </p>
+                  <p className="font-body-ui leading-relaxed text-on-surface" style={{ fontSize: `${readingFontSize - 1}px`, fontFamily }}>
+                    <TextWithLinks
+                      text={entry.short_def}
+                      prefix={prefix}
+                      onLookup={lookup}
+                    />
+                  </p>
+                </section>
+
+                {entry.long_def && (
+                  <section>
+                    <p className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-2">
+                      Lexicon Entry
+                    </p>
+                    <p className="font-body-ui leading-relaxed text-on-surface-variant whitespace-pre-wrap" style={{ fontSize: `${readingFontSize - 2}px`, fontFamily }}>
+                      <TextWithLinks
+                        text={entry.long_def}
+                        prefix={prefix}
+                        onLookup={lookup}
+                      />
+                    </p>
+                  </section>
+                )}
+              </div>
+
+              {/* Right: Usage */}
+              <div>
+                <p className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-3">
+                  {entry.usage_count > 0
+                    ? `Occurs ${entry.usage_count}× in the Bible`
+                    : "Usage"}
+                </p>
+
+                {entry.usage_count > 0 ? (
+                  <>
+                    <div className="space-y-0.5">
+                      {entry.usage_by_book.map((u) => (
+                        <div
+                          key={u.book}
+                          className="flex items-center justify-between py-1 px-1.5 rounded hover:bg-surface-container-low transition-colors"
+                        >
+                          <span className="font-body-ui text-[13px] text-on-surface">
+                            {u.book}
+                          </span>
+                          <span className="font-metadata-mono text-[11px] text-on-surface-variant tabular-nums">
+                            {u.count}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <button className="mt-3 w-full py-1.5 border border-outline-variant text-on-surface font-body-ui text-[12px] rounded hover:bg-surface-container-low transition-colors">
+                      Search all occurrences
+                    </button>
+                  </>
+                ) : (
+                  <p className="font-body-ui text-[13px] text-on-surface-variant italic">
+                    Usage data will be available after the index finishes building.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}

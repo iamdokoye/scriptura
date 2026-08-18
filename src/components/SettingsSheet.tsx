@@ -1,0 +1,486 @@
+import { useEffect, useRef, useState } from "react";
+import { useAppStore, type DisplayPrefs } from "../store/app";
+import { api, type Preferences } from "../lib/tauri";
+import { open as shellOpen } from "@tauri-apps/plugin-shell";
+
+const FONT_SIZE_PRESETS = [14, 16, 32, 48, 64, 72, 98];
+
+const DEFAULT_PREFS: Preferences = {
+  theme: "light",
+  font_size_reading: 18,
+  show_strongs: true,
+  show_morph: false,
+  verse_display: "verse-per-line",
+  default_commentary: null,
+};
+
+const FONTS: { id: DisplayPrefs["fontFamily"]; label: string }[] = [
+  { id: "system", label: "Default" },
+  { id: "serif",  label: "Serif" },
+  { id: "times",  label: "Times" },
+  { id: "mono",   label: "Mono" },
+];
+
+
+export default function SettingsSheet() {
+  const {
+    settingsOpen, setSettingsOpen,
+    setTheme, setShowStrongs, setReadingFontSize,
+    showCommentary, setShowCommentary,
+    showNotes, setShowNotes,
+    showCrossRefs, setShowCrossRefs,
+    showRedLetter, setShowRedLetter,
+    displayPrefs, setDisplayPrefs,
+  } = useAppStore();
+
+  const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
+  const [saving, setSaving] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (settingsOpen) {
+      api.getPreferences().then(setPrefs).catch(() => {});
+      rafRef.current = requestAnimationFrame(() => setVisible(true));
+    } else {
+      setVisible(false);
+      setOpenSections(new Set());
+    }
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [settingsOpen]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSettingsOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [settingsOpen, setSettingsOpen]);
+
+  function toggleSection(id: string) {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function save(update: Partial<Preferences>) {
+    const next = { ...prefs, ...update };
+    setPrefs(next);
+    setSaving(true);
+    try {
+      await api.setPreferences(update);
+      if (update.theme) setTheme(update.theme);
+      if (update.show_strongs !== undefined) setShowStrongs(update.show_strongs);
+      if (update.font_size_reading !== undefined) setReadingFontSize(update.font_size_reading);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!settingsOpen) return null;
+
+  const isOpen = (id: string) => openSections.has(id);
+
+  return (
+    <div className="fixed inset-0 z-[60]" onClick={() => setSettingsOpen(false)}>
+      <div
+        className={`absolute bottom-0 left-0 right-0 bg-surface border-t border-outline-variant rounded-t-2xl shadow-2xl transition-all duration-300 ease-out flex flex-col ${
+          visible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
+        }`}
+        style={{ maxHeight: "52vh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-3.5 border-b border-outline-variant shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-secondary">settings</span>
+            <span className="font-headline-sm text-headline-sm text-on-surface">Settings</span>
+          </div>
+          <div className="flex items-center gap-3">
+            {saving && <span className="font-metadata-mono text-[11px] text-secondary">Saving…</span>}
+            <button onClick={() => setSettingsOpen(false)} className="text-secondary hover:text-primary transition-colors">
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 divide-y divide-outline-variant">
+
+          {/* ── Appearance ───────────────────────────────────────────── */}
+          <AccordionSection
+            id="appearance" icon="palette" label="Appearance"
+            open={isOpen("appearance")} onToggle={() => toggleSection("appearance")}
+          >
+            {/* Text Settings sub-section */}
+            <AccordionSection
+              id="text-settings" icon="format_size" label="Text Settings"
+              open={isOpen("text-settings")} onToggle={() => toggleSection("text-settings")}
+              nested
+            >
+              {/* Font */}
+              <SubRow label="Font">
+                <div className="flex gap-1.5 flex-wrap">
+                  {FONTS.map((f) => (
+                    <ChipButton
+                      key={f.id}
+                      active={displayPrefs.fontFamily === f.id}
+                      onClick={() => setDisplayPrefs({ fontFamily: f.id })}
+                    >
+                      {f.label}
+                    </ChipButton>
+                  ))}
+                </div>
+              </SubRow>
+
+              {/* Alignment */}
+              <SubRow label="Alignment">
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => setDisplayPrefs({ textAlign: "left" })}
+                    title="Left align"
+                    className={`p-1.5 rounded-DEFAULT transition-colors ${displayPrefs.textAlign === "left" ? "bg-primary text-on-primary" : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"}`}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">format_align_left</span>
+                  </button>
+                  <button
+                    onClick={() => setDisplayPrefs({ textAlign: "justify" })}
+                    title="Justify"
+                    className={`p-1.5 rounded-DEFAULT transition-colors ${displayPrefs.textAlign === "justify" ? "bg-primary text-on-primary" : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"}`}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">format_align_justify</span>
+                  </button>
+                </div>
+              </SubRow>
+
+              {/* Font size */}
+              <SubRow label="Font size">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => save({ font_size_reading: Math.max(14, prefs.font_size_reading - 1) })}
+                    className="w-7 h-7 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high flex items-center justify-center font-bold text-on-surface text-sm"
+                  >−</button>
+                  <span className="font-metadata-mono text-on-surface w-10 text-center text-sm">{prefs.font_size_reading}px</span>
+                  <button
+                    onClick={() => save({ font_size_reading: Math.min(98, prefs.font_size_reading + 1) })}
+                    className="w-7 h-7 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high flex items-center justify-center font-bold text-on-surface text-sm"
+                  >+</button>
+                  <div className="flex gap-1 ml-1 flex-wrap">
+                    {FONT_SIZE_PRESETS.map((s) => (
+                      <ChipButton
+                        key={s}
+                        active={prefs.font_size_reading === s}
+                        onClick={() => save({ font_size_reading: s })}
+                        mono
+                      >
+                        {s}
+                      </ChipButton>
+                    ))}
+                  </div>
+                </div>
+              </SubRow>
+
+              {/* Margins */}
+              <SliderRow
+                label="Margins"
+                value={displayPrefs.margins}
+                min={0} max={20} step={1}
+                format={(v) => `${v}%`}
+                onChange={(v) => setDisplayPrefs({ margins: v })}
+              />
+
+              {/* Line spacing */}
+              <SliderRow
+                label="Line spacing"
+                value={displayPrefs.lineSpacing}
+                min={0} max={1} step={0.1}
+                format={(v) => v.toFixed(1)}
+                onChange={(v) => setDisplayPrefs({ lineSpacing: v })}
+              />
+
+              {/* Letter spacing */}
+              <SliderRow
+                label="Letter spacing"
+                value={displayPrefs.letterSpacing}
+                min={0} max={1} step={0.1}
+                format={(v) => v.toFixed(1)}
+                onChange={(v) => setDisplayPrefs({ letterSpacing: v })}
+              />
+            </AccordionSection>
+
+            {/* Theme */}
+            <SubRow label="Theme">
+              <div className="flex gap-1.5">
+                {(["light", "dark", "system"] as const).map((t) => (
+                  <ChipButton key={t} active={prefs.theme === t} onClick={() => save({ theme: t })}>
+                    {t === "light" ? "Light" : t === "dark" ? "Dark" : "System"}
+                  </ChipButton>
+                ))}
+              </div>
+            </SubRow>
+
+            {/* Verse layout */}
+            <SubRow label="Verse layout">
+              <div className="flex gap-1.5">
+                {(["verse-per-line", "paragraph"] as const).map((v) => (
+                  <ChipButton key={v} active={prefs.verse_display === v} onClick={() => save({ verse_display: v })}>
+                    {v === "verse-per-line" ? "Per line" : "Paragraph"}
+                  </ChipButton>
+                ))}
+              </div>
+            </SubRow>
+          </AccordionSection>
+
+          {/* ── Study Tools ──────────────────────────────────────────── */}
+          <AccordionSection
+            id="study" icon="school" label="Study Tools"
+            open={isOpen("study")} onToggle={() => toggleSection("study")}
+          >
+            <SubRow label="Show Strong's numbers">
+              <Toggle value={prefs.show_strongs} onChange={(v) => save({ show_strongs: v })} />
+            </SubRow>
+            <SubRow label="Show morphology tags">
+              <Toggle value={prefs.show_morph} onChange={(v) => save({ show_morph: v })} />
+            </SubRow>
+            <SubRow label="Commentary" description="Matthew Henry icon on verse hover">
+              <Toggle value={showCommentary} onChange={setShowCommentary} />
+            </SubRow>
+            <SubRow label="Notes" description="Notes icon on verse hover">
+              <Toggle value={showNotes} onChange={setShowNotes} />
+            </SubRow>
+            <SubRow label="Cross-references" description="Requires TSK module (auto-installed)">
+              <Toggle value={showCrossRefs} onChange={setShowCrossRefs} />
+            </SubRow>
+            <SubRow label="Red letter text" description="Words of Jesus in red (KJV, ASV…)">
+              <Toggle value={showRedLetter} onChange={setShowRedLetter} />
+            </SubRow>
+          </AccordionSection>
+
+          {/* ── Presentation ─────────────────────────────────────────── */}
+          <AccordionSection
+            id="presentation" icon="slideshow" label="Presentation"
+            open={isOpen("presentation")} onToggle={() => toggleSection("presentation")}
+          >
+            <SubRow label="Verse context" description="Ctrl+1–4 to switch live. Controls how many verses appear on screen.">
+              <div className="flex gap-1.5 flex-wrap">
+                {([
+                  { value: 1, label: "1 — Active" },
+                  { value: 2, label: "2 — +Next" },
+                  { value: 3, label: "3 — Prev+Next" },
+                  { value: 4, label: "4 — Chapter" },
+                ] as const).map((opt) => (
+                  <ChipButton
+                    key={opt.value}
+                    active={displayPrefs.presentationContext === opt.value}
+                    onClick={() => setDisplayPrefs({ presentationContext: opt.value })}
+                  >
+                    {opt.label}
+                  </ChipButton>
+                ))}
+              </div>
+            </SubRow>
+          </AccordionSection>
+
+          {/* ── Sync & Backup ────────────────────────────────────────── */}
+          <AccordionSection
+            id="sync" icon="sync" label="Sync & Backup"
+            open={isOpen("sync")} onToggle={() => toggleSection("sync")}
+          >
+            <div className="flex items-start gap-3 px-6 py-3">
+              <span className="material-symbols-outlined text-on-surface-variant text-[18px] mt-0.5">cloud_off</span>
+              <div>
+                <p className="font-body-ui text-[13px] text-on-surface font-medium">Cloud sync — coming soon</p>
+                <p className="font-body-ui text-[11px] text-on-surface-variant mt-0.5">
+                  Sync your notes and bookmarks across devices. Not yet available in this version.
+                </p>
+              </div>
+            </div>
+          </AccordionSection>
+
+          {/* ── Help ─────────────────────────────────────────────────── */}
+          <AccordionSection
+            id="help" icon="help" label="Help"
+            open={isOpen("help")} onToggle={() => toggleSection("help")}
+          >
+            {/* Onboarding / Tutorial */}
+            <SubRow label="Tutorial" description="Step-by-step walkthrough of Scriptura's features.">
+              <button
+                disabled
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-DEFAULT text-[12px] font-body-ui bg-surface-container text-on-surface-variant opacity-50 cursor-not-allowed"
+              >
+                <span className="material-symbols-outlined text-[14px]">play_circle</span>
+                Coming soon
+              </button>
+            </SubRow>
+
+            {/* FAQs */}
+            <div className="px-6 py-3 space-y-3">
+              {([
+                { q: "How do I install Bible modules?", a: "Go to the Modules view (bookshelf icon), search for a translation, and click Install." },
+                { q: "How do I start a presentation?", a: "Click the slideshow icon in the top bar to open the Presentation window, then navigate verses from the reading view." },
+                { q: "What are Strong's numbers?", a: "Strong's numbers link each word to its original Hebrew or Greek dictionary entry. Enable them in Study Tools settings." },
+                { q: "How do I change the font or size?", a: "Open Settings → Appearance → Text Settings to adjust font family, size, margins, and spacing." },
+              ] as const).map(({ q, a }) => (
+                <details key={q} className="group">
+                  <summary className="font-body-ui text-[12px] text-on-surface cursor-pointer list-none flex items-start justify-between gap-2">
+                    <span>{q}</span>
+                    <span className="material-symbols-outlined text-[14px] text-secondary shrink-0 mt-0.5 group-open:rotate-180 transition-transform">expand_more</span>
+                  </summary>
+                  <p className="font-body-ui text-[11px] text-on-surface-variant mt-1.5 leading-relaxed">{a}</p>
+                </details>
+              ))}
+            </div>
+
+            {/* Email feedback */}
+            <SubRow label="Send feedback" description="Report a bug or suggest a feature.">
+              <button
+                onClick={() => {
+                  const subject = encodeURIComponent("Feedback regarding Scriptura v0.1.0");
+                  const body = encodeURIComponent(
+                    "Hi,\n\nI have the following question or comment:\n\n\n\n---\nScriptura v0.1.0 · macOS"
+                  );
+                  shellOpen(`mailto:okkodann@gmail.com?subject=${subject}&body=${body}`).catch(() => {});
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-DEFAULT text-[12px] font-body-ui bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors"
+              >
+                <span className="material-symbols-outlined text-[14px]">mail</span>
+                Email us
+              </button>
+            </SubRow>
+          </AccordionSection>
+
+          {/* ── About ────────────────────────────────────────────────── */}
+          <AccordionSection
+            id="about" icon="info" label="About"
+            open={isOpen("about")} onToggle={() => toggleSection("about")}
+          >
+            <div className="px-6 py-3 font-body-ui text-[13px] text-on-surface-variant space-y-0.5">
+              <p>Scriptura — open-source desktop Bible study</p>
+              <p className="font-metadata-mono text-[11px]">Version 0.1.0-dev</p>
+              <p className="text-[12px] pt-1 leading-relaxed">
+                SWORD module format is copyright The SWORD Project contributors.
+                Public-domain texts are freely distributable.
+              </p>
+            </div>
+          </AccordionSection>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Accordion section ─────────────────────────────────────────────────────────
+
+function AccordionSection({
+  icon, label, open, onToggle, children, nested,
+}: {
+  id?: string;
+  icon: string;
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+  nested?: boolean;
+}) {
+  return (
+    <div className={nested ? "border-t border-outline-variant" : ""}>
+      <button
+        onClick={onToggle}
+        className={`w-full flex items-center justify-between px-6 py-3 transition-colors hover:bg-surface-container-low text-left ${
+          nested ? "pl-8 bg-surface-container-lowest" : ""
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <span className={`material-symbols-outlined text-secondary ${nested ? "text-[16px]" : "text-[18px]"}`}>{icon}</span>
+          <span className={`text-on-surface font-medium ${nested ? "font-body-ui text-[13px]" : "font-body-ui text-body-ui"}`}>{label}</span>
+        </div>
+        <span className={`material-symbols-outlined text-secondary transition-transform duration-200 ${open ? "rotate-180" : ""} ${nested ? "text-[16px]" : "text-[18px]"}`}>
+          expand_more
+        </span>
+      </button>
+
+      {open && (
+        <div className={`divide-y divide-outline-variant ${nested ? "bg-surface-container-lowest" : "bg-surface"}`}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Slider row ────────────────────────────────────────────────────────────────
+
+function SliderRow({ label, value, min, max, step, format, onChange }: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  format: (v: number) => string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-4 pl-8 pr-6 py-3">
+      <span className="font-body-ui text-[13px] text-on-surface shrink-0 w-28">{label}</span>
+      <input
+        type="range"
+        min={min} max={max} step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="flex-1 accent-primary h-1 cursor-pointer"
+      />
+      <span className="font-metadata-mono text-[12px] text-on-surface-variant w-9 text-right shrink-0">
+        {format(value)}
+      </span>
+    </div>
+  );
+}
+
+// ── Sub-row ───────────────────────────────────────────────────────────────────
+
+function SubRow({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-x-4 gap-y-2 flex-wrap pl-8 pr-6 py-3">
+      <div className="shrink-0">
+        <span className="font-body-ui text-[13px] text-on-surface block">{label}</span>
+        {description && <span className="font-body-ui text-[11px] text-on-surface-variant">{description}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ── Chip button ───────────────────────────────────────────────────────────────
+
+function ChipButton({ active, onClick, children, mono }: { active: boolean; onClick: () => void; children: React.ReactNode; mono?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-2.5 py-1 rounded-DEFAULT text-[12px] transition-colors ${mono ? "font-metadata-mono" : "font-body-ui"} ${
+        active
+          ? "bg-primary text-on-primary"
+          : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Toggle ────────────────────────────────────────────────────────────────────
+
+function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!value)}
+      className={`relative w-11 h-6 rounded-full overflow-hidden transition-colors shrink-0 ${value ? "bg-primary" : "bg-surface-container-high"}`}
+    >
+      <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${value ? "translate-x-5" : "translate-x-0"}`} />
+    </button>
+  );
+}
