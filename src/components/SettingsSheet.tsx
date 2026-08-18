@@ -37,6 +37,7 @@ export default function SettingsSheet() {
   const [saving, setSaving] = useState(false);
   const [visible, setVisible] = useState(false);
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -306,34 +307,42 @@ export default function SettingsSheet() {
             id="help" icon="help" label="Help"
             open={isOpen("help")} onToggle={() => toggleSection("help")}
           >
-            {/* Onboarding / Tutorial */}
-            <SubRow label="Tutorial" description="Step-by-step walkthrough of Scriptura's features.">
+            {/* Tutorial / Shortcuts */}
+            <SubRow label="Tutorial" description="Onboarding walkthrough — coming soon.">
               <button
-                disabled
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-DEFAULT text-[12px] font-body-ui bg-surface-container text-on-surface-variant opacity-50 cursor-not-allowed"
+                onClick={() => setShortcutsOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-DEFAULT text-[12px] font-body-ui bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors"
               >
-                <span className="material-symbols-outlined text-[14px]">play_circle</span>
-                Coming soon
+                <span className="material-symbols-outlined text-[14px]">keyboard</span>
+                View shortcuts
               </button>
             </SubRow>
 
-            {/* FAQs */}
-            <div className="px-6 py-3 space-y-3">
-              {([
-                { q: "How do I install Bible modules?", a: "Go to the Modules view (bookshelf icon), search for a translation, and click Install." },
-                { q: "How do I start a presentation?", a: "Click the slideshow icon in the top bar to open the Presentation window, then navigate verses from the reading view." },
-                { q: "What are Strong's numbers?", a: "Strong's numbers link each word to its original Hebrew or Greek dictionary entry. Enable them in Study Tools settings." },
-                { q: "How do I change the font or size?", a: "Open Settings → Appearance → Text Settings to adjust font family, size, margins, and spacing." },
-              ] as const).map(({ q, a }) => (
-                <details key={q} className="group">
-                  <summary className="font-body-ui text-[12px] text-on-surface cursor-pointer list-none flex items-start justify-between gap-2">
-                    <span>{q}</span>
-                    <span className="material-symbols-outlined text-[14px] text-secondary shrink-0 mt-0.5 group-open:rotate-180 transition-transform">expand_more</span>
-                  </summary>
-                  <p className="font-body-ui text-[11px] text-on-surface-variant mt-1.5 leading-relaxed">{a}</p>
-                </details>
-              ))}
-            </div>
+            {/* FAQs — nested accordion */}
+            <AccordionSection
+              id="faqs" icon="quiz" label="FAQs"
+              open={isOpen("faqs")} onToggle={() => toggleSection("faqs")}
+              nested
+            >
+              <div className="px-8 py-3 space-y-3.5">
+                {([
+                  { q: "How do I install Bible modules?", a: "Go to the Modules view (bookshelf icon), search for a translation, and click Install." },
+                  { q: "How do I start a presentation?", a: "Click the slideshow icon in the top bar to open the Presentation window, then navigate verses from the reading view." },
+                  { q: "What are Strong's numbers?", a: "Strong's numbers link each word to its original Hebrew or Greek dictionary entry. Enable them in Study Tools settings." },
+                  { q: "How do I change the font or size?", a: "Open Settings → Appearance → Text Settings to adjust font family, size, margins, and spacing." },
+                  { q: "How do I use the presentation verse context shortcuts?", a: "Press Ctrl+1–4 while presentation is active: 1 = active verse only, 2 = active + next, 3 = prev + active + next, 4 = full chapter scroll." },
+                  { q: "Can I use two Bible translations side by side?", a: "Yes — enable Parallel Mode from the top bar menu. Choose a secondary module to display it alongside the primary." },
+                ] as const).map(({ q, a }) => (
+                  <details key={q} className="group">
+                    <summary className="font-body-ui text-[12px] text-on-surface cursor-pointer list-none flex items-start justify-between gap-2">
+                      <span>{q}</span>
+                      <span className="material-symbols-outlined text-[13px] text-secondary shrink-0 mt-0.5 group-open:rotate-180 transition-transform">expand_more</span>
+                    </summary>
+                    <p className="font-body-ui text-[11px] text-on-surface-variant mt-1.5 leading-relaxed pl-1">{a}</p>
+                  </details>
+                ))}
+              </div>
+            </AccordionSection>
 
             {/* Email feedback */}
             <SubRow label="Send feedback" description="Report a bug or suggest a feature.">
@@ -352,6 +361,8 @@ export default function SettingsSheet() {
               </button>
             </SubRow>
           </AccordionSection>
+
+          {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
 
           {/* ── About ────────────────────────────────────────────────── */}
           <AccordionSection
@@ -469,6 +480,124 @@ function ChipButton({ active, onClick, children, mono }: { active: boolean; onCl
     >
       {children}
     </button>
+  );
+}
+
+// ── Shortcuts overlay ─────────────────────────────────────────────────────────
+
+const SHORTCUT_GROUPS: Array<{
+  label: string;
+  icon: string;
+  shortcuts: Array<{ keys: string[]; description: string; note?: string }>;
+}> = [
+  {
+    label: "Navigation",
+    icon: "menu_book",
+    shortcuts: [
+      { keys: ["Ctrl", "P"], description: "Previous chapter" },
+      { keys: ["Ctrl", "N"], description: "Next chapter" },
+      { keys: ["Alt", "H"], description: "Search history" },
+    ],
+  },
+  {
+    label: "Reading",
+    icon: "chrome_reader_mode",
+    shortcuts: [
+      { keys: ["Ctrl", "F"], description: "Toggle fullscreen" },
+      { keys: ["Esc"], description: "Exit fullscreen / close panels" },
+      { keys: ["Ctrl", "K"], description: "Word search palette", note: "Fullscreen only" },
+      { keys: ["Ctrl", "L"], description: "Focus scripture navigator", note: "Fullscreen only" },
+    ],
+  },
+  {
+    label: "Font size",
+    icon: "format_size",
+    shortcuts: [
+      { keys: ["Ctrl", "+"], description: "Increase font size by 1px" },
+      { keys: ["Ctrl", "−"], description: "Decrease font size by 1px" },
+      { keys: ["Ctrl", "Alt", "+"], description: "Jump to next preset size" },
+      { keys: ["Ctrl", "Alt", "−"], description: "Jump to previous preset size" },
+    ],
+  },
+  {
+    label: "Search",
+    icon: "search",
+    shortcuts: [
+      { keys: ["Alt", "P"], description: "Previous search result" },
+      { keys: ["Alt", "N"], description: "Next search result" },
+    ],
+  },
+  {
+    label: "Presentation",
+    icon: "slideshow",
+    shortcuts: [
+      { keys: ["Ctrl", "1"], description: "Active verse only", note: "Presentation active" },
+      { keys: ["Ctrl", "2"], description: "Active + next verse", note: "Presentation active" },
+      { keys: ["Ctrl", "3"], description: "Prev + active + next", note: "Presentation active" },
+      { keys: ["Ctrl", "4"], description: "Full chapter scroll", note: "Presentation active" },
+    ],
+  },
+];
+
+export function ShortcutsOverlay({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6"
+      onClick={onClose}
+    >
+      <div
+        className="bg-surface border border-outline-variant rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-secondary">keyboard</span>
+            <span className="font-headline-sm text-headline-sm text-on-surface">Keyboard Shortcuts</span>
+          </div>
+          <button onClick={onClose} className="text-secondary hover:text-primary transition-colors">
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
+          {SHORTCUT_GROUPS.map((group) => (
+            <div key={group.label}>
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="material-symbols-outlined text-[14px] text-secondary">{group.icon}</span>
+                <span className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest">{group.label}</span>
+              </div>
+              <div className="space-y-1">
+                {group.shortcuts.map((s) => (
+                  <div key={s.description} className="flex items-center justify-between gap-4 py-1.5 px-2 rounded hover:bg-surface-container-low transition-colors">
+                    <div>
+                      <span className="font-body-ui text-[13px] text-on-surface">{s.description}</span>
+                      {s.note && (
+                        <span className="ml-2 font-body-ui text-[10px] text-on-surface-variant italic">{s.note}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {s.keys.map((k, i) => (
+                        <span key={i} className="font-metadata-mono text-[11px] text-on-surface bg-surface-container border border-outline-variant rounded px-1.5 py-0.5">{k}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

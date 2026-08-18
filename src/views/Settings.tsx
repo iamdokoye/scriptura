@@ -3,6 +3,7 @@ import { useAppStore } from "../store/app";
 import { api, type Preferences } from "../lib/tauri";
 import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import SideNav from "../components/SideNav";
+import { ShortcutsOverlay } from "../components/SettingsSheet";
 
 const DEFAULT_PREFS: Preferences = {
   theme: "light",
@@ -17,6 +18,7 @@ export default function Settings() {
   const { setTheme, setShowStrongs, setReadingFontSize, showCommentary, setShowCommentary, showNotes, setShowNotes, showCrossRefs, setShowCrossRefs, showRedLetter, setShowRedLetter, displayPrefs, setDisplayPrefs } = useAppStore();
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
   const [saving, setSaving] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useEffect(() => {
     api.getPreferences().then(setPrefs).catch(() => {});
@@ -177,32 +179,39 @@ export default function Settings() {
 
           {/* Help */}
           <SettingsCard title="Help" icon="help">
-            <SettingsRow label="Tutorial" description="Step-by-step walkthrough of Scriptura's features.">
+            <SettingsRow label="Tutorial" description="Onboarding walkthrough — coming soon.">
               <button
-                disabled
-                className="flex items-center gap-2 px-3 py-1.5 rounded-DEFAULT font-body-ui text-sm bg-surface-container text-on-surface-variant opacity-50 cursor-not-allowed"
+                onClick={() => setShortcutsOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-DEFAULT font-body-ui text-sm bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors"
               >
-                <span className="material-symbols-outlined text-[16px]">play_circle</span>
-                Coming soon
+                <span className="material-symbols-outlined text-[16px]">keyboard</span>
+                View shortcuts
               </button>
             </SettingsRow>
 
-            <div className="px-4 py-3 space-y-3 border-t border-outline-variant">
-              <p className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-2">FAQs</p>
-              {([
-                { q: "How do I install Bible modules?", a: "Go to the Modules view (bookshelf icon), search for a translation, and click Install." },
-                { q: "How do I start a presentation?", a: "Click the slideshow icon in the top bar to open the Presentation window, then navigate verses from the reading view." },
-                { q: "What are Strong's numbers?", a: "Strong's numbers link each word to its original Hebrew or Greek dictionary entry. Enable them in Study Tools settings." },
-                { q: "How do I change the font or size?", a: "Open Settings → Appearance → Text Settings to adjust font family, size, margins, and spacing." },
-              ] as const).map(({ q, a }) => (
-                <details key={q} className="group">
-                  <summary className="font-body-ui text-[13px] text-on-surface cursor-pointer list-none flex items-start justify-between gap-2 py-1">
-                    <span>{q}</span>
-                    <span className="material-symbols-outlined text-[16px] text-secondary shrink-0 mt-0.5 group-open:rotate-180 transition-transform">expand_more</span>
-                  </summary>
-                  <p className="font-body-ui text-[12px] text-on-surface-variant mt-1.5 leading-relaxed">{a}</p>
-                </details>
-              ))}
+            {/* FAQs */}
+            <div className="border-t border-outline-variant">
+              <div className="px-4 py-2 bg-surface-container-low">
+                <span className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest">FAQs</span>
+              </div>
+              <div className="px-4 py-3 space-y-3">
+                {([
+                  { q: "How do I install Bible modules?", a: "Go to the Modules view (bookshelf icon), search for a translation, and click Install." },
+                  { q: "How do I start a presentation?", a: "Click the slideshow icon in the top bar to open the Presentation window, then navigate verses from the reading view." },
+                  { q: "What are Strong's numbers?", a: "Strong's numbers link each word to its original Hebrew or Greek dictionary entry. Enable them in Study Tools settings." },
+                  { q: "How do I change the font or size?", a: "Open Settings → Appearance → Text Settings to adjust font family, size, margins, and spacing." },
+                  { q: "How do I use the presentation verse context shortcuts?", a: "Press Ctrl+1–4 while presentation is active: 1 = active verse only, 2 = active + next, 3 = prev + active + next, 4 = full chapter scroll." },
+                  { q: "Can I use two Bible translations side by side?", a: "Yes — enable Parallel Mode from the top bar menu. Choose a secondary module to display it alongside the primary." },
+                ] as const).map(({ q, a }) => (
+                  <details key={q} className="group">
+                    <summary className="font-body-ui text-[13px] text-on-surface cursor-pointer list-none flex items-start justify-between gap-2 py-1">
+                      <span>{q}</span>
+                      <span className="material-symbols-outlined text-[16px] text-secondary shrink-0 mt-0.5 group-open:rotate-180 transition-transform">expand_more</span>
+                    </summary>
+                    <p className="font-body-ui text-[12px] text-on-surface-variant mt-1.5 leading-relaxed">{a}</p>
+                  </details>
+                ))}
+              </div>
             </div>
 
             <SettingsRow label="Send feedback" description="Report a bug or suggest a feature — opens your mail app.">
@@ -221,6 +230,8 @@ export default function Settings() {
               </button>
             </SettingsRow>
           </SettingsCard>
+
+          {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
 
           {/* About */}
           <SettingsCard title="About" icon="info">
