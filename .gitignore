@@ -1,7 +1,11 @@
 # Rust / Tauri
 target/
+debug/
 src-tauri/target/
 src-tauri/gen/
+**/*.rs.bk
+*.pdb
+**/mutants.out*/
 
 # Node
 node_modules/
