@@ -88,11 +88,13 @@ export default function App() {
           {view === "history" && <SearchHistory />}
           {(view === "bookmarks" || view === "notes") && <BookmarksNotes />}
         </div>
-        <div className={`shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out ${serviceOrderOpen ? "w-[300px]" : "w-0"}`}>
-          <div className="w-[300px] h-full">
-            <ServiceOrderPanel />
+        {!isFullscreen && (
+          <div className={`shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out ${serviceOrderOpen ? "w-[300px]" : "w-0"}`}>
+            <div className="w-[300px] h-full">
+              <ServiceOrderPanel />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
