@@ -20,6 +20,7 @@ export default function ServiceOrderPanel() {
   function navigateTo(item: ServiceItem) {
     setCurrentRef({ book: item.book, chapter: item.chapter, verse: item.verse });
     setView("reading");
+    setServiceOrderOpen(false);
   }
 
   // An item is "active" if the reader is currently on that exact verse+module
