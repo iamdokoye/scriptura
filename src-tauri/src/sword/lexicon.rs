@@ -76,6 +76,7 @@ impl LexiconReader {
     }
 
     /// Look up any string key; returns the raw entry text (for non-Strong's lookups).
+    #[allow(dead_code)]
     pub fn lookup_key(&self, key: &str) -> Result<String> {
         match &self.conf.compression {
             Compression::None => self.lookup_rawld(key),
