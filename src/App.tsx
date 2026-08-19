@@ -88,9 +88,15 @@ export default function App() {
           {view === "history" && <SearchHistory />}
           {(view === "bookmarks" || view === "notes") && <BookmarksNotes />}
         </div>
-        {!isFullscreen && serviceOrderOpen && (
-          <div className="absolute inset-0 z-20 flex justify-end" onClick={() => setServiceOrderOpen(false)}>
-            <div className="w-[300px] h-full transition-transform duration-200 ease-in-out" onClick={(e) => e.stopPropagation()}>
+        {!isFullscreen && (
+          <div
+            className={`absolute inset-0 z-20 flex justify-end transition-all duration-200 ${serviceOrderOpen ? "pointer-events-auto" : "pointer-events-none"}`}
+            onClick={() => setServiceOrderOpen(false)}
+          >
+            <div
+              className={`w-[300px] h-full transition-transform duration-200 ease-in-out ${serviceOrderOpen ? "translate-x-0" : "translate-x-full"}`}
+              onClick={(e) => e.stopPropagation()}
+            >
               <ServiceOrderPanel />
             </div>
           </div>
