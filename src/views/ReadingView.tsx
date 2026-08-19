@@ -23,6 +23,7 @@ export default function ReadingView() {
     setView, readingFontSize, setReadingFontSize, setLastHistoryRef,
     displayPrefs, setDisplayPrefs, addToServiceOrder,
     presentationActive, setPresentationActive, selectedStrongs,
+    serviceOrderOpen, setServiceOrderOpen,
   } = useAppStore();
 
   const [chapter, setChapter] = useState<ChapterText | null>(null);
@@ -218,6 +219,13 @@ export default function ReadingView() {
         return;
       }
 
+      // Ctrl+Q: toggle service order panel
+      if (ctrl && e.code === "KeyQ") {
+        e.preventDefault();
+        setServiceOrderOpen(!serviceOrderOpen);
+        return;
+      }
+
       // Ctrl+1–4: presentation verse context (only when presentation is active)
       if (ctrl && presentationActive) {
         const ctxMap: Record<string, 1 | 2 | 3 | 4> = {
@@ -237,6 +245,7 @@ export default function ReadingView() {
   }, [
     isFullscreen, currentRef, currentSearchResults,
     searchResultIndex, readingFontSize, presentationActive,
+    serviceOrderOpen, setServiceOrderOpen,
     setIsFullscreen, setCurrentRef, navTo,
     setSearchResultIndex, setView, setReadingFontSize, setLastHistoryRef,
     setDisplayPrefs,

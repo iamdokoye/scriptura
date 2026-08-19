@@ -531,6 +531,7 @@ const SHORTCUT_GROUPS: Array<{
     label: "Presentation",
     icon: "slideshow",
     shortcuts: [
+      { keys: ["Ctrl", "Q"], description: "Toggle service order panel" },
       { keys: ["Ctrl", "1"], description: "Active verse only", note: "Presentation active" },
       { keys: ["Ctrl", "2"], description: "Active + next verse", note: "Presentation active" },
       { keys: ["Ctrl", "3"], description: "Prev + active + next", note: "Presentation active" },

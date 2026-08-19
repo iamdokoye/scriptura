@@ -8,7 +8,6 @@ import ModuleManager from "./views/ModuleManager";
 import SearchResults from "./views/SearchResults";
 import SearchHistory from "./views/SearchHistory";
 import BookmarksNotes from "./views/BookmarksNotes";
-import SetlistView from "./views/SetlistView";
 import ServiceOrderPanel from "./components/ServiceOrderPanel";
 
 export default function App() {
@@ -88,9 +87,8 @@ export default function App() {
           {view === "search" && <SearchResults />}
           {view === "history" && <SearchHistory />}
           {(view === "bookmarks" || view === "notes") && <BookmarksNotes />}
-          {view === "setlist" && <SetlistView />}
         </div>
-        {serviceOrderOpen && !isFullscreen && view !== "setlist" && <ServiceOrderPanel />}
+        {serviceOrderOpen && <ServiceOrderPanel />}
       </div>
     </div>
   );
