@@ -405,9 +405,13 @@ export default function ReadingView() {
               displayPrefs={displayPrefs}
               fullscreen
             />
-            <div className={`absolute right-0 top-0 h-full w-[300px] z-20 transition-transform duration-200 ease-in-out ${serviceOrderOpen ? "translate-x-0" : "translate-x-full"}`}>
-              <ServiceOrderPanel />
-            </div>
+            {serviceOrderOpen && (
+              <div className="absolute inset-0 z-20 flex justify-end" onClick={() => setServiceOrderOpen(false)}>
+                <div className="w-[300px] h-full" onClick={(e) => e.stopPropagation()}>
+                  <ServiceOrderPanel />
+                </div>
+              </div>
+            )}
           </div>
         </div>
         {sheets}

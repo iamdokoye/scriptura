@@ -11,7 +11,7 @@ import BookmarksNotes from "./views/BookmarksNotes";
 import ServiceOrderPanel from "./components/ServiceOrderPanel";
 
 export default function App() {
-  const { view, theme, setTheme, hasModules, setHasModules, setPrimaryModule, setCurrentRef, setView, setShowStrongs, setReadingFontSize, isFullscreen, serviceOrderOpen } =
+  const { view, theme, setTheme, hasModules, setHasModules, setPrimaryModule, setCurrentRef, setView, setShowStrongs, setReadingFontSize, isFullscreen, serviceOrderOpen, setServiceOrderOpen } =
     useAppStore();
 
   // Apply theme class to root element
@@ -88,9 +88,11 @@ export default function App() {
           {view === "history" && <SearchHistory />}
           {(view === "bookmarks" || view === "notes") && <BookmarksNotes />}
         </div>
-        {!isFullscreen && (
-          <div className={`absolute right-0 top-0 h-full w-[300px] z-20 transition-transform duration-200 ease-in-out ${serviceOrderOpen ? "translate-x-0" : "translate-x-full"}`}>
-            <ServiceOrderPanel />
+        {!isFullscreen && serviceOrderOpen && (
+          <div className="absolute inset-0 z-20 flex justify-end" onClick={() => setServiceOrderOpen(false)}>
+            <div className="w-[300px] h-full transition-transform duration-200 ease-in-out" onClick={(e) => e.stopPropagation()}>
+              <ServiceOrderPanel />
+            </div>
           </div>
         )}
       </div>
