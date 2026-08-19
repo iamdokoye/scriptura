@@ -382,35 +382,31 @@ export default function ReadingView() {
             </button>
           </div>
 
-          <div className="flex flex-1 overflow-hidden">
-            <div className="flex-1 overflow-y-auto">
-              <PrimaryPane
-                chapter={chapter}
-                loading={loading}
-                error={error}
-                currentVerse={currentRef.verse}
-                onStrongsClick={handleStrongsClick}
-                onVerseClick={handleVerseClick}
-                onCrossRefClick={openCrossRef}
-                onCompareClick={openCompare}
-                onCommentaryClick={openCommentary}
-                onNotesClick={openNotes}
-                onAddToServiceClick={handleAddToService}
-                showBorder={false}
-                showStrongs={showStrongs}
-                showCrossRefs={showCrossRefs}
-                showRedLetter={showRedLetter}
-                showCommentary={showCommentary}
-                showNotes={showNotes}
-                readingFontSize={readingFontSize}
-                displayPrefs={displayPrefs}
-                fullscreen
-              />
-            </div>
-            <div className={`shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out ${serviceOrderOpen ? "w-[300px]" : "w-0"}`}>
-              <div className="w-[300px] h-full">
-                <ServiceOrderPanel />
-              </div>
+          <div className="relative flex-1 overflow-y-auto">
+            <PrimaryPane
+              chapter={chapter}
+              loading={loading}
+              error={error}
+              currentVerse={currentRef.verse}
+              onStrongsClick={handleStrongsClick}
+              onVerseClick={handleVerseClick}
+              onCrossRefClick={openCrossRef}
+              onCompareClick={openCompare}
+              onCommentaryClick={openCommentary}
+              onNotesClick={openNotes}
+              onAddToServiceClick={handleAddToService}
+              showBorder={false}
+              showStrongs={showStrongs}
+              showCrossRefs={showCrossRefs}
+              showRedLetter={showRedLetter}
+              showCommentary={showCommentary}
+              showNotes={showNotes}
+              readingFontSize={readingFontSize}
+              displayPrefs={displayPrefs}
+              fullscreen
+            />
+            <div className={`absolute right-0 top-0 h-full w-[300px] z-20 transition-transform duration-200 ease-in-out ${serviceOrderOpen ? "translate-x-0" : "translate-x-full"}`}>
+              <ServiceOrderPanel />
             </div>
           </div>
         </div>

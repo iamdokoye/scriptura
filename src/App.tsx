@@ -80,7 +80,7 @@ export default function App() {
     <div className="h-screen flex flex-col overflow-hidden bg-background text-on-background font-body-ui text-body-ui selection:bg-secondary-container selection:text-on-secondary-container">
       {!isFullscreen && <TopBar />}
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
         <div className="flex flex-1 overflow-hidden">
           {view === "reading" && (hasModules ? <ReadingView /> : <EmptyLibrary />)}
           {view === "modules" && <ModuleManager />}
@@ -89,10 +89,8 @@ export default function App() {
           {(view === "bookmarks" || view === "notes") && <BookmarksNotes />}
         </div>
         {!isFullscreen && (
-          <div className={`shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out ${serviceOrderOpen ? "w-[300px]" : "w-0"}`}>
-            <div className="w-[300px] h-full">
-              <ServiceOrderPanel />
-            </div>
+          <div className={`absolute right-0 top-0 h-full w-[300px] z-20 transition-transform duration-200 ease-in-out ${serviceOrderOpen ? "translate-x-0" : "translate-x-full"}`}>
+            <ServiceOrderPanel />
           </div>
         )}
       </div>
