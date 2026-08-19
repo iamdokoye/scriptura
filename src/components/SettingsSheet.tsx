@@ -327,7 +327,7 @@ export default function SettingsSheet() {
               <div className="px-8 py-3 space-y-3.5">
                 {([
                   { q: "How do I install Bible modules?", a: "Go to the Modules view (bookshelf icon), search for a translation, and click Install." },
-                  { q: "How do I start a presentation?", a: "Click the slideshow icon in the top bar to open the Presentation window, then navigate verses from the reading view." },
+                  { q: "How do I start a presentation?", a: "Click the slideshow icon in the top bar to open the Presentation window, then navigate verses from the reading view. Use Ctrl+Q to open the service queue." },
                   { q: "What are Strong's numbers?", a: "Strong's numbers link each word to its original Hebrew or Greek dictionary entry. Enable them in Study Tools settings." },
                   { q: "How do I change the font or size?", a: "Open Settings → Appearance → Text Settings to adjust font family, size, margins, and spacing." },
                   { q: "How do I use the presentation verse context shortcuts?", a: "Press Ctrl+1–4 while presentation is active: 1 = active verse only, 2 = active + next, 3 = prev + active + next, 4 = full chapter scroll." },
@@ -531,7 +531,7 @@ const SHORTCUT_GROUPS: Array<{
     label: "Presentation",
     icon: "slideshow",
     shortcuts: [
-      { keys: ["Ctrl", "Q"], description: "Toggle service order panel" },
+      { keys: ["Ctrl", "Q"], description: "Toggle service queue" },
       { keys: ["Ctrl", "1"], description: "Active verse only", note: "Presentation active" },
       { keys: ["Ctrl", "2"], description: "Active + next verse", note: "Presentation active" },
       { keys: ["Ctrl", "3"], description: "Prev + active + next", note: "Presentation active" },

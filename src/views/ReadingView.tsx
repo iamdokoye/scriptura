@@ -722,7 +722,7 @@ const VerseRow = memo(function VerseRow({
         </button>
         <button
           className="p-1 text-secondary hover:text-primary hover:bg-secondary-container rounded"
-          title="Add to service order"
+          title="Add to service queue"
           onClick={(e) => { e.stopPropagation(); onAddToServiceClick(); }}
         >
           <span className="material-symbols-outlined text-[16px]">playlist_add</span>

@@ -4,7 +4,6 @@ import { useAppStore, type ServiceItem } from "../store/app";
 export default function ServiceOrderPanel() {
   const {
     serviceOrder,
-    serviceOrderOpen,
     setServiceOrderOpen,
     removeFromServiceOrder,
     reorderServiceOrder,
@@ -51,8 +50,6 @@ export default function ServiceOrderPanel() {
     setOverIdx(null);
   }
 
-  if (!serviceOrderOpen) return null;
-
   const empty = serviceOrder.length === 0;
 
   return (
@@ -61,7 +58,7 @@ export default function ServiceOrderPanel() {
       <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant shrink-0">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-[18px] text-primary">queue_play_next</span>
-          <span className="font-headline-sm text-headline-sm text-on-surface">Service Order</span>
+          <span className="font-headline-sm text-headline-sm text-on-surface">Service Queue</span>
         </div>
         <div className="flex items-center gap-1">
           {!empty && (
@@ -97,7 +94,7 @@ export default function ServiceOrderPanel() {
             <p className="font-body-ui text-[13px] text-on-surface-variant leading-relaxed">
               Hover over any verse and click{" "}
               <span className="material-symbols-outlined text-[13px] align-middle">playlist_add</span>{" "}
-              to add it to the service order.
+              to add it to the service queue.
             </p>
           </div>
         ) : (

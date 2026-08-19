@@ -120,12 +120,12 @@ export default function TopBar() {
       {/* Right: toolbar actions */}
       <div className="flex items-center gap-1">
         <button
-          aria-label="Service order"
+          aria-label="Service queue"
           onClick={() => setServiceOrderOpen(!serviceOrderOpen)}
           className={`relative p-1.5 rounded transition-colors ${
             serviceOrderOpen ? "bg-secondary-container text-on-secondary-container" : "text-secondary hover:bg-surface-container-low"
           }`}
-          title="Service order"
+          title="Service queue (Ctrl+Q)"
         >
           <span className="material-symbols-outlined text-[20px]">queue_play_next</span>
           {serviceOrder.length > 0 && (
