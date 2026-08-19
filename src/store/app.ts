@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { SearchResult } from "../lib/tauri";
 
 export type View = "reading" | "search" | "modules" | "bookmarks" | "notes" | "history";
+export type Workspace = "study" | "worship";
 
 export interface ServiceItem {
   id: string;
@@ -27,6 +28,12 @@ function loadHistory(): SearchHistoryEntry[] {
 }
 function saveHistory(h: SearchHistoryEntry[]) {
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(0, 100))); } catch {}
+}
+
+const WORKSPACE_KEY = "scriptura-workspace";
+function loadWorkspace(): Workspace {
+  const v = localStorage.getItem(WORKSPACE_KEY);
+  return v === "worship" ? "worship" : "study";
 }
 
 const STUDY_UI_KEY = "scriptura-study-ui-v2";
@@ -112,6 +119,8 @@ interface AppState {
   // Navigation
   view: View;
   setView: (v: View) => void;
+  workspace: Workspace;
+  setWorkspace: (w: Workspace) => void;
 
   // Current reading position
   currentRef: VerseRef;
@@ -202,6 +211,11 @@ const studyUi = loadStudyUi();
 export const useAppStore = create<AppState>((set) => ({
   view: "reading",
   setView: (view) => set({ view }),
+  workspace: loadWorkspace(),
+  setWorkspace: (workspace) => {
+    try { localStorage.setItem(WORKSPACE_KEY, workspace); } catch {}
+    set({ workspace });
+  },
 
   currentRef: { book: "John", chapter: 3, verse: 16 },
   setCurrentRef: (currentRef) => set({ currentRef }),
