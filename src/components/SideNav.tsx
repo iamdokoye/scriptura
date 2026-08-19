@@ -1,5 +1,9 @@
 import { useAppStore, type View, type Workspace } from "../store/app";
 
+const STUDY_DEFAULT: View = "reading";
+const WORSHIP_DEFAULT: View = "reading";
+const WORSHIP_VIEWS = new Set<View>(["reading", "setlist"]);
+
 interface NavItem {
   id: View;
   icon: string;
@@ -18,9 +22,9 @@ const STUDY_ITEMS: NavItem[] = [
 ];
 
 const WORSHIP_ITEMS: NavItem[] = [
-  { id: "reading",   icon: "slideshow",      label: "Live"    },
-  { id: "search",    icon: "queue_music",    label: "Setlist",  comingSoon: true },
-  { id: "bookmarks", icon: "library_music",  label: "Songs",    comingSoon: true },
+  { id: "reading",   icon: "slideshow",     label: "Live"    },
+  { id: "setlist",   icon: "queue_music",   label: "Setlist" },
+  { id: "bookmarks", icon: "library_music", label: "Songs",  comingSoon: true },
 ];
 
 interface Props {
@@ -30,6 +34,12 @@ interface Props {
 export default function SideNav({ variant }: Props) {
   const { view, setView, workspace, setWorkspace } = useAppStore();
   const items = workspace === "worship" ? WORSHIP_ITEMS : STUDY_ITEMS;
+
+  function switchWorkspace(w: Workspace) {
+    setWorkspace(w);
+    if (w === "worship" && !WORSHIP_VIEWS.has(view)) setView(WORSHIP_DEFAULT);
+    if (w === "study" && WORSHIP_VIEWS.has(view) && view !== "reading") setView(STUDY_DEFAULT);
+  }
 
   if (variant === "icon-rail") {
     return (
@@ -66,7 +76,7 @@ export default function SideNav({ variant }: Props) {
         </div>
 
         {/* Workspace switcher */}
-        <WorkspaceSwitcher workspace={workspace} setWorkspace={setWorkspace} compact />
+        <WorkspaceSwitcher workspace={workspace} setWorkspace={switchWorkspace} compact />
       </nav>
     );
   }
@@ -107,7 +117,7 @@ export default function SideNav({ variant }: Props) {
       </div>
 
       {/* Workspace switcher */}
-      <WorkspaceSwitcher workspace={workspace} setWorkspace={setWorkspace} />
+      <WorkspaceSwitcher workspace={workspace} setWorkspace={switchWorkspace} />
     </nav>
   );
 }
