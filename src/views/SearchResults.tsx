@@ -150,12 +150,12 @@ export default function SearchResults() {
     });
   }
 
-  // ── Group results by book ─────────────────────────────────────────────────
+  // ── Group results by book (merge non-consecutive matches from same book) ──
   const grouped = results.reduce<{ book: string; items: { result: SearchResult; index: number }[] }[]>(
     (acc, r, i) => {
-      const last = acc[acc.length - 1];
-      if (last && last.book === r.book) {
-        last.items.push({ result: r, index: i });
+      const existing = acc.find((g) => g.book === r.book);
+      if (existing) {
+        existing.items.push({ result: r, index: i });
       } else {
         acc.push({ book: r.book, items: [{ result: r, index: i }] });
       }
