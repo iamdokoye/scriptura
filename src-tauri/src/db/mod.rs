@@ -325,6 +325,100 @@ impl Database {
         conn.execute("UPDATE installed_modules SET index_built=1 WHERE id=?1", params![module_id])?;
         Ok(())
     }
+
+    // ── Songs ─────────────────────────────────────────────────────────────────
+
+    pub fn upsert_song(&self, song: &crate::types::Song) -> Result<()> {
+        let conn = self.0.lock().unwrap();
+        let sections = serde_json::to_string(&song.sections)
+            .map_err(|e| AppError::Other(e.to_string()))?;
+        let order = serde_json::to_string(&song.section_order)
+            .map_err(|e| AppError::Other(e.to_string()))?;
+        let tags = serde_json::to_string(&song.tags)
+            .map_err(|e| AppError::Other(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO songs (id, title, author, copyright, sections, section_order, tags, source)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(id) DO UPDATE SET
+               title=excluded.title, author=excluded.author, copyright=excluded.copyright,
+               sections=excluded.sections, section_order=excluded.section_order,
+               tags=excluded.tags, source=excluded.source",
+            params![song.id, song.title, song.author, song.copyright, sections, order, tags, song.source],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_songs(&self) -> Result<Vec<crate::types::Song>> {
+        let conn = self.0.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, title, author, copyright, sections, section_order, tags, source, created_at
+             FROM songs ORDER BY title COLLATE NOCASE"
+        )?;
+        let songs = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, String>(6)?,
+                row.get::<_, String>(7)?,
+                row.get::<_, String>(8)?,
+            ))
+        })?
+        .filter_map(|r| r.ok())
+        .map(|(id, title, author, copyright, sections_j, order_j, tags_j, source, created_at)| {
+            crate::types::Song {
+                id, title, author, copyright,
+                sections: serde_json::from_str(&sections_j).unwrap_or_default(),
+                section_order: serde_json::from_str(&order_j).unwrap_or_default(),
+                tags: serde_json::from_str(&tags_j).unwrap_or_default(),
+                source, created_at,
+            }
+        })
+        .collect();
+        Ok(songs)
+    }
+
+    pub fn get_song(&self, id: &str) -> Result<Option<crate::types::Song>> {
+        let conn = self.0.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT id, title, author, copyright, sections, section_order, tags, source, created_at
+             FROM songs WHERE id = ?1",
+            [id],
+            |row| Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, String>(6)?,
+                row.get::<_, String>(7)?,
+                row.get::<_, String>(8)?,
+            )),
+        );
+        match result {
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+            Ok((id, title, author, copyright, sections_j, order_j, tags_j, source, created_at)) => {
+                Ok(Some(crate::types::Song {
+                    id, title, author, copyright,
+                    sections: serde_json::from_str(&sections_j).unwrap_or_default(),
+                    section_order: serde_json::from_str(&order_j).unwrap_or_default(),
+                    tags: serde_json::from_str(&tags_j).unwrap_or_default(),
+                    source, created_at,
+                }))
+            }
+        }
+    }
+
+    pub fn delete_song(&self, id: &str) -> Result<()> {
+        let conn = self.0.lock().unwrap();
+        conn.execute("DELETE FROM songs WHERE id = ?1", [id])?;
+        Ok(())
+    }
 }
 
 /// Transform a raw user query into an FTS5 MATCH expression.
@@ -421,6 +515,18 @@ CREATE TABLE IF NOT EXISTS strongs_counts (
     book      TEXT NOT NULL,
     count     INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (module_id, strongs, book)
+);
+
+CREATE TABLE IF NOT EXISTS songs (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    author TEXT,
+    copyright TEXT,
+    sections TEXT NOT NULL DEFAULT '[]',
+    section_order TEXT NOT NULL DEFAULT '[]',
+    tags TEXT NOT NULL DEFAULT '[]',
+    source TEXT NOT NULL DEFAULT 'manual',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 "#;
 

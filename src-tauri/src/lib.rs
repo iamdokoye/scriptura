@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod markup;
 mod modules;
+mod songs;
 mod sword;
 mod types;
 mod versification;
@@ -12,6 +13,7 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -123,6 +125,12 @@ pub fn run() {
             commands::rebuild_search_index,
             commands::open_presentation_window,
             commands::close_presentation_window,
+            songs::list_songs,
+            songs::get_song,
+            songs::save_song,
+            songs::delete_song,
+            songs::import_pptx_songs,
+            songs::import_ewsx_songs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,6 +1,34 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+// ── Song types ───────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SongSection {
+    pub label: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Song {
+    pub id: String,
+    pub title: String,
+    pub author: Option<String>,
+    pub copyright: Option<String>,
+    pub sections: Vec<SongSection>,
+    pub section_order: Vec<String>,
+    pub tags: Vec<String>,
+    pub source: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ImportResult {
+    pub imported: usize,
+    pub skipped: usize,
+    pub errors: Vec<String>,
+}
+
 // ── Error type ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Error)]

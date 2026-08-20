@@ -7,12 +7,13 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "reading",   icon: "menu_book",  label: "Library"   },
-  { id: "bookmarks", icon: "bookmark",   label: "Bookmarks" },
-  { id: "search",    icon: "search",     label: "Search"    },
-  { id: "history",   icon: "history",    label: "History"   },
-  { id: "modules",   icon: "extension",  label: "Modules"   },
-  { id: "notes",     icon: "edit_note",  label: "Notes"     },
+  { id: "reading",   icon: "menu_book",     label: "Library"   },
+  { id: "bookmarks", icon: "bookmark",      label: "Bookmarks" },
+  { id: "search",    icon: "search",        label: "Search"    },
+  { id: "songs",     icon: "music_note",    label: "Songs"     },
+  { id: "history",   icon: "history",       label: "History"   },
+  { id: "modules",   icon: "extension",     label: "Modules"   },
+  { id: "notes",     icon: "edit_note",     label: "Notes"     },
 ];
 
 interface Props {

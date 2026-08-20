@@ -76,6 +76,29 @@ export interface InstalledModule extends ModuleInfo {
   index_built: boolean;
 }
 
+export interface SongSection {
+  label: string;
+  content: string;
+}
+
+export interface Song {
+  id: string;
+  title: string;
+  author?: string;
+  copyright?: string;
+  sections: SongSection[];
+  section_order: string[];
+  tags: string[];
+  source: string;
+  created_at: string;
+}
+
+export interface ImportResult {
+  imported: number;
+  skipped: number;
+  errors: string[];
+}
+
 export interface Bookmark {
   id: number;
   book: string;
@@ -206,4 +229,22 @@ export const api = {
 
   closePresentationWindow: () =>
     invoke<void>("close_presentation_window"),
+
+  listSongs: () =>
+    invoke<Song[]>("list_songs"),
+
+  getSong: (id: string) =>
+    invoke<Song | null>("get_song", { id }),
+
+  saveSong: (song: Song) =>
+    invoke<void>("save_song", { song }),
+
+  deleteSong: (id: string) =>
+    invoke<void>("delete_song", { id }),
+
+  importPptxSongs: (paths: string[]) =>
+    invoke<ImportResult>("import_pptx_songs", { paths }),
+
+  importEwsxSongs: (path: string) =>
+    invoke<ImportResult>("import_ewsx_songs", { path }),
 };

@@ -5,6 +5,7 @@
   "windows": ["main", "presentation"],
   "permissions": [
     "core:default",
-    "shell:allow-open"
+    "shell:allow-open",
+    "dialog:allow-open"
   ]
 }

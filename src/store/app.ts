@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { SearchResult } from "../lib/tauri";
 
-export type View = "reading" | "search" | "modules" | "bookmarks" | "notes" | "history";
+export type View = "reading" | "search" | "modules" | "bookmarks" | "notes" | "history" | "songs";
 
 export interface ServiceItem {
   id: string;
