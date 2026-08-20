@@ -29,7 +29,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Setup Rust
@@ -60,6 +60,9 @@ jobs:
             echo "APPLE_ID=${{ secrets.APPLE_ID }}" >> $GITHUB_ENV
             echo "APPLE_PASSWORD=${{ secrets.APPLE_PASSWORD }}" >> $GITHUB_ENV
             echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}" >> $GITHUB_ENV
+          else
+            # Fall back to ad-hoc signing so the DMG is produced and runnable
+            echo "APPLE_SIGNING_IDENTITY=-" >> $GITHUB_ENV
           fi
 
       - name: Build app
@@ -84,7 +87,6 @@ jobs:
           name: scriptura-${{ matrix.platform }}
           path: |
             src-tauri/target/**/bundle/dmg/*.dmg
-            src-tauri/target/**/bundle/macos/*.app.tar.gz
             src-tauri/target/**/bundle/nsis/**/*.exe
             src-tauri/target/**/bundle/msi/*.msi
           if-no-files-found: ignore

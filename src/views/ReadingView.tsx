@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useAppStore } from "../store/app";
-import { api, type ChapterText, type TextSpan } from "../lib/tauri";
+import { api, type ChapterText, type InstalledModule, type TextSpan } from "../lib/tauri";
 import { emitPresentation } from "../lib/presentation";
 import BookNavigator from "../components/BookNavigator";
 import SideNav from "../components/SideNav";
@@ -18,6 +18,7 @@ const FONT_SIZE_PRESETS = [14, 16, 32, 48, 64, 72, 98] as const;
 export default function ReadingView() {
   const {
     currentRef, setCurrentRef, primaryModule, parallelModule, parallelMode,
+    setParallelMode, setParallelModule,
     showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes,
     setSelectedStrongs, isFullscreen, setIsFullscreen,
     currentSearchResults, searchResultIndex, setSearchResultIndex, setCurrentRef: navTo,
@@ -41,6 +42,13 @@ export default function ReadingView() {
   const fsSearchOpenRef = useRef(false);
   fsSearchOpenRef.current = fsSearchOpen;
   const fsScriptureRef = useRef<HTMLInputElement>(null);
+  const [bibleModules, setBibleModules] = useState<InstalledModule[]>([]);
+  const [showFsParallelPicker, setShowFsParallelPicker] = useState(false);
+  const fsParallelPickerRef = useRef<HTMLDivElement>(null);
+  const [syncScroll, setSyncScroll] = useState(false);
+  const primaryScrollRef = useRef<HTMLDivElement>(null);
+  const parallelScrollRef = useRef<HTMLDivElement>(null);
+  const isSyncing = useRef(false);
 
   const openCrossRef = useCallback((verse: number) => {
     setCrossRefVerse({ book: currentRef.book, chapter: currentRef.chapter, verse });
@@ -57,6 +65,48 @@ export default function ReadingView() {
   const openNotes = useCallback((verse: number) => {
     setNotesVerse({ book: currentRef.book, chapter: currentRef.chapter, verse });
   }, [currentRef.book, currentRef.chapter]);
+
+  useEffect(() => {
+    api.listInstalledModules()
+      .then((mods) => setBibleModules(mods.filter((m) => m.category === "Bible")))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (fsParallelPickerRef.current && !fsParallelPickerRef.current.contains(e.target as Node)) {
+        setShowFsParallelPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
+  useEffect(() => {
+    if (!syncScroll) return;
+    const primary = primaryScrollRef.current;
+    const parallel = parallelScrollRef.current;
+    if (!primary || !parallel) return;
+
+    function makeHandler(source: HTMLDivElement, target: HTMLDivElement) {
+      return () => {
+        if (isSyncing.current) return;
+        isSyncing.current = true;
+        const pct = source.scrollTop / Math.max(1, source.scrollHeight - source.clientHeight);
+        target.scrollTop = pct * (target.scrollHeight - target.clientHeight);
+        isSyncing.current = false;
+      };
+    }
+
+    const onPrimary = makeHandler(primary, parallel);
+    const onParallel = makeHandler(parallel, primary);
+    primary.addEventListener("scroll", onPrimary, { passive: true });
+    parallel.addEventListener("scroll", onParallel, { passive: true });
+    return () => {
+      primary.removeEventListener("scroll", onPrimary);
+      parallel.removeEventListener("scroll", onParallel);
+    };
+  }, [syncScroll, parallelChapter]);
 
   useEffect(() => {
     if (!primaryModule) return;
@@ -337,6 +387,73 @@ export default function ReadingView() {
 
             <div className="flex-1" />
 
+            {/* Parallel module picker */}
+            <div ref={fsParallelPickerRef} className="relative flex items-center gap-1">
+              <button
+                onClick={() => {
+                  const next = !parallelMode;
+                  setParallelMode(next);
+                  if (next && !parallelModule) setShowFsParallelPicker(true);
+                }}
+                title="Toggle parallel view"
+                className={`p-1.5 rounded transition-colors ${
+                  parallelMode ? "bg-secondary-container text-on-secondary-container" : "text-secondary hover:bg-surface-container-low"
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">splitscreen</span>
+              </button>
+              {parallelMode && (
+                <button
+                  onClick={() => setShowFsParallelPicker((v) => !v)}
+                  className="flex items-center gap-0.5 px-2 py-1 rounded text-secondary hover:bg-surface-container-low transition-colors max-w-[120px]"
+                  title="Switch parallel translation"
+                >
+                  <span className="font-metadata-mono text-[11px] truncate">
+                    {parallelModule ?? "Pick…"}
+                  </span>
+                  <span className="material-symbols-outlined text-[12px] shrink-0">expand_more</span>
+                </button>
+              )}
+              {showFsParallelPicker && bibleModules.length > 0 && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg min-w-[160px] max-h-48 overflow-y-auto">
+                  {parallelModule && (
+                    <button
+                      onClick={() => { setParallelModule(null); setShowFsParallelPicker(false); }}
+                      className="w-full text-left px-3 py-2 font-body-ui text-body-ui text-secondary hover:bg-surface-container-high"
+                    >
+                      — None
+                    </button>
+                  )}
+                  {bibleModules.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setParallelModule(m.id); setShowFsParallelPicker(false); }}
+                      className={`w-full text-left px-3 py-2 font-body-ui text-body-ui transition-colors ${
+                        m.id === parallelModule
+                          ? "bg-secondary-container text-on-secondary-container font-medium"
+                          : "hover:bg-surface-container-high text-on-surface"
+                      }`}
+                    >
+                      {m.id}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Sync scroll toggle (fullscreen, only when parallel is on) */}
+            {parallelMode && (
+              <button
+                title={syncScroll ? "Unsync scroll" : "Sync scroll between panes"}
+                onClick={() => setSyncScroll((v) => !v)}
+                className={`p-1.5 rounded transition-colors ${
+                  syncScroll ? "bg-secondary-container text-on-secondary-container" : "text-secondary hover:bg-surface-container-low"
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">sync</span>
+              </button>
+            )}
+
             {/* Word search */}
             <button
               onClick={() => setFsSearchOpen(true)}
@@ -382,7 +499,7 @@ export default function ReadingView() {
             </button>
           </div>
 
-          <div className="relative flex-1 overflow-y-auto">
+          <div className="relative flex-1 flex overflow-hidden">
             <PrimaryPane
               chapter={chapter}
               loading={loading}
@@ -395,7 +512,7 @@ export default function ReadingView() {
               onCommentaryClick={openCommentary}
               onNotesClick={openNotes}
               onAddToServiceClick={handleAddToService}
-              showBorder={false}
+              showBorder={parallelMode}
               showStrongs={showStrongs}
               showCrossRefs={showCrossRefs}
               showRedLetter={showRedLetter}
@@ -404,7 +521,23 @@ export default function ReadingView() {
               readingFontSize={readingFontSize}
               displayPrefs={displayPrefs}
               fullscreen
+              scrollContainerRef={primaryScrollRef}
             />
+            {parallelMode && (
+              <>
+                <div className="w-px bg-outline-variant shrink-0" />
+                {parallelChapter ? (
+                  <ParallelPane chapter={parallelChapter} onStrongsClick={handleStrongsClick} showStrongs={showStrongs} readingFontSize={readingFontSize} displayPrefs={displayPrefs} scrollContainerRef={parallelScrollRef} />
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-3 text-on-surface-variant px-8">
+                    <span className="material-symbols-outlined text-[40px] opacity-40">splitscreen</span>
+                    <p className="font-body-ui text-body-ui text-center opacity-60">
+                      Select a parallel translation using the splitscreen button above.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
             <div
               className={`absolute inset-0 z-20 flex justify-end transition-all duration-200 ${serviceOrderOpen ? "pointer-events-auto" : "pointer-events-none"}`}
               onClick={() => setServiceOrderOpen(false)}
@@ -452,6 +585,17 @@ export default function ReadingView() {
               >
                 <span className="material-symbols-outlined text-[18px]">chevron_right</span>
               </button>
+              {parallelMode && (
+                <button
+                  title={syncScroll ? "Unsync scroll" : "Sync scroll between panes"}
+                  onClick={() => setSyncScroll((v) => !v)}
+                  className={`p-1 rounded transition-colors ${
+                    syncScroll ? "bg-secondary-container text-on-secondary-container" : "text-secondary hover:bg-surface-container-low"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">sync</span>
+                </button>
+              )}
               <button
                 title="Focus mode (Ctrl+F)"
                 onClick={() => setIsFullscreen(true)}
@@ -483,12 +627,22 @@ export default function ReadingView() {
               showNotes={showNotes}
               readingFontSize={readingFontSize}
               displayPrefs={displayPrefs}
+              scrollContainerRef={primaryScrollRef}
             />
 
-            {parallelMode && parallelChapter && (
+            {parallelMode && (
               <>
                 <div className="w-px bg-outline-variant shrink-0" />
-                <ParallelPane chapter={parallelChapter} onStrongsClick={handleStrongsClick} showStrongs={showStrongs} readingFontSize={readingFontSize} displayPrefs={displayPrefs} />
+                {parallelChapter ? (
+                  <ParallelPane chapter={parallelChapter} onStrongsClick={handleStrongsClick} showStrongs={showStrongs} readingFontSize={readingFontSize} displayPrefs={displayPrefs} scrollContainerRef={parallelScrollRef} />
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-3 text-on-surface-variant px-8">
+                    <span className="material-symbols-outlined text-[40px] opacity-40">splitscreen</span>
+                    <p className="font-body-ui text-body-ui text-center opacity-60">
+                      Select a parallel translation from the Study Library sidebar.
+                    </p>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -508,7 +662,7 @@ const FONT_FAMILY_CSS: Record<string, string> = {
 };
 
 function PrimaryPane({
-  chapter, loading, error, currentVerse, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showBorder, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, readingFontSize, displayPrefs, fullscreen,
+  chapter, loading, error, currentVerse, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showBorder, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, readingFontSize, displayPrefs, fullscreen, scrollContainerRef,
 }: {
   chapter: ChapterText | null;
   loading: boolean;
@@ -530,8 +684,10 @@ function PrimaryPane({
   readingFontSize: number;
   displayPrefs: import("../store/app").DisplayPrefs;
   fullscreen?: boolean;
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const internalRef = useRef<HTMLDivElement>(null);
+  const scrollRef = (scrollContainerRef ?? internalRef) as React.RefObject<HTMLDivElement>;
   const prevChapterRef = useRef<ChapterText | null>(null);
 
   useEffect(() => {
@@ -585,7 +741,7 @@ function PrimaryPane({
   );
 }
 
-function ParallelPane({ chapter, onStrongsClick, showStrongs, readingFontSize, displayPrefs }: { chapter: ChapterText; onStrongsClick: (s: string) => void; showStrongs: boolean; readingFontSize: number; displayPrefs: import("../store/app").DisplayPrefs }) {
+function ParallelPane({ chapter, onStrongsClick, showStrongs, readingFontSize, displayPrefs, scrollContainerRef }: { chapter: ChapterText; onStrongsClick: (s: string) => void; showStrongs: boolean; readingFontSize: number; displayPrefs: import("../store/app").DisplayPrefs; scrollContainerRef?: React.RefObject<HTMLDivElement | null> }) {
   const horizPadding = `max(16px, ${displayPrefs.margins / 2}%)`;
   const textStyle: React.CSSProperties = {
     fontSize: `${readingFontSize}px`,
@@ -595,7 +751,7 @@ function ParallelPane({ chapter, onStrongsClick, showStrongs, readingFontSize, d
     fontFamily: FONT_FAMILY_CSS[displayPrefs.fontFamily],
   };
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div ref={scrollContainerRef as React.RefObject<HTMLDivElement>} className="flex-1 overflow-y-auto">
       <div className="max-w-[1100px] mx-auto w-full py-8 space-y-4" style={{ paddingLeft: horizPadding, paddingRight: horizPadding }}>
         <h2 className="font-headline-md text-headline-md text-primary mb-4 border-b border-outline-variant pb-2">
           {chapter.module_id}

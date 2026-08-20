@@ -1,6 +1,7 @@
+import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../store/app";
+import { api, type InstalledModule } from "../lib/tauri";
 
-// Canonical book list — OT then NT
 const CANON: { section: string; books: string[] }[] = [
   { section: "Pentateuch", books: ["Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy"] },
   { section: "Historical", books: ["Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel", "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther"] },
@@ -14,15 +15,114 @@ const CANON: { section: string; books: string[] }[] = [
 ];
 
 export default function BookNavigator() {
-  const { currentRef, setCurrentRef, primaryModule } = useAppStore();
+  const {
+    currentRef, setCurrentRef,
+    primaryModule, setPrimaryModule,
+    parallelMode, parallelModule, setParallelModule,
+  } = useAppStore();
+
+  const [bibleModules, setBibleModules] = useState<InstalledModule[]>([]);
+  const [showPrimaryPicker, setShowPrimaryPicker] = useState(false);
+  const [showParallelPicker, setShowParallelPicker] = useState(false);
+  const primaryPickerRef = useRef<HTMLDivElement>(null);
+  const parallelPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    api.listInstalledModules()
+      .then((mods) => setBibleModules(mods.filter((m) => m.category === "Bible")))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (primaryPickerRef.current && !primaryPickerRef.current.contains(e.target as Node)) {
+        setShowPrimaryPicker(false);
+      }
+      if (parallelPickerRef.current && !parallelPickerRef.current.contains(e.target as Node)) {
+        setShowParallelPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
 
   return (
     <aside className="w-[220px] bg-surface-container-lowest border-r border-outline-variant flex flex-col h-full overflow-y-auto shrink-0">
       <div className="p-4 border-b border-outline-variant">
         <h2 className="font-headline-md text-headline-md font-bold text-on-surface">Study Library</h2>
-        <p className="font-metadata-mono text-metadata-mono text-secondary mt-1">
-          {primaryModule ?? "No module active"}
-        </p>
+
+        {/* Primary translation picker */}
+        <div ref={primaryPickerRef} className="relative mt-1.5">
+          <button
+            onClick={() => setShowPrimaryPicker((v) => !v)}
+            className="flex items-center gap-0.5 text-primary hover:opacity-75 transition-opacity max-w-full"
+            title="Switch Bible translation"
+          >
+            <span className="font-metadata-mono text-metadata-mono truncate">
+              {primaryModule ?? "No module active"}
+            </span>
+            <span className="material-symbols-outlined text-[14px] shrink-0">expand_more</span>
+          </button>
+          {showPrimaryPicker && bibleModules.length > 0 && (
+            <div className="absolute left-0 top-full mt-1 z-50 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg min-w-[160px] max-h-48 overflow-y-auto">
+              {bibleModules.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => { setPrimaryModule(m.id); setShowPrimaryPicker(false); }}
+                  className={`w-full text-left px-3 py-2 font-body-ui text-body-ui transition-colors ${
+                    m.id === primaryModule
+                      ? "bg-secondary-container text-on-secondary-container font-medium"
+                      : "hover:bg-surface-container-high text-on-surface"
+                  }`}
+                >
+                  {m.id}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Parallel translation picker — only visible when parallel mode is on */}
+        {parallelMode && (
+          <div ref={parallelPickerRef} className="relative mt-1.5">
+            <button
+              onClick={() => setShowParallelPicker((v) => !v)}
+              className="flex items-center gap-0.5 text-secondary hover:text-primary transition-colors max-w-full"
+              title="Switch parallel translation"
+            >
+              <span className="material-symbols-outlined text-[12px] shrink-0">splitscreen</span>
+              <span className="font-metadata-mono text-[11px] truncate ml-0.5">
+                {parallelModule ?? "Pick parallel…"}
+              </span>
+              <span className="material-symbols-outlined text-[12px] shrink-0">expand_more</span>
+            </button>
+            {showParallelPicker && bibleModules.length > 0 && (
+              <div className="absolute left-0 top-full mt-1 z-50 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg min-w-[160px] max-h-48 overflow-y-auto">
+                {parallelModule && (
+                  <button
+                    onClick={() => { setParallelModule(null); setShowParallelPicker(false); }}
+                    className="w-full text-left px-3 py-2 font-body-ui text-body-ui text-secondary hover:bg-surface-container-high"
+                  >
+                    — None
+                  </button>
+                )}
+                {bibleModules.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => { setParallelModule(m.id); setShowParallelPicker(false); }}
+                    className={`w-full text-left px-3 py-2 font-body-ui text-body-ui transition-colors ${
+                      m.id === parallelModule
+                        ? "bg-secondary-container text-on-secondary-container font-medium"
+                        : "hover:bg-surface-container-high text-on-surface"
+                    }`}
+                  >
+                    {m.id}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="p-2 space-y-1 font-body-ui text-body-ui">
