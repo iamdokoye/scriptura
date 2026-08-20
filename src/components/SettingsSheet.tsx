@@ -331,7 +331,7 @@ export default function SettingsSheet() {
                   { q: "What are Strong's numbers?", a: "Strong's numbers link each word to its original Hebrew or Greek dictionary entry. Enable them in Study Tools settings." },
                   { q: "How do I change the font or size?", a: "Open Settings → Appearance → Text Settings to adjust font family, size, margins, and spacing." },
                   { q: "How do I use the presentation verse context shortcuts?", a: "Press Ctrl+1–4 while presentation is active: 1 = active verse only, 2 = active + next, 3 = prev + active + next, 4 = full chapter scroll." },
-                  { q: "Can I use two Bible translations side by side?", a: "Yes — enable Parallel Mode from the top bar menu. Choose a secondary module to display it alongside the primary." },
+                  { q: "Can I use two Bible translations side by side?", a: "Yes — click the splitscreen icon in the top bar to enable Parallel Mode, then pick the second translation from the Study Library sidebar. Enable the sync icon to scroll both panes together." },
                 ] as const).map(({ q, a }) => (
                   <details key={q} className="group">
                     <summary className="font-body-ui text-[12px] text-on-surface cursor-pointer list-none flex items-start justify-between gap-2">
@@ -510,6 +510,14 @@ const SHORTCUT_GROUPS: Array<{
     ],
   },
   {
+    label: "Parallel",
+    icon: "splitscreen",
+    shortcuts: [
+      { keys: ["splitscreen"], description: "Toggle parallel mode" },
+      { keys: ["sync"], description: "Sync scroll between panes", note: "Parallel on" },
+    ],
+  },
+  {
     label: "Font size",
     icon: "format_size",
     shortcuts: [
@@ -588,7 +596,12 @@ export function ShortcutsOverlay({ onClose }: { onClose: () => void }) {
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       {s.keys.map((k, i) => (
-                        <span key={i} className="font-metadata-mono text-[11px] text-on-surface bg-surface-container border border-outline-variant rounded px-1.5 py-0.5">{k}</span>
+                        <span key={i} className="inline-flex items-center justify-center text-on-surface bg-surface-container border border-outline-variant rounded px-1.5 py-0.5">
+                          {/^[a-z_]+$/.test(k)
+                            ? <span className="material-symbols-outlined text-[14px] leading-none">{k}</span>
+                            : <span className="font-metadata-mono text-[11px]">{k}</span>
+                          }
+                        </span>
                       ))}
                     </div>
                   </div>
