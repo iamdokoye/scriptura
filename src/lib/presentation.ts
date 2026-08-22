@@ -1,3 +1,4 @@
+import { emit, listen } from "@tauri-apps/api/event";
 import type { DisplayPrefs } from "../store/app";
 
 export interface PresentState {
@@ -14,24 +15,22 @@ export interface PresentState {
 
 const CHANNEL = "scriptura-presentation";
 
-let _channel: BroadcastChannel | null = null;
-function channel(): BroadcastChannel {
-  if (!_channel) _channel = new BroadcastChannel(CHANNEL);
-  return _channel;
-}
-
 export function emitPresentation(state: PresentState) {
-  channel().postMessage(state);
+  // Tauri's emit routes through the backend and reaches all WebView windows,
+  // unlike BroadcastChannel which is isolated per renderer process.
+  emit(CHANNEL, state).catch(console.error);
 }
 
 export function listenPresentation(cb: (state: PresentState) => void): () => void {
-  const ch = channel();
-  const handler = (e: MessageEvent<PresentState>) => cb(e.data);
-  ch.addEventListener("message", handler);
-  return () => ch.removeEventListener("message", handler);
-}
-
-export function closePresentation() {
-  _channel?.close();
-  _channel = null;
+  // listen() is async but we keep a synchronous cleanup API for useEffect.
+  let unlisten: (() => void) | null = null;
+  const promise = listen<PresentState>(CHANNEL, (event) => cb(event.payload));
+  promise.then((fn) => { unlisten = fn; }).catch(console.error);
+  return () => {
+    if (unlisten) {
+      unlisten();
+    } else {
+      promise.then((fn) => fn()).catch(() => {});
+    }
+  };
 }
