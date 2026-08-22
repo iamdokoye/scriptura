@@ -236,11 +236,12 @@ pub fn get_cross_references(
     let module_path = registry.module_path("TSK");
     let reader = BibleReader::open(&module_path, &conf, &file_cache)?;
 
-    let Ok(verse_text) = reader.get_verse(&book, chapter, verse) else {
+    // TSK stores its actual references within ThML <scripRef> elements. The
+    // normal display parser suppresses those elements, so read the raw module
+    // data before passing it to the TSK-specific parser.
+    let Ok(raw) = reader.get_raw_verse(&book, chapter, verse) else {
         return Ok(vec![]);
     };
-
-    let raw: String = verse_text.spans.iter().map(|s| s.text.as_str()).collect();
     Ok(crate::sword::crossref::parse_tsk_text(&raw, 120))
 }
 
@@ -303,39 +304,32 @@ pub fn list_installed_modules(
     registry.load_installed();
 
     let records = db.list_installed_module_records()?;
-    let modules = records.into_iter().map(|(id, name, path, version, category, index_built)| {
-        // Prefer the parsed conf's module_type over the DB-stored category string,
-        // because older records may have been stored with "Bible" as a default.
-        let cat = if let Some(conf) = registry.conf_for(&id) {
-            match conf.module_type {
-                crate::sword::conf::ModuleType::Commentary => ModuleCategory::Commentary,
-                crate::sword::conf::ModuleType::Lexicon    => ModuleCategory::Lexicon,
-                crate::sword::conf::ModuleType::Dictionary => ModuleCategory::Dictionary,
-                crate::sword::conf::ModuleType::Bible      => ModuleCategory::Bible,
-            }
-        } else {
-            match category.as_str() {
-                "Commentary" => ModuleCategory::Commentary,
-                "Lexicon"    => ModuleCategory::Lexicon,
-                "Dictionary" => ModuleCategory::Dictionary,
-                "Devotional" => ModuleCategory::Devotional,
-                _            => ModuleCategory::Bible,
-            }
+    let modules = records.into_iter().filter_map(|(id, name, path, version, _category, index_built)| {
+        // The database is only an installation record. A module is usable only
+        // when its extracted configuration can also be loaded from disk. This
+        // lets the startup auto-install repair stale records left by an aborted
+        // download instead of incorrectly treating them as installed forever.
+        let conf = registry.conf_for(&id)?;
+        let category = match conf.module_type {
+            crate::sword::conf::ModuleType::Commentary => ModuleCategory::Commentary,
+            crate::sword::conf::ModuleType::Lexicon    => ModuleCategory::Lexicon,
+            crate::sword::conf::ModuleType::Dictionary => ModuleCategory::Dictionary,
+            crate::sword::conf::ModuleType::Bible      => ModuleCategory::Bible,
         };
-        InstalledModule {
+        Some(InstalledModule {
             id: id.clone(),
             name,
             description: String::new(),
             language: String::new(),
             version,
-            category: cat,
+            category,
             installed: true,
             requires_key: false,
             has_strongs: false,
             size_bytes: None,
             install_path: path,
             index_built,
-        }
+        })
     }).collect();
     Ok(modules)
 }
@@ -356,7 +350,7 @@ pub async fn list_available_modules(
 /// Shared implementation for install_module and install_module_with_key.
 ///
 /// Phase 1 (0–60%): Download + extract via ModuleRegistry::install.
-/// Phase 2 (60–95%): Build FTS index via build_fts_index.
+/// Phase 2 (60–95%): Build an FTS index when the module is searchable.
 /// Phase 3 (100%): Done — emitted here so the UI progress bar completes.
 async fn run_install(
     module_id: String,
@@ -386,50 +380,64 @@ async fn run_install(
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
 
-    // Emit 60% to mark the clean boundary between download and FTS phases
-    let _ = app.emit("module-install-progress", serde_json::json!({
-        "module_id": module_id,
-        "progress": 60u32,
-        "message": "Building search index…",
-    }));
-
-    // Record module before indexing so it shows in the UI immediately
+    // Record the extracted module before optional indexing. In particular, TSK is
+    // needed by cross-references immediately after download; making it wait for a
+    // full-text index meant it could look downloaded but never installed.
     let module_path = registry.module_path(&module_id);
-    let category_str = registry.conf_for(&module_id)
-        .map(|c| match c.module_type {
-            crate::sword::conf::ModuleType::Commentary => "Commentary",
-            crate::sword::conf::ModuleType::Lexicon    => "Lexicon",
-            crate::sword::conf::ModuleType::Dictionary => "Dictionary",
-            crate::sword::conf::ModuleType::Bible      => "Bible",
-        })
-        .unwrap_or("Bible");
+    let conf = registry.conf_for(&module_id)
+        .ok_or_else(|| AppError::ModuleNotFound(module_id.clone()))?;
+    let category_str = match conf.module_type {
+        crate::sword::conf::ModuleType::Commentary => "Commentary",
+        crate::sword::conf::ModuleType::Lexicon    => "Lexicon",
+        crate::sword::conf::ModuleType::Dictionary => "Dictionary",
+        crate::sword::conf::ModuleType::Bible      => "Bible",
+    };
+    let module_name = if conf.name.is_empty() { module_id.as_str() } else { &conf.name };
+    let module_version = if conf.version.is_empty() { "1.0" } else { &conf.version };
     db.record_installed_module(
         &module_id,
-        &module_id,
+        module_name,
         &module_path.to_string_lossy(),
-        "1.0",
+        module_version,
         category_str,
     )?;
 
-    // Phase 2: build FTS index (60–95%), blocking
-    let app_clone2 = app.clone();
-    let module_id_clone2 = module_id.clone();
-    let registry_ptr2 = registry as *const ModuleRegistry as usize;
-    let db_ptr = db as *const Database as usize;
+    // TSK is reference data, not a searchable text module. Its index was both
+    // unnecessary and delayed the point at which cross-references became usable.
+    // Mark it complete now so the caller can immediately read the extracted data.
+    let should_index = matches!(conf.module_type, ModuleType::Bible | ModuleType::Commentary)
+        && !module_id.eq_ignore_ascii_case("TSK");
 
-    tokio::task::spawn_blocking(move || {
-        let registry = unsafe { &*(registry_ptr2 as *const ModuleRegistry) };
-        let db = unsafe { &*(db_ptr as *const Database) };
-        build_fts_index(&module_id_clone2, registry, db, 60, |pct, msg| {
-            let _ = app_clone2.emit("module-install-progress", serde_json::json!({
-                "module_id": module_id_clone2,
-                "progress": pct,
-                "message": msg,
-            }));
+    if should_index {
+        // Phase 2: build FTS index (60–95%), blocking
+        let _ = app.emit("module-install-progress", serde_json::json!({
+            "module_id": module_id,
+            "progress": 60u32,
+            "message": "Building search index…",
+        }));
+
+        let app_clone2 = app.clone();
+        let module_id_clone2 = module_id.clone();
+        let registry_ptr2 = registry as *const ModuleRegistry as usize;
+        let db_ptr = db as *const Database as usize;
+
+        tokio::task::spawn_blocking(move || {
+            let registry = unsafe { &*(registry_ptr2 as *const ModuleRegistry) };
+            let db = unsafe { &*(db_ptr as *const Database) };
+            build_fts_index(&module_id_clone2, registry, db, 60, |pct, msg| {
+                let _ = app_clone2.emit("module-install-progress", serde_json::json!({
+                    "module_id": module_id_clone2,
+                    "progress": pct,
+                    "message": msg,
+                }));
+            })
         })
-    })
-    .await
-    .map_err(|e| AppError::Other(e.to_string()))??;
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))??;
+    } else {
+        // Non-searchable modules should not be re-indexed on every launch.
+        db.mark_index_built(&module_id)?;
+    }
 
     // Phase 3: done
     let _ = app.emit("module-install-progress", serde_json::json!({

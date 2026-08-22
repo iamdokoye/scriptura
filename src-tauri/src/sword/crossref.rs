@@ -136,3 +136,21 @@ pub fn parse_tsk_text(text: &str, max: usize) -> Vec<CrossReference> {
 
     refs
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parse_tsk_text;
+
+    #[test]
+    fn reads_references_inside_thml_scripref_elements() {
+        let refs = parse_tsk_text(
+            r#"<scripRef>Pr 8:22-24; Joh 1:1-3; 1Jo 1:1</scripRef>"#,
+            120,
+        );
+
+        assert_eq!(refs.len(), 3);
+        assert_eq!(refs[0].book, "Proverbs");
+        assert_eq!(refs[1].book, "John");
+        assert_eq!(refs[2].book, "1 John");
+    }
+}

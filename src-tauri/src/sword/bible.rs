@@ -91,6 +91,15 @@ impl<'a> BibleReader<'a> {
         Ok(VerseText { book: book.to_string(), chapter, verse, spans })
     }
 
+    /// Return unparsed verse data for consumers that need module-specific markup.
+    ///
+    /// The TSK cross-reference module stores its references inside ThML
+    /// `<scripRef>` elements. The regular markup parser intentionally hides those
+    /// from display text, so cross-reference extraction must use this raw form.
+    pub fn get_raw_verse(&self, book: &str, chapter: u32, verse: u32) -> Result<String> {
+        self.raw_verse(book, chapter, verse)
+    }
+
     // ── Bulk chapter readers ──────────────────────────────────────────────────
 
     fn rawtext_chapter(

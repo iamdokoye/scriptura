@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { api, type CrossReference } from "../lib/tauri";
 import { useAppStore } from "../store/app";
@@ -11,11 +11,21 @@ interface Props {
   onClose: () => void;
 }
 
-type Status = "loading" | "installing" | "ready" | "no-tsk";
+type Status = "loading" | "installing" | "ready" | "no-tsk" | "no-refs";
+
+interface CrossReferencePassage extends CrossReference {
+  text: string | null;
+}
+
+function plainText(spans: { text: string }[]) {
+  return spans.map((span) => span.text).join("").trim();
+}
 
 export default function CrossRefSheet({ isOpen, book, chapter, verse, onClose }: Props) {
-  const { setCurrentRef, setView } = useAppStore();
+  const { primaryModule, setCurrentRef, setView } = useAppStore();
   const [refs, setRefs] = useState<CrossReference[]>([]);
+  const [sourceText, setSourceText] = useState<string | null>(null);
+  const [passages, setPassages] = useState<CrossReferencePassage[]>([]);
   const [status, setStatus] = useState<Status>("loading");
   const [installProgress, setInstallProgress] = useState(0);
   const [installMessage, setInstallMessage] = useState("");
@@ -32,22 +42,59 @@ export default function CrossRefSheet({ isOpen, book, chapter, verse, onClose }:
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [isOpen]);
 
-  // Fetch cross-refs whenever the sheet opens or the verse changes
-  useEffect(() => {
-    if (!isOpen) return;
+  const loadCrossReferences = useCallback(async () => {
+    if (!primaryModule) {
+      setStatus("no-tsk");
+      return;
+    }
+
     setStatus("loading");
     setRefs([]);
+    setSourceText(null);
+    setPassages([]);
 
-    api.getCrossReferences(book, chapter, verse).then((r) => {
-      if (r.length > 0) {
-        setRefs(r);
-        setStatus("ready");
-      } else {
-        // Empty result means TSK isn't installed
-        setStatus("no-tsk");
+    try {
+      const [allRefs, source] = await Promise.all([
+        api.getCrossReferences(book, chapter, verse),
+        api.getVerse(primaryModule, book, chapter, verse),
+      ]);
+      setSourceText(plainText(source.spans));
+
+      // TSK includes links back to the selected verse in some entries. The
+      // selected passage is already displayed first, so do not repeat it.
+      const related = allRefs.filter(
+        (ref) => ref.book !== book || ref.chapter !== chapter || ref.verse !== verse,
+      );
+      setRefs(related);
+
+      if (related.length === 0) {
+        setStatus("no-refs");
+        return;
       }
-    }).catch(() => setStatus("no-tsk"));
-  }, [isOpen, book, chapter, verse]);
+
+      const resolved = await Promise.all(
+        related.map(async (ref): Promise<CrossReferencePassage> => {
+          try {
+            const relatedVerse = await api.getVerse(primaryModule, ref.book, ref.chapter, ref.verse);
+            return { ...ref, text: plainText(relatedVerse.spans) };
+          } catch {
+            // Keep the reference visible even if this Bible module does not
+            // contain the exact verse (for example, versification differences).
+            return { ...ref, text: null };
+          }
+        }),
+      );
+      setPassages(resolved);
+      setStatus("ready");
+    } catch {
+      setStatus("no-tsk");
+    }
+  }, [book, chapter, primaryModule, verse]);
+
+  // Fetch cross-refs whenever the sheet opens or the verse changes
+  useEffect(() => {
+    if (isOpen) void loadCrossReferences();
+  }, [isOpen, loadCrossReferences]);
 
   // Listen for TSK install progress
   useEffect(() => {
@@ -60,15 +107,12 @@ export default function CrossRefSheet({ isOpen, book, chapter, verse, onClose }:
         setInstallMessage(message);
         if (progress === 100) {
           // TSK just finished — re-fetch
-          api.getCrossReferences(book, chapter, verse).then((r) => {
-            setRefs(r);
-            setStatus(r.length > 0 ? "ready" : "no-tsk");
-          });
+          void loadCrossReferences();
         }
       }
     );
     return () => { unlisten.then((f) => f()); };
-  }, [book, chapter, verse]);
+  }, [loadCrossReferences]);
 
   function startInstall() {
     setStatus("installing");
@@ -135,6 +179,21 @@ export default function CrossRefSheet({ isOpen, book, chapter, verse, onClose }:
             </div>
           )}
 
+          {/* Installed, but this verse has no related passages */}
+          {status === "no-refs" && sourceText !== null && (
+            <div className="flex flex-col gap-4">
+              <PassageCard
+                label="Selected verse"
+                reference={`${book} ${chapter}:${verse}`}
+                text={sourceText}
+                highlighted
+              />
+              <p className="text-on-surface-variant font-body-ui text-[13px]">
+                No cross-references were found for this verse.
+              </p>
+            </div>
+          )}
+
           {/* Installing with progress bar */}
           {status === "installing" && (
             <div className="py-8 flex flex-col items-center gap-4">
@@ -155,23 +214,62 @@ export default function CrossRefSheet({ isOpen, book, chapter, verse, onClose }:
           )}
 
           {/* Cross-refs ready */}
-          {status === "ready" && refs.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {refs.map((ref, i) => (
-                <button
-                  key={i}
-                  onClick={() => navigate(ref)}
-                  className="px-3 py-1.5 rounded-full bg-surface-container-low hover:bg-secondary-container hover:text-on-secondary-container text-on-surface-variant font-metadata-mono text-[12px] transition-colors border border-outline-variant"
-                >
-                  {ref.book} {ref.chapter}:{ref.verse}
-                  {ref.end_verse ? `–${ref.end_verse}` : ""}
-                </button>
-              ))}
+          {status === "ready" && sourceText !== null && (
+            <div className="flex flex-col gap-4">
+              <PassageCard
+                label="Selected verse"
+                reference={`${book} ${chapter}:${verse}`}
+                text={sourceText}
+                highlighted
+              />
+
+              <div className="pt-1">
+                <p className="mb-2 font-metadata-mono text-[11px] uppercase tracking-wide text-secondary">
+                  Cross-references ({refs.length})
+                </p>
+                <div className="flex flex-col gap-2">
+                  {passages.map((ref, i) => (
+                    <button
+                      key={`${ref.book}-${ref.chapter}-${ref.verse}-${i}`}
+                      onClick={() => navigate(ref)}
+                      className="w-full rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3 text-left transition-colors hover:bg-secondary-container hover:text-on-secondary-container"
+                    >
+                      <span className="block font-metadata-mono text-[12px] text-secondary">
+                        {ref.book} {ref.chapter}:{ref.verse}
+                        {ref.end_verse ? `–${ref.end_verse}` : ""}
+                      </span>
+                      <span className="mt-1 block font-body-reading text-[15px] leading-relaxed text-on-surface">
+                        {ref.text ?? "Verse text is unavailable in the selected Bible module."}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
         </div>
       </div>
     </div>
+  );
+}
+
+function PassageCard({ label, reference, text, highlighted = false }: {
+  label: string;
+  reference: string;
+  text: string;
+  highlighted?: boolean;
+}) {
+  return (
+    <article className={`rounded-xl border px-4 py-3 ${
+      highlighted
+        ? "border-primary/40 bg-primary-container/25"
+        : "border-outline-variant bg-surface-container-low"
+    }`}>
+      <p className="font-metadata-mono text-[11px] uppercase tracking-wide text-secondary">
+        {label} · {reference}
+      </p>
+      <p className="mt-1 font-body-reading text-[16px] leading-relaxed text-on-surface">{text}</p>
+    </article>
   );
 }
