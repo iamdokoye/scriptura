@@ -15,12 +15,15 @@ opt-level = 2
 
 # Release builds: maximum optimisation. Larger binary, much faster runtime.
 # LTO=fat lets the compiler inline across crate boundaries (zlib, SQLite, XML parser).
-# panic=abort sheds the unwinding machinery (~5% smaller binary, slightly faster).
+# panic=unwind (the default) is kept explicit here: it costs a little size/speed
+# over abort, but it means a panic anywhere terminates that one operation instead
+# of instantly killing the whole app with no diagnostics — see the panic hook in
+# lib.rs, which relies on unwinding to run before the process exits.
 [profile.release]
 opt-level = 3
 lto = "fat"
 codegen-units = 1
-panic = "abort"
+panic = "unwind"
 strip = true
 
 [lib]

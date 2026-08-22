@@ -21,6 +21,8 @@ pub fn run() {
                 .expect("could not resolve app data dir");
             std::fs::create_dir_all(&data_dir)?;
 
+            install_panic_hook(data_dir.join("crash.log"));
+
             let db_path = data_dir.join("scriptura.db");
             let db = db::Database::open(&db_path).expect("failed to open database");
             app.manage(db);
@@ -131,4 +133,39 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Replaces the default panic hook so a panic leaves a diagnosable trail instead
+/// of vanishing with the process. With `panic = "unwind"` (see Cargo.toml), Tokio
+/// already catches a panic inside any spawned task — including every
+/// `spawn_blocking` call in commands/mod.rs — and turns it into an `Err` the
+/// caller already handles; this hook is what makes that panic visible afterward,
+/// since the default hook only prints to stderr, which a packaged GUI app has
+/// nowhere to show.
+fn install_panic_hook(log_path: std::path::PathBuf) {
+    use std::io::Write;
+
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        default_hook(info);
+
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let location = info.location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown location".into());
+        let message = info.payload().downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| info.payload().downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "(no message)".into());
+
+        log::error!("[panic] {message} at {location}");
+
+        let entry = format!("[{timestamp}] panic at {location}: {message}\n");
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
+            let _ = file.write_all(entry.as_bytes());
+        }
+    }));
 }
