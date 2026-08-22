@@ -6,6 +6,7 @@ mod sword;
 mod types;
 mod versification;
 
+use std::sync::Arc;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -25,11 +26,14 @@ pub fn run() {
 
             let db_path = data_dir.join("scriptura.db");
             let db = db::Database::open(&db_path).expect("failed to open database");
-            app.manage(db);
+            // Managed as Arc so command handlers can clone an owned, 'static handle
+            // to move into tokio::task::spawn_blocking — see commands/mod.rs — instead
+            // of the raw-pointer-cast pattern that used to bypass the borrow checker.
+            app.manage(Arc::new(db));
 
             let modules_dir = data_dir.join("modules");
             std::fs::create_dir_all(&modules_dir)?;
-            app.manage(modules::ModuleRegistry::new(modules_dir));
+            app.manage(Arc::new(modules::ModuleRegistry::new(modules_dir)));
             app.manage(commands::ChapterCache::new());
             app.manage(sword::file_cache::FileCache::new());
             app.manage(commands::PresentationState(std::sync::Mutex::new(None)));
@@ -38,8 +42,8 @@ pub fn run() {
             // the chapter cache with the saved reading position so first render is instant.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-                let db       = handle.state::<db::Database>();
-                let registry = handle.state::<modules::ModuleRegistry>();
+                let db       = handle.state::<Arc<db::Database>>();
+                let registry = handle.state::<Arc<modules::ModuleRegistry>>();
                 let chapter_cache = handle.state::<commands::ChapterCache>();
                 let file_cache    = handle.state::<sword::file_cache::FileCache>();
 

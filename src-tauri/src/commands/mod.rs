@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 use crate::db::Database;
 use crate::modules::ModuleRegistry;
@@ -144,7 +144,7 @@ pub fn get_chapter(
     module_id: String,
     book: String,
     chapter: u32,
-    registry: State<ModuleRegistry>,
+    registry: State<Arc<ModuleRegistry>>,
     chapter_cache: State<ChapterCache>,
     file_cache: State<FileCache>,
 ) -> std::result::Result<ChapterText, AppError> {
@@ -166,7 +166,7 @@ pub fn get_verse(
     book: String,
     chapter: u32,
     verse: u32,
-    registry: State<ModuleRegistry>,
+    registry: State<Arc<ModuleRegistry>>,
     file_cache: State<FileCache>,
 ) -> std::result::Result<VerseText, AppError> {
     let conf = registry.conf_for(&module_id)
@@ -183,8 +183,8 @@ pub fn get_strongs_entry(
     module_id: String,         // lexicon module, e.g. "StrongsGreek"
     strongs_number: String,
     bible_module_id: String,   // active Bible module, used to query occurrence counts
-    db: State<'_, Database>,
-    registry: State<ModuleRegistry>,
+    db: State<'_, Arc<Database>>,
+    registry: State<Arc<ModuleRegistry>>,
 ) -> std::result::Result<StrongsEntry, AppError> {
     let conf = registry.conf_for(&module_id)
         .ok_or_else(|| AppError::ModuleNotFound(module_id.clone()))?;
@@ -207,7 +207,7 @@ pub fn get_commentary(
     book: String,
     chapter: u32,
     verse: u32,
-    registry: State<ModuleRegistry>,
+    registry: State<Arc<ModuleRegistry>>,
     file_cache: State<FileCache>,
 ) -> std::result::Result<String, AppError> {
     let conf = registry.conf_for(&module_id)
@@ -227,7 +227,7 @@ pub fn get_cross_references(
     book: String,
     chapter: u32,
     verse: u32,
-    registry: State<ModuleRegistry>,
+    registry: State<Arc<ModuleRegistry>>,
     file_cache: State<FileCache>,
 ) -> std::result::Result<Vec<CrossReference>, AppError> {
     let Some(conf) = registry.conf_for("TSK") else {
@@ -251,7 +251,7 @@ pub fn get_cross_references(
 pub fn search(
     query: String,
     options: SearchOptions,
-    db: State<Database>,
+    db: State<Arc<Database>>,
 ) -> std::result::Result<Vec<SearchResult>, AppError> {
     db.search_fts(&query, &options)
 }
@@ -262,18 +262,16 @@ pub fn search(
 pub async fn rebuild_search_index(
     module_id: String,
     app: AppHandle,
-    db: State<'_, Database>,
-    registry: State<'_, ModuleRegistry>,
+    db: State<'_, Arc<Database>>,
+    registry: State<'_, Arc<ModuleRegistry>>,
 ) -> std::result::Result<(), AppError> {
     let app_clone = app.clone();
     let module_id_clone = module_id.clone();
-    let registry_ptr = registry.inner() as *const ModuleRegistry as usize;
-    let db_ptr = db.inner() as *const Database as usize;
+    let registry = registry.inner().clone();
+    let db = db.inner().clone();
 
     tokio::task::spawn_blocking(move || {
-        let registry = unsafe { &*(registry_ptr as *const ModuleRegistry) };
-        let db = unsafe { &*(db_ptr as *const Database) };
-        build_fts_index(&module_id_clone, registry, db, 0, |pct, msg| {
+        build_fts_index(&module_id_clone, &registry, &db, 0, |pct, msg| {
             let _ = app_clone.emit("index-progress", serde_json::json!({
                 "module_id": module_id_clone,
                 "progress": pct,
@@ -297,8 +295,8 @@ pub async fn rebuild_search_index(
 
 #[tauri::command]
 pub fn list_installed_modules(
-    db: State<Database>,
-    registry: State<ModuleRegistry>,
+    db: State<Arc<Database>>,
+    registry: State<Arc<ModuleRegistry>>,
 ) -> std::result::Result<Vec<InstalledModule>, AppError> {
     // Reload from disk to catch any newly installed modules
     registry.load_installed();
@@ -336,15 +334,12 @@ pub fn list_installed_modules(
 
 #[tauri::command]
 pub async fn list_available_modules(
-    registry: State<'_, ModuleRegistry>,
+    registry: State<'_, Arc<ModuleRegistry>>,
 ) -> std::result::Result<Vec<ModuleInfo>, AppError> {
-    let registry_ptr = registry.inner() as *const ModuleRegistry as usize;
-    tokio::task::spawn_blocking(move || {
-        let registry = unsafe { &*(registry_ptr as *const ModuleRegistry) };
-        Ok(registry.fetch_available())
-    })
-    .await
-    .map_err(|e| AppError::Other(e.to_string()))?
+    let registry = registry.inner().clone();
+    tokio::task::spawn_blocking(move || Ok(registry.fetch_available()))
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))?
 }
 
 /// Shared implementation for install_module and install_module_with_key.
@@ -356,20 +351,19 @@ async fn run_install(
     module_id: String,
     key: Option<String>,
     app: AppHandle,
-    db: &Database,
-    registry: &ModuleRegistry,
+    db: Arc<Database>,
+    registry: Arc<ModuleRegistry>,
 ) -> std::result::Result<(), AppError> {
     let app_clone = app.clone();
     let module_id_clone = module_id.clone();
     let key_clone = key.clone();
 
-    let registry_ptr = registry as *const ModuleRegistry as usize;
+    let registry_for_install = Arc::clone(&registry);
     let mid_for_closure = module_id_clone.clone();
 
     // Phase 1: download + extract (reports 5–59 via the closure)
     tokio::task::spawn_blocking(move || {
-        let registry = unsafe { &*(registry_ptr as *const ModuleRegistry) };
-        registry.install(&module_id_clone, key_clone.as_deref(), move |progress, message| {
+        registry_for_install.install(&module_id_clone, key_clone.as_deref(), move |progress, message| {
             let _ = app_clone.emit("module-install-progress", serde_json::json!({
                 "module_id": mid_for_closure,
                 "progress": progress,
@@ -418,13 +412,11 @@ async fn run_install(
 
         let app_clone2 = app.clone();
         let module_id_clone2 = module_id.clone();
-        let registry_ptr2 = registry as *const ModuleRegistry as usize;
-        let db_ptr = db as *const Database as usize;
+        let registry_for_index = Arc::clone(&registry);
+        let db_for_index = Arc::clone(&db);
 
         tokio::task::spawn_blocking(move || {
-            let registry = unsafe { &*(registry_ptr2 as *const ModuleRegistry) };
-            let db = unsafe { &*(db_ptr as *const Database) };
-            build_fts_index(&module_id_clone2, registry, db, 60, |pct, msg| {
+            build_fts_index(&module_id_clone2, &registry_for_index, &db_for_index, 60, |pct, msg| {
                 let _ = app_clone2.emit("module-install-progress", serde_json::json!({
                     "module_id": module_id_clone2,
                     "progress": pct,
@@ -453,10 +445,10 @@ async fn run_install(
 pub async fn install_module(
     module_id: String,
     app: AppHandle,
-    db: State<'_, Database>,
-    registry: State<'_, ModuleRegistry>,
+    db: State<'_, Arc<Database>>,
+    registry: State<'_, Arc<ModuleRegistry>>,
 ) -> std::result::Result<(), AppError> {
-    run_install(module_id, None, app, db.inner(), registry.inner()).await
+    run_install(module_id, None, app, db.inner().clone(), registry.inner().clone()).await
 }
 
 #[tauri::command]
@@ -464,10 +456,10 @@ pub async fn install_module_with_key(
     module_id: String,
     key: String,
     app: AppHandle,
-    db: State<'_, Database>,
-    registry: State<'_, ModuleRegistry>,
+    db: State<'_, Arc<Database>>,
+    registry: State<'_, Arc<ModuleRegistry>>,
 ) -> std::result::Result<(), AppError> {
-    run_install(module_id, Some(key), app, db.inner(), registry.inner()).await
+    run_install(module_id, Some(key), app, db.inner().clone(), registry.inner().clone()).await
 }
 
 // ── Bookmarks ─────────────────────────────────────────────────────────────────
@@ -475,18 +467,18 @@ pub async fn install_module_with_key(
 #[tauri::command]
 pub fn add_bookmark(
     book: String, chapter: u32, verse: u32, module_id: String,
-    db: State<Database>,
+    db: State<Arc<Database>>,
 ) -> std::result::Result<Bookmark, AppError> {
     db.add_bookmark(&book, chapter, verse, &module_id)
 }
 
 #[tauri::command]
-pub fn remove_bookmark(id: i64, db: State<Database>) -> std::result::Result<(), AppError> {
+pub fn remove_bookmark(id: i64, db: State<Arc<Database>>) -> std::result::Result<(), AppError> {
     db.remove_bookmark(id)
 }
 
 #[tauri::command]
-pub fn list_bookmarks(db: State<Database>) -> std::result::Result<Vec<Bookmark>, AppError> {
+pub fn list_bookmarks(db: State<Arc<Database>>) -> std::result::Result<Vec<Bookmark>, AppError> {
     db.list_bookmarks()
 }
 
@@ -495,48 +487,48 @@ pub fn list_bookmarks(db: State<Database>) -> std::result::Result<Vec<Bookmark>,
 #[tauri::command]
 pub fn add_note(
     book: String, chapter: u32, verse: Option<u32>, module_id: String, content: String,
-    db: State<Database>,
+    db: State<Arc<Database>>,
 ) -> std::result::Result<Note, AppError> {
     db.add_note(&book, chapter, verse, &module_id, &content)
 }
 
 #[tauri::command]
-pub fn update_note(id: i64, content: String, db: State<Database>) -> std::result::Result<Note, AppError> {
+pub fn update_note(id: i64, content: String, db: State<Arc<Database>>) -> std::result::Result<Note, AppError> {
     db.update_note(id, &content)
 }
 
 #[tauri::command]
-pub fn delete_note(id: i64, db: State<Database>) -> std::result::Result<(), AppError> {
+pub fn delete_note(id: i64, db: State<Arc<Database>>) -> std::result::Result<(), AppError> {
     db.delete_note(id)
 }
 
 #[tauri::command]
-pub fn list_notes(db: State<Database>) -> std::result::Result<Vec<Note>, AppError> {
+pub fn list_notes(db: State<Arc<Database>>) -> std::result::Result<Vec<Note>, AppError> {
     db.list_notes()
 }
 
 // ── Preferences & position ────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn get_reading_position(db: State<Database>) -> std::result::Result<Option<ReadingPosition>, AppError> {
+pub fn get_reading_position(db: State<Arc<Database>>) -> std::result::Result<Option<ReadingPosition>, AppError> {
     db.get_reading_position()
 }
 
 #[tauri::command]
 pub fn set_reading_position(
     book: String, chapter: u32, verse: u32, module_id: String,
-    db: State<Database>,
+    db: State<Arc<Database>>,
 ) -> std::result::Result<(), AppError> {
     db.set_reading_position(&ReadingPosition { book, chapter, verse, module_id })
 }
 
 #[tauri::command]
-pub fn get_preferences(db: State<Database>) -> std::result::Result<Preferences, AppError> {
+pub fn get_preferences(db: State<Arc<Database>>) -> std::result::Result<Preferences, AppError> {
     db.get_preferences()
 }
 
 #[tauri::command]
-pub fn set_preferences(prefs: Value, db: State<Database>) -> std::result::Result<(), AppError> {
+pub fn set_preferences(prefs: Value, db: State<Arc<Database>>) -> std::result::Result<(), AppError> {
     // Merge partial prefs into current preferences
     let mut current = db.get_preferences()?;
     if let Some(obj) = prefs.as_object() {
