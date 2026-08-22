@@ -1,4 +1,5 @@
-import { emit, listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { DisplayPrefs } from "../store/app";
 
 export interface PresentState {
@@ -15,14 +16,15 @@ export interface PresentState {
 
 const CHANNEL = "scriptura-presentation";
 
+// Route through the Rust backend so the event reaches the presentation WebView.
+// Frontend-to-frontend emit is unreliable across separate Tauri windows;
+// backend app.emit() is the canonical cross-webview delivery path.
 export function emitPresentation(state: PresentState) {
-  // Tauri's emit routes through the backend and reaches all WebView windows,
-  // unlike BroadcastChannel which is isolated per renderer process.
-  emit(CHANNEL, state).catch(console.error);
+  invoke("relay_presentation", { payload: state }).catch(console.error);
 }
 
 export function listenPresentation(cb: (state: PresentState) => void): () => void {
-  // listen() is async but we keep a synchronous cleanup API for useEffect.
+  // listen() receives backend-emitted events reliably regardless of which window is focused.
   let unlisten: (() => void) | null = null;
   const promise = listen<PresentState>(CHANNEL, (event) => cb(event.payload));
   promise.then((fn) => { unlisten = fn; }).catch(console.error);

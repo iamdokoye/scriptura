@@ -541,6 +541,18 @@ pub fn set_preferences(prefs: Value, db: State<Database>) -> std::result::Result
     db.set_preferences(&current)
 }
 
+/// Relay presentation state from the main window to the presentation window.
+/// Frontend→frontend emit is unreliable across Tauri WebViews; routing via the
+/// backend (app.emit) is the canonical cross-window path.
+#[tauri::command]
+pub async fn relay_presentation(
+    app: AppHandle,
+    payload: serde_json::Value,
+) -> std::result::Result<(), String> {
+    app.emit("scriptura-presentation", payload)
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn open_presentation_window(app: AppHandle) -> std::result::Result<(), String> {
     use tauri::{WebviewUrl, WebviewWindowBuilder};

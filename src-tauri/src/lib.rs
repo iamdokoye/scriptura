@@ -121,6 +121,7 @@ pub fn run() {
             commands::get_preferences,
             commands::set_preferences,
             commands::rebuild_search_index,
+            commands::relay_presentation,
             commands::open_presentation_window,
             commands::close_presentation_window,
         ])
