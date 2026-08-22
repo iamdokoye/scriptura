@@ -1,6 +1,6 @@
 [package]
 name = "scriptura"
-version = "0.1.6"
+version = "0.1.7"
 description = "Scriptura — desktop Bible study app"
 authors = []
 license = ""
