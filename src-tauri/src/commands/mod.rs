@@ -541,16 +541,37 @@ pub fn set_preferences(prefs: Value, db: State<Database>) -> std::result::Result
     db.set_preferences(&current)
 }
 
+/// Persisted presentation state so the presentation window can fetch it immediately on load.
+pub struct PresentationState(pub Mutex<Option<Value>>);
+
 /// Relay presentation state from the main window to the presentation window.
-/// Frontend→frontend emit is unreliable across Tauri WebViews; routing via the
-/// backend (app.emit) is the canonical cross-window path.
+/// Stores the latest state and emits directly to the "presentation" WebView window.
+/// Using WebviewWindow::emit (point-to-point) rather than AppHandle::emit (broadcast)
+/// is more reliable across Tauri WebView process boundaries on macOS.
 #[tauri::command]
 pub async fn relay_presentation(
     app: AppHandle,
-    payload: serde_json::Value,
+    state: State<'_, PresentationState>,
+    payload: Value,
 ) -> std::result::Result<(), String> {
-    app.emit("scriptura-presentation", payload)
-        .map_err(|e| e.to_string())
+    // Persist so the window can pull it immediately on mount
+    *state.0.lock().unwrap() = Some(payload.clone());
+
+    // Emit directly to the presentation window
+    if let Some(window) = app.get_webview_window("presentation") {
+        window.emit("scriptura-presentation", &payload)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Called by the presentation window on mount to get the current state without
+/// waiting for the next emit (avoids race between window load and first relay call).
+#[tauri::command]
+pub async fn get_presentation_state(
+    state: State<'_, PresentationState>,
+) -> std::result::Result<Option<Value>, String> {
+    Ok(state.0.lock().unwrap().clone())
 }
 
 #[tauri::command]

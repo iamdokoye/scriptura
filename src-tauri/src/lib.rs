@@ -28,6 +28,7 @@ pub fn run() {
             app.manage(modules::ModuleRegistry::new(modules_dir));
             app.manage(commands::ChapterCache::new());
             app.manage(sword::file_cache::FileCache::new());
+            app.manage(commands::PresentationState(std::sync::Mutex::new(None)));
 
             // Background startup thread: rebuild stale FTS indexes, then pre-warm
             // the chapter cache with the saved reading position so first render is instant.
@@ -122,6 +123,7 @@ pub fn run() {
             commands::set_preferences,
             commands::rebuild_search_index,
             commands::relay_presentation,
+            commands::get_presentation_state,
             commands::open_presentation_window,
             commands::close_presentation_window,
         ])

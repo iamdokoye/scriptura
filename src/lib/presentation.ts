@@ -16,18 +16,26 @@ export interface PresentState {
 
 const CHANNEL = "scriptura-presentation";
 
-// Route through the Rust backend so the event reaches the presentation WebView.
-// Frontend-to-frontend emit is unreliable across separate Tauri windows;
-// backend app.emit() is the canonical cross-webview delivery path.
+// Route through the Rust backend. The backend stores the latest state and
+// emits directly to the "presentation" WebviewWindow using window.emit(),
+// which is point-to-point and reliable across macOS WKWebView boundaries.
 export function emitPresentation(state: PresentState) {
   invoke("relay_presentation", { payload: state }).catch(console.error);
 }
 
 export function listenPresentation(cb: (state: PresentState) => void): () => void {
-  // listen() receives backend-emitted events reliably regardless of which window is focused.
   let unlisten: (() => void) | null = null;
+
+  // Pull the last known state immediately — avoids missing the initial sync
+  // if this window loaded before the first relay call fired.
+  invoke<PresentState | null>("get_presentation_state")
+    .then((s) => { if (s) cb(s); })
+    .catch(() => {});
+
+  // Then listen for all subsequent relay events from the backend.
   const promise = listen<PresentState>(CHANNEL, (event) => cb(event.payload));
   promise.then((fn) => { unlisten = fn; }).catch(console.error);
+
   return () => {
     if (unlisten) {
       unlisten();
