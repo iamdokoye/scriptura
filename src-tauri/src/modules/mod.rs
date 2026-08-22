@@ -68,6 +68,16 @@ impl ModuleRegistry {
         for entry in entries.flatten() {
             let module_dir = entry.path();
             let module_id = entry.file_name().to_string_lossy().to_string();
+
+            // `.tmp-*` / `.old-*` are install()'s staging directories; one can be left
+            // behind if the app is killed mid-install/mid-swap. They never match a
+            // conf's own naming, so they'd just be silently skipped below — but since
+            // we're already iterating this directory, sweep them up while we're here.
+            if module_id.starts_with(".tmp-") || module_id.starts_with(".old-") {
+                let _ = std::fs::remove_dir_all(&module_dir);
+                continue;
+            }
+
             let conf_path = module_dir.join("mods.d").join(format!("{}.conf", module_id.to_lowercase()));
             if let Ok(conf) = ModuleConf::parse(&module_id, &conf_path) {
                 self.register(conf);
@@ -169,13 +179,28 @@ impl ModuleRegistry {
         }).collect()
     }
 
-    /// Download and install a module from CrossWire
+    /// Download and install a module from CrossWire.
+    ///
+    /// The archive is downloaded and extracted into a temporary sibling directory,
+    /// fully validated there (conf found and parsed, cipher key present if required),
+    /// and only then atomically swapped into the module's real directory. This means
+    /// an interrupted download, a truncated response, or a corrupt/incomplete archive
+    /// can never leave a partially-extracted module at the path readers actually use —
+    /// they either see the previous good install (if any) or nothing, never a broken one.
     pub fn install(
         &self,
         module_id: &str,
         cipher_key: Option<&str>,
         progress_cb: impl Fn(u32, &str) + Send + Sync + 'static,
     ) -> Result<()> {
+        // Validate before module_id is used to build any URL or filesystem path.
+        if module_id.is_empty()
+            || module_id.contains(['/', '\\', '\0', '.'])
+            || module_id.len() > 64
+        {
+            return Err(AppError::Sword(format!("invalid module id: {module_id}")));
+        }
+
         progress_cb(5, "Connecting to CrossWire repository…");
 
         let url = format!("{CROSSWIRE_REPO_URL}{module_id}.zip");
@@ -221,71 +246,107 @@ impl ModuleRegistry {
             }
         }
 
+        // A connection that closes early hands back a short read (n == 0) rather than
+        // an error, so an interrupted download can otherwise pass through silently as
+        // if it were the complete file. Catch that here, before anything is extracted.
+        if content_length > 0 && downloaded != content_length {
+            return Err(AppError::Network(format!(
+                "incomplete download: got {downloaded} of {content_length} bytes"
+            )));
+        }
+
         progress_cb(52, "Extracting module…");
 
-        // Validate module_id to prevent path injection into the modules directory
-        if module_id.is_empty()
-            || module_id.contains(['/', '\\', '\0', '.'])
-            || module_id.len() > 64
-        {
-            return Err(AppError::Sword(format!("invalid module id: {module_id}")));
-        }
-
+        std::fs::create_dir_all(&self.modules_dir)?;
         let dest_dir = self.modules_dir.join(module_id);
-        std::fs::create_dir_all(&dest_dir)?;
+        // Extract into a temp sibling directory first. Nothing below writes to
+        // dest_dir directly, so a panic, crash, or error partway through extraction
+        // or validation leaves dest_dir untouched — either the previous good install
+        // (on an update) or nothing (on a fresh install), never a partial module.
+        let tmp_dir = self.modules_dir.join(format!(".tmp-{module_id}"));
+        let _ = std::fs::remove_dir_all(&tmp_dir); // leftover from a prior interrupted attempt
+        std::fs::create_dir_all(&tmp_dir)?;
 
-        let cursor = std::io::Cursor::new(data);
-        let mut zip = zip::ZipArchive::new(cursor)
-            .map_err(|e| AppError::Sword(format!("zip open: {e}")))?;
+        let extract_and_validate = || -> Result<ModuleConf> {
+            let cursor = std::io::Cursor::new(data);
+            let mut zip = zip::ZipArchive::new(cursor)
+                .map_err(|e| AppError::Sword(format!("zip open: {e}")))?;
 
-        for i in 0..zip.len() {
-            let mut file = zip.by_index(i)
-                .map_err(|e| AppError::Sword(format!("zip entry {i}: {e}")))?;
+            for i in 0..zip.len() {
+                let mut file = zip.by_index(i)
+                    .map_err(|e| AppError::Sword(format!("zip entry {i}: {e}")))?;
 
-            // enclosed_name() returns None for paths with ".." or absolute components
-            let enclosed = match file.enclosed_name() {
-                Some(p) => p,
-                None => {
-                    log::warn!("[modules] skipping unsafe zip entry: {}", file.name());
+                // enclosed_name() returns None for paths with ".." or absolute components
+                let enclosed = match file.enclosed_name() {
+                    Some(p) => p,
+                    None => {
+                        log::warn!("[modules] skipping unsafe zip entry: {}", file.name());
+                        continue;
+                    }
+                };
+                let out_path = tmp_dir.join(enclosed);
+
+                // Double-check the resolved path is still inside tmp_dir
+                if !out_path.starts_with(&tmp_dir) {
+                    log::warn!("[modules] skipping zip entry outside dest: {}", file.name());
                     continue;
                 }
-            };
-            let out_path = dest_dir.join(enclosed);
 
-            // Double-check the resolved path is still inside dest_dir
-            if !out_path.starts_with(&dest_dir) {
-                log::warn!("[modules] skipping zip entry outside dest: {}", file.name());
-                continue;
+                if file.is_dir() {
+                    std::fs::create_dir_all(&out_path)?;
+                } else {
+                    if let Some(parent) = out_path.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    if file.size() > MAX_ENTRY_BYTES {
+                        return Err(AppError::Sword(format!(
+                            "zip entry {} exceeds size limit", file.name()
+                        )));
+                    }
+                    // std::io::copy surfaces a zip CRC32 mismatch as an error here,
+                    // since ZipFile validates each entry's checksum as it is read.
+                    let mut out_file = std::fs::File::create(&out_path)?;
+                    std::io::copy(&mut file, &mut out_file)?;
+                }
             }
 
-            if file.is_dir() {
-                std::fs::create_dir_all(&out_path)?;
-            } else {
-                if let Some(parent) = out_path.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                if file.size() > MAX_ENTRY_BYTES {
-                    return Err(AppError::Sword(format!(
-                        "zip entry {} exceeds size limit", file.name()
-                    )));
-                }
-                let mut out_file = std::fs::File::create(&out_path)?;
-                std::io::copy(&mut file, &mut out_file)?;
+            let conf_path = Self::find_conf(&tmp_dir, module_id)?;
+            let mut conf = ModuleConf::parse(module_id, &conf_path)?;
+
+            if conf.requires_cipher() && cipher_key.is_none() {
+                return Err(AppError::CipherKeyRequired);
             }
-        }
+            if let Some(key) = cipher_key {
+                conf.raw.insert("cipherkey".to_string(), key.to_string());
+            }
+            Ok(conf)
+        };
 
         progress_cb(57, "Parsing module configuration…");
+        let conf = match extract_and_validate() {
+            Ok(conf) => conf,
+            Err(e) => {
+                let _ = std::fs::remove_dir_all(&tmp_dir);
+                return Err(e);
+            }
+        };
 
-        let conf_path = Self::find_conf(&dest_dir, module_id)?;
-        let mut conf = ModuleConf::parse(module_id, &conf_path)?;
-
-        if conf.requires_cipher() && cipher_key.is_none() {
-            std::fs::remove_dir_all(&dest_dir).ok();
-            return Err(AppError::CipherKeyRequired);
-        }
-
-        if let Some(key) = cipher_key {
-            conf.raw.insert("cipherkey".to_string(), key.to_string());
+        // Fully validated — swap it into place. If dest_dir already holds a previous
+        // install (a reinstall/update), stage it aside rather than deleting it up
+        // front, so a failed rename can still restore it instead of losing the module.
+        if dest_dir.exists() {
+            let backup_dir = self.modules_dir.join(format!(".old-{module_id}"));
+            let _ = std::fs::remove_dir_all(&backup_dir);
+            std::fs::rename(&dest_dir, &backup_dir)
+                .map_err(|e| AppError::Sword(format!("failed to stage previous install: {e}")))?;
+            if let Err(e) = std::fs::rename(&tmp_dir, &dest_dir) {
+                let _ = std::fs::rename(&backup_dir, &dest_dir); // best-effort rollback
+                return Err(AppError::Sword(format!("failed to finalize module install: {e}")));
+            }
+            let _ = std::fs::remove_dir_all(&backup_dir);
+        } else {
+            std::fs::rename(&tmp_dir, &dest_dir)
+                .map_err(|e| AppError::Sword(format!("failed to finalize module install: {e}")))?;
         }
 
         self.register(conf);
