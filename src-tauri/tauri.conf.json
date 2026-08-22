@@ -38,6 +38,15 @@
     "macOS": {
       "signingIdentity": "-",
       "hardenedRuntime": false
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENCRDQ5RTg2NDNBQ0YzMTIKUldRUzg2eERocDdVeTlwdGZWNklSNEhsR1ZndklkSlJ5WjJYc3lUaVM4Uzl4ZzB4SHJtVkQvcTEK",
+      "endpoints": [
+        "https://github.com/iamdokoye/scriptura/releases/latest/download/latest.json"
+      ]
     }
   }
 }

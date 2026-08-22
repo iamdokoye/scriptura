@@ -69,7 +69,9 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Windows code signing (optional — set these secrets to enable signing)
+          # Signs the updater artifacts (.sig files + latest.json) so the in-app
+          # updater can verify downloads against the pubkey in tauri.conf.json.
+          # Generate with `npx tauri signer generate` and store the key as this secret.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
@@ -77,6 +79,10 @@ jobs:
           releaseName: Scriptura ${{ github.ref_name }}
           releaseBody: |
             See the [changelog](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for what's new.
+          # Kept as a draft so releases can be reviewed before going out — but note
+          # the in-app updater only sees *published* releases (it reads
+          # releases/latest/download/latest.json), so remember to publish the
+          # draft once it's ready for users to auto-update to.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

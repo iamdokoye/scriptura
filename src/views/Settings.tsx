@@ -4,6 +4,8 @@ import { api, type Preferences } from "../lib/tauri";
 import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import SideNav from "../components/SideNav";
 import { ShortcutsOverlay } from "../components/SettingsSheet";
+import { checkForUpdate, downloadAndInstall, getVersion } from "../lib/updater";
+import type { Update } from "@tauri-apps/plugin-updater";
 
 const DEFAULT_PREFS: Preferences = {
   theme: "light",
@@ -235,14 +237,14 @@ export default function Settings() {
 
           {/* About */}
           <SettingsCard title="About" icon="info">
-            <div className="font-body-ui text-body-ui text-on-surface-variant space-y-1">
+            <div className="px-4 py-3 font-body-ui text-body-ui text-on-surface-variant space-y-1">
               <p>Scriptura — open-source desktop Bible study</p>
-              <p className="font-metadata-mono text-metadata-mono">Version 0.1.0-dev</p>
-              <p className="text-[13px] mt-2">
+              <p className="text-[13px]">
                 SWORD module format is copyright The SWORD Project contributors.
                 Public-domain texts (KJV, WEB) are freely distributable.
               </p>
             </div>
+            <UpdateChecker />
           </SettingsCard>
 
           {saving && (
@@ -251,6 +253,88 @@ export default function Settings() {
         </div>
       </main>
     </div>
+  );
+}
+
+type UpdateState =
+  | { phase: "idle" }
+  | { phase: "checking" }
+  | { phase: "up-to-date" }
+  | { phase: "available"; update: Update }
+  | { phase: "downloading"; downloaded: number; total: number | null }
+  | { phase: "error"; message: string };
+
+function UpdateChecker() {
+  const [version, setVersion] = useState("");
+  const [state, setState] = useState<UpdateState>({ phase: "idle" });
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => {});
+  }, []);
+
+  async function handleCheck() {
+    setState({ phase: "checking" });
+    try {
+      const result = await checkForUpdate();
+      setState(
+        result.status === "available"
+          ? { phase: "available", update: result.update }
+          : { phase: "up-to-date" },
+      );
+    } catch (e) {
+      setState({ phase: "error", message: e instanceof Error ? e.message : "Update check failed" });
+    }
+  }
+
+  async function handleInstall(update: Update) {
+    setState({ phase: "downloading", downloaded: 0, total: null });
+    try {
+      await downloadAndInstall(update, (downloaded, total) => {
+        setState({ phase: "downloading", downloaded, total });
+      });
+      // App relaunches on success; if we're still here, installation didn't restart it.
+    } catch (e) {
+      setState({ phase: "error", message: e instanceof Error ? e.message : "Update failed" });
+    }
+  }
+
+  return (
+    <SettingsRow label="Version" description={version ? `Currently on v${version}` : undefined}>
+      <div className="flex flex-col items-end gap-1.5">
+        {state.phase === "idle" && (
+          <button
+            onClick={handleCheck}
+            className="px-3 py-1.5 rounded-DEFAULT font-body-ui text-sm bg-surface-container-high text-on-surface hover:bg-surface-container-highest transition-colors"
+          >
+            Check for updates
+          </button>
+        )}
+        {state.phase === "checking" && (
+          <span className="font-metadata-mono text-metadata-mono text-on-surface-variant">Checking…</span>
+        )}
+        {state.phase === "up-to-date" && (
+          <span className="font-metadata-mono text-metadata-mono text-secondary">You're up to date</span>
+        )}
+        {state.phase === "available" && (
+          <button
+            onClick={() => handleInstall(state.update)}
+            className="px-3 py-1.5 rounded-DEFAULT font-body-ui text-sm bg-primary text-on-primary hover:opacity-90 transition-opacity"
+          >
+            Download &amp; install v{state.update.version}
+          </button>
+        )}
+        {state.phase === "downloading" && (
+          <span className="font-metadata-mono text-metadata-mono text-on-surface-variant">
+            {state.total
+              ? `Downloading… ${Math.round((state.downloaded / state.total) * 100)}%`
+              : "Downloading…"}
+          </span>
+        )}
+        {state.phase === "error" && (
+          <span className="font-metadata-mono text-metadata-mono text-error">{state.message}</span>
+        )}
+      </div>
+    </SettingsRow>
   );
 }
 
