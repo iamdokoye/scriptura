@@ -110,7 +110,7 @@ export default function PresentationView() {
           />
         )}
       </div>
-      <StrongsSheet />
+      <StrongsSheet immediate />
     </div>
   );
 }
@@ -169,6 +169,9 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
   if (active) rows.push({ v: active, label: ref, role: "active" });
   if (next) rows.push({ v: next, label: `${state.book} ${state.chapter}:${next.verse}`, role: "next" });
 
+  // Keep state changes instantaneous: macOS can defer CSS animation frames for
+  // an unfocused presentation WKWebView.
+
   return (
     <div className="h-full flex flex-col justify-center gap-0 py-10" style={{ paddingLeft: hPad, paddingRight: hPad }}>
       {rows.map(({ v, label, role }) => {
@@ -176,7 +179,7 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
         const opacity = isActive ? "opacity-100" : role === "prev" ? "opacity-25" : "opacity-50";
         const ts = isActive ? activeStyle : contextStyle;
         return (
-          <div key={role} className={`transition-opacity duration-300 ${opacity} ${isActive ? "py-8 border-y border-white/10" : "py-5"}`}>
+          <div key={role} className={`${opacity} ${isActive ? "py-8 border-y border-white/10" : "py-5"}`}>
             {state.parallelMode && parallelChapter ? (
               <div className="grid grid-cols-2 gap-12">
                 <ContextVerseBlock text={verseText(v)} label={label} module={state.primaryModule} textStyle={ts} refSize={refSize} active={isActive} />
@@ -258,7 +261,7 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad }
             <div
               key={v.verse}
               ref={isActive ? activeRef : null}
-              className={`transition-opacity duration-300 ${isActive ? "opacity-100" : "opacity-30"}`}
+              className={isActive ? "opacity-100" : "opacity-30"}
             >
               {state.parallelMode && parallelChapter ? (
                 <div className="grid grid-cols-2 gap-12">
@@ -287,7 +290,7 @@ function ScrollVerseBlock({ verse, text, active, textStyle, verseNumSize, dim }:
   return (
     <div className={`flex gap-4 ${dim ? "opacity-60" : ""}`}>
       <span
-        className={`font-metadata-mono shrink-0 mt-1 transition-colors ${active ? "text-white/60" : "text-white/20"}`}
+        className={`font-metadata-mono shrink-0 mt-1 ${active ? "text-white/60" : "text-white/20"}`}
         style={{ fontSize: verseNumSize }}
       >
         {verse}

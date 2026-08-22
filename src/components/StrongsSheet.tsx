@@ -113,7 +113,13 @@ const FONT_FAMILY_CSS: Record<string, string> = {
   mono:   `"Courier New", Courier, monospace`,
 };
 
-export default function StrongsSheet() {
+/**
+ * `immediate` is used by the external presentation window. macOS may pause
+ * requestAnimationFrame callbacks for an unfocused WKWebView, so a sheet that
+ * begins transparent and waits for the next frame can remain invisible until
+ * that window is activated.
+ */
+export default function StrongsSheet({ immediate = false }: { immediate?: boolean }) {
   const { selectedStrongs, setSelectedStrongs, primaryModule, readingFontSize, isFullscreen, displayPrefs, setDisplayPrefs } = useAppStore();
   const fontFamily = FONT_FAMILY_CSS[displayPrefs.fontFamily] ?? FONT_FAMILY_CSS.system;
   const [entry, setEntry] = useState<StrongsEntry | null>(null);
@@ -131,15 +137,17 @@ export default function StrongsSheet() {
   const isOpen = selectedStrongs !== null;
   const prefix: "H" | "G" = selectedStrongs?.startsWith("H") ? "H" : "G";
 
-  // Slide-up animation: set visible one frame after mount
+  // Slide-up animation: set visible one frame after mount. The presentation
+  // window deliberately skips this animation; its state must be visible even
+  // while the operator window has focus.
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !immediate) {
       rafRef.current = requestAnimationFrame(() => setVisible(true));
     } else {
       setVisible(false);
     }
     return () => cancelAnimationFrame(rafRef.current);
-  }, [isOpen]);
+  }, [isOpen, immediate]);
 
   const lookup = useCallback(
     (num: string) => {
@@ -190,7 +198,7 @@ export default function StrongsSheet() {
       {/* Sheet */}
       <div
         className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full rounded-t-2xl shadow-2xl bg-surface border border-outline-variant flex flex-col transition-all duration-300 ease-out ${
-          visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
+          visible || immediate ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
         style={{ maxWidth: isFullscreen ? "90%" : "56rem", height: drag.height }}
         onClick={(e) => e.stopPropagation()}
