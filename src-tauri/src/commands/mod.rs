@@ -545,9 +545,12 @@ pub fn set_preferences(prefs: Value, db: State<Database>) -> std::result::Result
 pub struct PresentationState(pub Mutex<Option<Value>>);
 
 /// Relay presentation state from the main window to the presentation window.
-/// Stores the latest state and emits directly to the "presentation" WebView window.
-/// Using WebviewWindow::emit (point-to-point) rather than AppHandle::emit (broadcast)
-/// is more reliable across Tauri WebView process boundaries on macOS.
+/// Stores the latest state and pushes it via WebviewWindow::eval, which injects
+/// JS directly into the target webview from the host process. This is used instead
+/// of listen/emit or the window's own timers because macOS throttles JS execution
+/// (including setTimeout and the event loop that would deliver a `listen` callback)
+/// in WKWebViews that are not the key/focused window — eval() is driven externally
+/// and isn't subject to that throttling.
 #[tauri::command]
 pub async fn relay_presentation(
     app: AppHandle,
@@ -557,10 +560,12 @@ pub async fn relay_presentation(
     // Persist so the window can pull it immediately on mount
     *state.0.lock().unwrap() = Some(payload.clone());
 
-    // Emit directly to the presentation window
     if let Some(window) = app.get_webview_window("presentation") {
-        window.emit("scriptura-presentation", &payload)
-            .map_err(|e| e.to_string())?;
+        let json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
+        let script = format!(
+            "window.__scripturaApplyPresentation && window.__scripturaApplyPresentation({json});"
+        );
+        window.eval(&script).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
