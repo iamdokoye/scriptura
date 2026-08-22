@@ -231,7 +231,7 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad }
 
   useEffect(() => {
     activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [state.verse]);
+  }, [state.book, state.chapter, state.verse, chapter]);
 
   const ref = `${state.book} ${state.chapter}`;
   const textStyle = makeTextStyle(prefs, fontSize);
