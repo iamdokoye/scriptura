@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import type { DisplayPrefs } from "../store/app";
 
 export interface PresentState {
@@ -14,33 +13,36 @@ export interface PresentState {
   readingFontSize: number;
 }
 
-const CHANNEL = "scriptura-presentation";
-
-// Route through the Rust backend. The backend stores the latest state and
-// emits directly to the "presentation" WebviewWindow using window.emit(),
-// which is point-to-point and reliable across macOS WKWebView boundaries.
+// Route through the Rust backend. The backend stores the latest state in a Mutex,
+// which the presentation window polls for changes.
 export function emitPresentation(state: PresentState) {
   invoke("relay_presentation", { payload: state }).catch(console.error);
 }
 
+// Poll the backend for state changes every 150ms.
+// Tauri 2 WKWebView cross-process events (listen/emit) are unreliable on macOS;
+// invoke-based polling is the only mechanism guaranteed to cross the boundary.
 export function listenPresentation(cb: (state: PresentState) => void): () => void {
-  let unlisten: (() => void) | null = null;
+  let stopped = false;
+  let lastJson = "";
 
-  // Pull the last known state immediately — avoids missing the initial sync
-  // if this window loaded before the first relay call fired.
-  invoke<PresentState | null>("get_presentation_state")
-    .then((s) => { if (s) cb(s); })
-    .catch(() => {});
-
-  // Then listen for all subsequent relay events from the backend.
-  const promise = listen<PresentState>(CHANNEL, (event) => cb(event.payload));
-  promise.then((fn) => { unlisten = fn; }).catch(console.error);
-
-  return () => {
-    if (unlisten) {
-      unlisten();
-    } else {
-      promise.then((fn) => fn()).catch(() => {});
+  async function tick() {
+    if (stopped) return;
+    try {
+      const s = await invoke<PresentState | null>("get_presentation_state");
+      if (s) {
+        const json = JSON.stringify(s);
+        if (json !== lastJson) {
+          lastJson = json;
+          cb(s);
+        }
+      }
+    } catch {
+      // ignore
     }
-  };
+    if (!stopped) setTimeout(tick, 150);
+  }
+
+  tick();
+  return () => { stopped = true; };
 }
