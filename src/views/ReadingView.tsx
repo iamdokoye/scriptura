@@ -1,7 +1,6 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppStore } from "../store/app";
-import { api, type ChapterText, type InstalledModule, type MonitorInfo, type TextSpan } from "../lib/tauri";
-import { emitPresentation } from "../lib/presentation";
+import { api, type InstalledModule, type MonitorInfo } from "../lib/tauri";
 import BookNavigator from "../components/BookNavigator";
 import SideNav from "../components/SideNav";
 import StrongsSheet from "../components/StrongsSheet";
@@ -13,8 +12,11 @@ import FullscreenSearchPalette from "../components/FullscreenSearchPalette";
 import ScriptureNav from "../components/ScriptureNav";
 import ServiceOrderPanel from "../components/ServiceOrderPanel";
 import ErrorBoundary from "../components/ErrorBoundary";
-
-const FONT_SIZE_PRESETS = [14, 16, 32, 48, 64, 72, 98] as const;
+import { PrimaryPane, ParallelPane } from "../components/VersePanes";
+import { useReadingShortcuts } from "../hooks/useReadingShortcuts";
+import { useScrollSync } from "../hooks/useScrollSync";
+import { useChapterData } from "../hooks/useChapterData";
+import { usePresentationSync } from "../hooks/usePresentationSync";
 
 export default function ReadingView() {
   const {
@@ -29,16 +31,11 @@ export default function ReadingView() {
     serviceOrderOpen, setServiceOrderOpen,
   } = useAppStore();
 
-  const [chapter, setChapter] = useState<ChapterText | null>(null);
-  const [parallelChapter, setParallelChapter] = useState<ChapterText | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  type VerseRef = { book: string; chapter: number; verse: number };
-  const [crossRefVerse, setCrossRefVerse] = useState<VerseRef | null>(null);
-  const [compareVerse, setCompareVerse] = useState<VerseRef | null>(null);
-  const [commentaryVerse, setCommentaryVerse] = useState<VerseRef | null>(null);
-  const [notesVerse, setNotesVerse] = useState<VerseRef | null>(null);
+  type VerseRefLocal = { book: string; chapter: number; verse: number };
+  const [crossRefVerse, setCrossRefVerse] = useState<VerseRefLocal | null>(null);
+  const [compareVerse, setCompareVerse] = useState<VerseRefLocal | null>(null);
+  const [commentaryVerse, setCommentaryVerse] = useState<VerseRefLocal | null>(null);
+  const [notesVerse, setNotesVerse] = useState<VerseRefLocal | null>(null);
   const [fsSearchOpen, setFsSearchOpen] = useState(false);
   const fsSearchOpenRef = useRef(false);
   fsSearchOpenRef.current = fsSearchOpen;
@@ -49,7 +46,6 @@ export default function ReadingView() {
   const [syncScroll, setSyncScroll] = useState(false);
   const primaryScrollRef = useRef<HTMLDivElement>(null);
   const parallelScrollRef = useRef<HTMLDivElement>(null);
-  const isSyncing = useRef(false);
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   const [showMonitorPicker, setShowMonitorPicker] = useState(false);
   const monitorPickerRef = useRef<HTMLDivElement>(null);
@@ -93,225 +89,23 @@ export default function ReadingView() {
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, []);
 
-  useEffect(() => {
-    if (!syncScroll) return;
-    const primary = primaryScrollRef.current;
-    const parallel = parallelScrollRef.current;
-    if (!primary || !parallel) return;
+  const { chapter, parallelChapter, loading, error } = useChapterData(
+    primaryModule, currentRef.book, currentRef.chapter, parallelMode, parallelModule,
+  );
 
-    function makeHandler(source: HTMLDivElement, target: HTMLDivElement) {
-      return () => {
-        if (isSyncing.current) return;
-        isSyncing.current = true;
-        const pct = source.scrollTop / Math.max(1, source.scrollHeight - source.clientHeight);
-        target.scrollTop = pct * (target.scrollHeight - target.clientHeight);
-        isSyncing.current = false;
-      };
-    }
+  useScrollSync(syncScroll, primaryScrollRef, parallelScrollRef, parallelChapter);
 
-    const onPrimary = makeHandler(primary, parallel);
-    const onParallel = makeHandler(parallel, primary);
-    primary.addEventListener("scroll", onPrimary, { passive: true });
-    parallel.addEventListener("scroll", onParallel, { passive: true });
-    return () => {
-      primary.removeEventListener("scroll", onPrimary);
-      parallel.removeEventListener("scroll", onParallel);
-    };
-  }, [syncScroll, parallelChapter]);
+  usePresentationSync({
+    presentationActive, primaryModule, currentRef, parallelModule,
+    parallelMode, selectedStrongs, displayPrefs, readingFontSize,
+  });
 
-  useEffect(() => {
-    if (!primaryModule) return;
-    setLoading(true);
-    setError(null);
-    api
-      .getChapter(primaryModule, currentRef.book, currentRef.chapter)
-      .then((ch) => {
-        setChapter(ch);
-        const prev = currentRef.chapter - 1;
-        const next = currentRef.chapter + 1;
-        if (prev >= 1) api.getChapter(primaryModule, currentRef.book, prev).catch(() => {});
-        api.getChapter(primaryModule, currentRef.book, next).catch(() => {});
-      })
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
-  }, [primaryModule, currentRef.book, currentRef.chapter]);
-
-  useEffect(() => {
-    if (!parallelMode || !parallelModule) { setParallelChapter(null); return; }
-    api
-      .getChapter(parallelModule, currentRef.book, currentRef.chapter)
-      .then(setParallelChapter)
-      .catch(() => setParallelChapter(null));
-  }, [parallelMode, parallelModule, currentRef.book, currentRef.chapter]);
-
-  // Broadcast state to the presentation window whenever anything changes
-  useEffect(() => {
-    if (!presentationActive || !primaryModule) return;
-    emitPresentation({
-      book: currentRef.book,
-      chapter: currentRef.chapter,
-      verse: currentRef.verse,
-      primaryModule,
-      parallelModule,
-      parallelMode,
-      selectedStrongs,
-      displayPrefs,
-      readingFontSize,
-    });
-  }, [presentationActive, currentRef, primaryModule, parallelModule, parallelMode, selectedStrongs, displayPrefs]);
-
-  // ── Keyboard shortcuts ───────────────────────────────────────────────────────
-  useEffect(() => {
-    function handle(e: KeyboardEvent) {
-      const ctrl = e.ctrlKey || e.metaKey;
-      const alt = e.altKey;
-
-      // Ctrl+F: toggle fullscreen
-      if (ctrl && e.code === "KeyF") {
-        e.preventDefault();
-        setIsFullscreen(!isFullscreen);
-        return;
-      }
-
-      // Escape: close fullscreen search palette first, then exit fullscreen.
-      // Read from a ref (not the closure) so we always see the current value.
-      if (e.code === "Escape") {
-        if (fsSearchOpenRef.current) { setFsSearchOpen(false); return; }
-        if (isFullscreen) { setIsFullscreen(false); return; }
-      }
-
-      // Ctrl+K in fullscreen: open word search palette
-      if (ctrl && e.code === "KeyK" && isFullscreen) {
-        e.preventDefault();
-        setFsSearchOpen(true);
-        return;
-      }
-
-      // Ctrl+L in fullscreen: focus scripture nav
-      if (ctrl && e.code === "KeyL" && isFullscreen) {
-        e.preventDefault();
-        setTimeout(() => fsScriptureRef.current?.focus(), 30);
-        return;
-      }
-
-      // Ctrl+= or Ctrl++: increase font size by 1px
-      if (ctrl && !alt && (e.code === "Equal" || e.code === "NumpadAdd")) {
-        e.preventDefault();
-        const next = Math.min(98, readingFontSize + 1);
-        setReadingFontSize(next);
-        api.setPreferences({ font_size_reading: next }).catch(() => {});
-        return;
-      }
-
-      // Ctrl+-: decrease font size by 1px
-      if (ctrl && !alt && (e.code === "Minus" || e.code === "NumpadSubtract")) {
-        e.preventDefault();
-        const next = Math.max(14, readingFontSize - 1);
-        setReadingFontSize(next);
-        api.setPreferences({ font_size_reading: next }).catch(() => {});
-        return;
-      }
-
-      // Ctrl+Alt++ / Ctrl+Alt+=: jump to next preset size
-      if (ctrl && alt && (e.code === "Equal" || e.code === "NumpadAdd")) {
-        e.preventDefault();
-        const next = FONT_SIZE_PRESETS.find((s) => s > readingFontSize) ?? FONT_SIZE_PRESETS[FONT_SIZE_PRESETS.length - 1];
-        setReadingFontSize(next);
-        api.setPreferences({ font_size_reading: next }).catch(() => {});
-        return;
-      }
-
-      // Ctrl+Alt+-: jump to previous preset size
-      if (ctrl && alt && (e.code === "Minus" || e.code === "NumpadSubtract")) {
-        e.preventDefault();
-        const prev = [...FONT_SIZE_PRESETS].reverse().find((s) => s < readingFontSize) ?? FONT_SIZE_PRESETS[0];
-        setReadingFontSize(prev);
-        api.setPreferences({ font_size_reading: prev }).catch(() => {});
-        return;
-      }
-
-      // Ctrl+P: previous chapter
-      if (ctrl && e.code === "KeyP") {
-        e.preventDefault();
-        if (currentRef.chapter > 1) {
-          setCurrentRef({ ...currentRef, chapter: currentRef.chapter - 1, verse: 1 });
-        }
-        return;
-      }
-
-      // Ctrl+N: next chapter
-      if (ctrl && e.code === "KeyN") {
-        e.preventDefault();
-        setCurrentRef({ ...currentRef, chapter: currentRef.chapter + 1, verse: 1 });
-        return;
-      }
-
-      // Alt+H: go to search history view (use code for macOS Option key)
-      if (alt && e.code === "KeyH") {
-        e.preventDefault();
-        setView("history");
-        return;
-      }
-
-      // Alt+P: previous search result (Option+P on Mac produces "π" but code is still KeyP)
-      if (alt && e.code === "KeyP" && currentSearchResults.length > 0) {
-        e.preventDefault();
-        const idx = searchResultIndex <= 0 ? 0 : searchResultIndex - 1;
-        const r = currentSearchResults[idx];
-        if (r) {
-          setSearchResultIndex(idx);
-          const ref = { book: r.book, chapter: r.chapter, verse: r.verse };
-          navTo(ref);
-          setLastHistoryRef(ref);
-        }
-        return;
-      }
-
-      // Alt+N: next search result
-      if (alt && e.code === "KeyN" && currentSearchResults.length > 0) {
-        e.preventDefault();
-        const idx = Math.min(searchResultIndex + 1, currentSearchResults.length - 1);
-        const r = currentSearchResults[idx];
-        if (r) {
-          setSearchResultIndex(idx);
-          const ref = { book: r.book, chapter: r.chapter, verse: r.verse };
-          navTo(ref);
-          setLastHistoryRef(ref);
-        }
-        return;
-      }
-
-      // Ctrl+Q: toggle service order panel
-      if (ctrl && e.code === "KeyQ") {
-        e.preventDefault();
-        setServiceOrderOpen(!serviceOrderOpen);
-        return;
-      }
-
-      // Ctrl+1–4: presentation verse context (only when presentation is active)
-      if (ctrl && presentationActive) {
-        const ctxMap: Record<string, 1 | 2 | 3 | 4> = {
-          Digit1: 1, Digit2: 2, Digit3: 3, Digit4: 4,
-          Numpad1: 1, Numpad2: 2, Numpad3: 3, Numpad4: 4,
-        };
-        if (e.code in ctxMap) {
-          e.preventDefault();
-          setDisplayPrefs({ presentationContext: ctxMap[e.code] });
-          return;
-        }
-      }
-    }
-
-    window.addEventListener("keydown", handle);
-    return () => window.removeEventListener("keydown", handle);
-  }, [
-    isFullscreen, currentRef, currentSearchResults,
-    searchResultIndex, readingFontSize, presentationActive,
-    serviceOrderOpen, setServiceOrderOpen,
-    setIsFullscreen, setCurrentRef, navTo,
-    setSearchResultIndex, setView, setReadingFontSize, setLastHistoryRef,
-    setDisplayPrefs,
-  ]);
+  useReadingShortcuts({
+    isFullscreen, setIsFullscreen, fsSearchOpenRef, setFsSearchOpen, fsScriptureRef,
+    readingFontSize, setReadingFontSize, currentRef, setCurrentRef,
+    currentSearchResults, searchResultIndex, setSearchResultIndex, navTo, setLastHistoryRef,
+    setView, serviceOrderOpen, setServiceOrderOpen, presentationActive, setDisplayPrefs,
+  });
 
   function handleStrongsClick(strongs: string) {
     setSelectedStrongs(strongs);
@@ -728,249 +522,3 @@ export default function ReadingView() {
     </div>
   );
 }
-
-const FONT_FAMILY_CSS: Record<string, string> = {
-  system: `-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`,
-  serif:  `Georgia, "Palatino Linotype", Palatino, serif`,
-  times:  `"Times New Roman", Times, serif`,
-  mono:   `"Courier New", Courier, monospace`,
-};
-
-function PrimaryPane({
-  chapter, loading, error, currentVerse, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showBorder, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, readingFontSize, displayPrefs, fullscreen, scrollContainerRef,
-}: {
-  chapter: ChapterText | null;
-  loading: boolean;
-  error: string | null;
-  currentVerse: number;
-  onStrongsClick: (s: string) => void;
-  onVerseClick: (verse: number) => void;
-  onCrossRefClick: (verse: number) => void;
-  onCompareClick: (verse: number) => void;
-  onCommentaryClick: (verse: number) => void;
-  onNotesClick: (verse: number) => void;
-  onAddToServiceClick: (verse: number) => void;
-  showBorder: boolean;
-  showStrongs: boolean;
-  showCrossRefs: boolean;
-  showRedLetter: boolean;
-  showCommentary: boolean;
-  showNotes: boolean;
-  readingFontSize: number;
-  displayPrefs: import("../store/app").DisplayPrefs;
-  fullscreen?: boolean;
-  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
-}) {
-  const internalRef = useRef<HTMLDivElement>(null);
-  const scrollRef = (scrollContainerRef ?? internalRef) as React.RefObject<HTMLDivElement>;
-  const prevChapterRef = useRef<ChapterText | null>(null);
-
-  useEffect(() => {
-    if (!chapter) return;
-    const isNewChapter = chapter !== prevChapterRef.current;
-    prevChapterRef.current = chapter;
-    const el = scrollRef.current?.querySelector<HTMLElement>(`[data-verse="${currentVerse}"]`);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: isNewChapter ? "start" : "nearest" });
-  }, [chapter, currentVerse]);
-
-  if (loading) return <div className="flex-1 flex items-center justify-center"><span className="font-body-ui text-body-ui text-on-surface-variant">Loading…</span></div>;
-  if (error) return <div className="flex-1 p-8"><p className="font-body-ui text-body-ui text-error">{error}</p></div>;
-  if (!chapter) return <div className="flex-1 flex items-center justify-center"><span className="font-body-ui text-body-ui text-on-surface-variant">Select a module to begin reading.</span></div>;
-
-  const maxWidth = fullscreen ? "100%" : "1100px";
-  const horizPadding = `max(16px, ${displayPrefs.margins / 2}%)`;
-  const textStyle: React.CSSProperties = {
-    fontSize: `${readingFontSize}px`,
-    lineHeight: 1 + displayPrefs.lineSpacing,
-    letterSpacing: displayPrefs.letterSpacing === 0 ? undefined : `${(displayPrefs.letterSpacing * 0.1).toFixed(3)}em`,
-    textAlign: displayPrefs.textAlign,
-    fontFamily: FONT_FAMILY_CSS[displayPrefs.fontFamily],
-  };
-
-  return (
-    <div ref={scrollRef} className={`flex-1 overflow-y-auto ${showBorder ? "border-r border-outline-variant" : ""}`}>
-      <div className="mx-auto w-full py-8 space-y-4" style={{ maxWidth, paddingLeft: horizPadding, paddingRight: horizPadding }}>
-        {chapter.verses.map((v) => (
-          <VerseRow
-            key={v.verse}
-            verse={v.verse}
-            spans={v.spans}
-            active={v.verse === currentVerse}
-            onStrongsClick={onStrongsClick}
-            onVerseClick={() => onVerseClick(v.verse)}
-            onCrossRefClick={() => onCrossRefClick(v.verse)}
-            onCompareClick={() => onCompareClick(v.verse)}
-            onCommentaryClick={() => onCommentaryClick(v.verse)}
-            onNotesClick={() => onNotesClick(v.verse)}
-            onAddToServiceClick={() => onAddToServiceClick(v.verse)}
-            showStrongs={showStrongs}
-            showCrossRefs={showCrossRefs}
-            showRedLetter={showRedLetter}
-            showCommentary={showCommentary}
-            showNotes={showNotes}
-            textStyle={textStyle}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ParallelPane({ chapter, onStrongsClick, showStrongs, readingFontSize, displayPrefs, scrollContainerRef }: { chapter: ChapterText; onStrongsClick: (s: string) => void; showStrongs: boolean; readingFontSize: number; displayPrefs: import("../store/app").DisplayPrefs; scrollContainerRef?: React.RefObject<HTMLDivElement | null> }) {
-  const horizPadding = `max(16px, ${displayPrefs.margins / 2}%)`;
-  const textStyle: React.CSSProperties = {
-    fontSize: `${readingFontSize}px`,
-    lineHeight: 1 + displayPrefs.lineSpacing,
-    letterSpacing: displayPrefs.letterSpacing === 0 ? undefined : `${(displayPrefs.letterSpacing * 0.1).toFixed(3)}em`,
-    textAlign: displayPrefs.textAlign,
-    fontFamily: FONT_FAMILY_CSS[displayPrefs.fontFamily],
-  };
-  return (
-    <div ref={scrollContainerRef as React.RefObject<HTMLDivElement>} className="flex-1 overflow-y-auto">
-      <div className="max-w-[1100px] mx-auto w-full py-8 space-y-4" style={{ paddingLeft: horizPadding, paddingRight: horizPadding }}>
-        <h2 className="font-headline-md text-headline-md text-primary mb-4 border-b border-outline-variant pb-2">
-          {chapter.module_id}
-        </h2>
-        {chapter.verses.map((v) => (
-          <VerseRow
-            key={v.verse}
-            verse={v.verse}
-            spans={v.spans}
-            active={false}
-            onStrongsClick={onStrongsClick}
-            onVerseClick={() => {}}
-            onCrossRefClick={() => {}}
-            onCompareClick={() => {}}
-            onCommentaryClick={() => {}}
-            onNotesClick={() => {}}
-            onAddToServiceClick={() => {}}
-            showStrongs={showStrongs}
-            showCrossRefs={false}
-            showRedLetter={false}
-            showCommentary={false}
-            showNotes={false}
-            textStyle={textStyle}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const VerseRow = memo(function VerseRow({
-  verse, spans, active, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, textStyle,
-}: {
-  verse: number;
-  spans: TextSpan[];
-  active: boolean;
-  onStrongsClick: (s: string) => void;
-  onVerseClick: () => void;
-  onCrossRefClick: () => void;
-  onCompareClick: () => void;
-  onCommentaryClick: () => void;
-  onNotesClick: () => void;
-  onAddToServiceClick: () => void;
-  showStrongs: boolean;
-  showCrossRefs: boolean;
-  showRedLetter: boolean;
-  showCommentary: boolean;
-  showNotes: boolean;
-  textStyle: React.CSSProperties;
-}) {
-  return (
-    <div
-      data-verse={verse}
-      className={`verse-container relative group flex gap-3 p-verse-padding rounded-DEFAULT transition-colors cursor-pointer ${
-        active
-          ? "bg-surface-container-lowest border border-outline-variant shadow-[0_2px_8px_rgba(0,0,0,0.02)]"
-          : "hover:bg-surface-container-low"
-      }`}
-      onClick={onVerseClick}
-    >
-      <span
-        className={`font-verse-number text-verse-number mt-2 w-6 text-right select-none shrink-0 ${
-          active ? "text-primary font-bold" : "text-secondary"
-        }`}
-      >
-        {verse}
-      </span>
-      <p
-        className="font-body-reading text-on-surface flex-1 select-text"
-        style={textStyle}
-      >
-        {spans.map((span, i) => {
-          const red = showRedLetter && span.is_red_letter;
-          if (span.strongs && showStrongs) {
-            return (
-              <span
-                key={i}
-                className={`strongs-word relative group/word border-b border-dashed hover:bg-secondary/10 pb-0.5 ${red ? "text-red-600 dark:text-red-400 border-red-400" : "border-primary"}`}
-                title="Double-click to look up in concordance"
-                onDoubleClick={(e) => { e.stopPropagation(); onStrongsClick(span.strongs!); }}
-              >
-                <span className="strongs-tag absolute -top-3 left-1/2 -translate-x-1/2 font-metadata-mono text-[9px] text-secondary opacity-0 transition-opacity">
-                  {span.strongs}
-                </span>
-                {span.text}
-              </span>
-            );
-          }
-          if (span.is_added) {
-            return <em key={i} className={red ? "text-red-600 dark:text-red-400" : undefined}>{span.text}</em>;
-          }
-          return <span key={i} className={red ? "text-red-600 dark:text-red-400" : undefined}>{span.text}</span>;
-        })}
-      </p>
-
-      <div className="verse-actions absolute -right-2 top-2 opacity-0 pointer-events-none flex flex-col gap-1 bg-surface border border-outline-variant shadow-sm rounded p-1 transition-opacity z-10">
-        <button className="p-1 text-secondary hover:text-primary hover:bg-secondary-container rounded" title="Copy">
-          <span className="material-symbols-outlined text-[16px]">content_copy</span>
-        </button>
-        {showNotes && (
-          <button
-            className="p-1 text-secondary hover:text-primary hover:bg-secondary-container rounded"
-            title="Add note"
-            onClick={(e) => { e.stopPropagation(); onNotesClick(); }}
-          >
-            <span className="material-symbols-outlined text-[16px]">edit_note</span>
-          </button>
-        )}
-        <button className="p-1 text-secondary hover:text-primary hover:bg-secondary-container rounded" title="Bookmark">
-          <span className="material-symbols-outlined text-[16px]">bookmark_add</span>
-        </button>
-        {showCommentary && (
-          <button
-            className="p-1 text-secondary hover:text-primary hover:bg-secondary-container rounded"
-            title="Commentary"
-            onClick={(e) => { e.stopPropagation(); onCommentaryClick(); }}
-          >
-            <span className="material-symbols-outlined text-[16px]">library_books</span>
-          </button>
-        )}
-        {showCrossRefs && (
-          <button
-            className="p-1 text-secondary hover:text-primary hover:bg-secondary-container rounded"
-            title="Cross-references"
-            onClick={(e) => { e.stopPropagation(); onCrossRefClick(); }}
-          >
-            <span className="material-symbols-outlined text-[16px]">link</span>
-          </button>
-        )}
-        <button
-          className="p-1 text-secondary hover:text-primary hover:bg-secondary-container rounded"
-          title="Compare translations"
-          onClick={(e) => { e.stopPropagation(); onCompareClick(); }}
-        >
-          <span className="material-symbols-outlined text-[16px]">compare</span>
-        </button>
-        <button
-          className="p-1 text-secondary hover:text-primary hover:bg-secondary-container rounded"
-          title="Add to service queue"
-          onClick={(e) => { e.stopPropagation(); onAddToServiceClick(); }}
-        >
-          <span className="material-symbols-outlined text-[16px]">playlist_add</span>
-        </button>
-      </div>
-    </div>
-  );
-});
