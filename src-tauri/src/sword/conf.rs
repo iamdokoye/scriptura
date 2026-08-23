@@ -1,7 +1,7 @@
+use crate::types::{AppError, Result};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use crate::types::{AppError, Result};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ModuleType {
@@ -39,7 +39,7 @@ pub enum Versification {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Compression {
     None,
-    Zip,   // zText / zLD
+    Zip, // zText / zLD
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -75,8 +75,9 @@ pub struct ModuleConf {
 
 impl ModuleConf {
     pub fn parse(module_id: &str, conf_path: &Path) -> Result<Self> {
-        let content = fs::read_to_string(conf_path)
-            .map_err(|e| AppError::Sword(format!("cannot read conf {}: {e}", conf_path.display())))?;
+        let content = fs::read_to_string(conf_path).map_err(|e| {
+            AppError::Sword(format!("cannot read conf {}: {e}", conf_path.display()))
+        })?;
 
         let mut raw: HashMap<String, String> = HashMap::new();
         for line in content.lines() {
@@ -100,7 +101,10 @@ impl ModuleConf {
             _ => ModuleType::Bible,
         };
 
-        let compression = if matches!(get("moddrv").to_lowercase().as_str(), "ztext" | "zcom" | "zld") {
+        let compression = if matches!(
+            get("moddrv").to_lowercase().as_str(),
+            "ztext" | "zcom" | "zld"
+        ) {
             Compression::Zip
         } else {
             Compression::None
@@ -140,14 +144,22 @@ impl ModuleConf {
 
         // RawLD uses 6-byte idx entries (u32 offset + u16 size)
         // RawLD4 / zLD use 8-byte idx entries (u32 + u32)
-        let idx_entry_size = if get("moddrv").to_lowercase() == "rawld" { 6 } else { 8 };
+        let idx_entry_size = if get("moddrv").to_lowercase() == "rawld" {
+            6
+        } else {
+            8
+        };
 
         Ok(Self {
             module_id: module_id.to_string(),
             name: get("description"),
             description: get("about"),
             module_type,
-            encoding: if get("encoding").to_lowercase().contains("utf") { Encoding::Utf8 } else { Encoding::Latin1 },
+            encoding: if get("encoding").to_lowercase().contains("utf") {
+                Encoding::Utf8
+            } else {
+                Encoding::Latin1
+            },
             markup,
             versification,
             compression,

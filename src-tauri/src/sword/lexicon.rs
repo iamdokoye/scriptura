@@ -1,3 +1,6 @@
+use crate::sword::block::{decompress_zlib, read_u32_le};
+use crate::sword::conf::{Compression, ModuleConf};
+use crate::types::{AppError, Result, StrongsEntry};
 /// SWORD Lexicon/Dictionary reader.
 ///
 /// Supports RawLD (uncompressed) and zLD (zlib-compressed).
@@ -17,12 +20,8 @@
 ///     [num_entries × (entry_offset: u32 LE, entry_size: u32 LE)]
 ///     [entry data…]
 ///   Blocks contain ~30 Strong's entries each in ascending number order.
-
 use std::fs;
 use std::path::{Path, PathBuf};
-use crate::sword::block::{decompress_zlib, read_u32_le};
-use crate::sword::conf::{Compression, ModuleConf};
-use crate::types::{AppError, Result, StrongsEntry};
 
 pub struct LexiconReader {
     conf: ModuleConf,
@@ -42,7 +41,11 @@ impl LexiconReader {
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| "lexicon".to_string());
-                return Ok(Self { conf: conf.clone(), data_dir: parent.to_path_buf(), file_stem: stem });
+                return Ok(Self {
+                    conf: conf.clone(),
+                    data_dir: parent.to_path_buf(),
+                    file_stem: stem,
+                });
             }
         }
 
@@ -54,22 +57,34 @@ impl LexiconReader {
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| "lexicon".to_string());
-                return Ok(Self { conf: conf.clone(), data_dir: parent.to_path_buf(), file_stem: stem });
+                return Ok(Self {
+                    conf: conf.clone(),
+                    data_dir: parent.to_path_buf(),
+                    file_stem: stem,
+                });
             }
         }
 
         // Last resort: DataPath itself as directory
         if stem_path.is_dir() {
-            return Ok(Self { conf: conf.clone(), data_dir: stem_path, file_stem: "lexicon".to_string() });
+            return Ok(Self {
+                conf: conf.clone(),
+                data_dir: stem_path,
+                file_stem: "lexicon".to_string(),
+            });
         }
 
-        Err(AppError::Sword(format!("lexicon data not found for {}: {}", conf.module_id, stem_path.display())))
+        Err(AppError::Sword(format!(
+            "lexicon data not found for {}: {}",
+            conf.module_id,
+            stem_path.display()
+        )))
     }
 
     /// Look up a Strong's number (e.g. "G25" or "H430") and return a parsed entry.
     pub fn get_strongs_entry(&self, number: &str) -> Result<StrongsEntry> {
         let raw = match &self.conf.compression {
-            Compression::Zip  => self.lookup_strongs_zld(number)?,
+            Compression::Zip => self.lookup_strongs_zld(number)?,
             Compression::None => self.lookup_strongs_rawld(number)?,
         };
         parse_strongs_entry(number, &raw)
@@ -80,7 +95,7 @@ impl LexiconReader {
     pub fn lookup_key(&self, key: &str) -> Result<String> {
         match &self.conf.compression {
             Compression::None => self.lookup_rawld(key),
-            Compression::Zip  => self.lookup_zld_by_key(key),
+            Compression::Zip => self.lookup_zld_by_key(key),
         }
     }
 
@@ -97,7 +112,7 @@ impl LexiconReader {
 
         let zdx = self.read_file("zdx")?;
         let zdt = self.read_file("zdt")?;
-        let num_blocks = zdx.len() / 8;  // 8 bytes per zdx entry
+        let num_blocks = zdx.len() / 8; // 8 bytes per zdx entry
 
         // Search window around the estimated block
         const WINDOW: usize = 12;
@@ -108,9 +123,11 @@ impl LexiconReader {
         let target_attr = format!("n=\"{n}\"");
 
         for bnum in start..end {
-            let blk_off  = read_u32_le(&zdx, bnum * 8).unwrap_or(0) as usize;
-            let blk_csz  = read_u32_le(&zdx, bnum * 8 + 4).unwrap_or(0) as usize;
-            if blk_off + blk_csz > zdt.len() || blk_csz == 0 { continue; }
+            let blk_off = read_u32_le(&zdx, bnum * 8).unwrap_or(0) as usize;
+            let blk_csz = read_u32_le(&zdx, bnum * 8 + 4).unwrap_or(0) as usize;
+            if blk_off + blk_csz > zdt.len() || blk_csz == 0 {
+                continue;
+            }
 
             let blk = match decompress_zlib(&zdt[blk_off..blk_off + blk_csz]) {
                 Ok(b) => b,
@@ -131,7 +148,9 @@ impl LexiconReader {
                     Some(s) => s as usize,
                     None => break,
                 };
-                if entry_sz == 0 || entry_off + entry_sz > blk.len() { continue; }
+                if entry_sz == 0 || entry_off + entry_sz > blk.len() {
+                    continue;
+                }
 
                 let content = &blk[entry_off..entry_off + entry_sz];
                 let txt = String::from_utf8_lossy(content);
@@ -141,7 +160,10 @@ impl LexiconReader {
             }
         }
 
-        Err(AppError::Sword(format!("Strong's number {} not found", number)))
+        Err(AppError::Sword(format!(
+            "Strong's number {} not found",
+            number
+        )))
     }
 
     fn lookup_strongs_rawld(&self, number: &str) -> Result<String> {
@@ -182,8 +204,13 @@ impl LexiconReader {
                     let content = Self::rawld_read_content(dat, offset, size);
                     return self.decode(content);
                 }
-                std::cmp::Ordering::Less    => lo = mid + 1,
-                std::cmp::Ordering::Greater => { if mid == 0 { break; } hi = mid; }
+                std::cmp::Ordering::Less => lo = mid + 1,
+                std::cmp::Ordering::Greater => {
+                    if mid == 0 {
+                        break;
+                    }
+                    hi = mid;
+                }
             }
         }
         Err(AppError::Sword(format!("key not found: {key}")))
@@ -193,8 +220,13 @@ impl LexiconReader {
     /// Both null-terminated (RawLD4 / zLD) and backslash-terminated (RawLD) formats.
     fn rawld_read_key(dat: &[u8], offset: usize) -> String {
         let slice = &dat[offset.min(dat.len())..];
-        let end = slice.iter().position(|&b| b == 0 || b == b'\\').unwrap_or(slice.len());
-        String::from_utf8_lossy(&slice[..end]).trim_end().to_string()
+        let end = slice
+            .iter()
+            .position(|&b| b == 0 || b == b'\\')
+            .unwrap_or(slice.len());
+        String::from_utf8_lossy(&slice[..end])
+            .trim_end()
+            .to_string()
     }
 
     /// Extract the content (everything after the key separator) from a RawLD dat entry.
@@ -203,11 +235,17 @@ impl LexiconReader {
         let end = offset.saturating_add(size).min(dat.len());
         let slice = &dat[offset..end];
         // Skip past key + separator byte (null or backslash + optional newline)
-        let sep = slice.iter().position(|&b| b == 0 || b == b'\\').unwrap_or(0);
+        let sep = slice
+            .iter()
+            .position(|&b| b == 0 || b == b'\\')
+            .unwrap_or(0);
         let content_start = (sep + 1).min(slice.len());
         // Skip an optional leading newline after the backslash
         let content = &slice[content_start..];
-        let skip = content.iter().position(|&b| b != b'\r' && b != b'\n').unwrap_or(0);
+        let skip = content
+            .iter()
+            .position(|&b| b != b'\r' && b != b'\n')
+            .unwrap_or(0);
         &content[skip..]
     }
 
@@ -234,7 +272,9 @@ impl LexiconReader {
             if dat_off >= dat.len() {
                 break;
             }
-            let null_pos = dat[dat_off..].iter().position(|&b| b == 0)
+            let null_pos = dat[dat_off..]
+                .iter()
+                .position(|&b| b == 0)
                 .ok_or_else(|| AppError::Sword("zLD: no null terminator in dat key".into()))?;
             let entry_key = Self::read_cstr(&dat, dat_off);
             match entry_key.to_lowercase().cmp(&key.to_lowercase()) {
@@ -253,29 +293,42 @@ impl LexiconReader {
                     ) as usize;
 
                     let blk_off = read_u32_le(&zdx, block_num * 8)
-                        .ok_or_else(|| AppError::Sword("zLD: zdx offset".into()))? as usize;
+                        .ok_or_else(|| AppError::Sword("zLD: zdx offset".into()))?
+                        as usize;
                     let blk_csz = read_u32_le(&zdx, block_num * 8 + 4)
-                        .ok_or_else(|| AppError::Sword("zLD: zdx csize".into()))? as usize;
+                        .ok_or_else(|| AppError::Sword("zLD: zdx csize".into()))?
+                        as usize;
 
-                    let compressed = zdt.get(blk_off..blk_off + blk_csz)
+                    let compressed = zdt
+                        .get(blk_off..blk_off + blk_csz)
                         .ok_or_else(|| AppError::Sword("zLD: zdt out of range".into()))?;
                     let blk = decompress_zlib(compressed)?;
 
                     let num_entries = read_u32_le(&blk, 0).unwrap_or(0) as usize;
                     if entry_idx >= num_entries {
-                        return Err(AppError::Sword(format!("zLD: entry_idx {entry_idx} >= {num_entries}")));
+                        return Err(AppError::Sword(format!(
+                            "zLD: entry_idx {entry_idx} >= {num_entries}"
+                        )));
                     }
                     let entry_off = read_u32_le(&blk, 4 + entry_idx * 8)
-                        .ok_or_else(|| AppError::Sword("zLD: entry offset".into()))? as usize;
+                        .ok_or_else(|| AppError::Sword("zLD: entry offset".into()))?
+                        as usize;
                     let entry_sz = read_u32_le(&blk, 4 + entry_idx * 8 + 4)
-                        .ok_or_else(|| AppError::Sword("zLD: entry size".into()))? as usize;
+                        .ok_or_else(|| AppError::Sword("zLD: entry size".into()))?
+                        as usize;
 
-                    let content = blk.get(entry_off..entry_off + entry_sz)
+                    let content = blk
+                        .get(entry_off..entry_off + entry_sz)
                         .ok_or_else(|| AppError::Sword("zLD: entry out of block".into()))?;
                     return self.decode(content);
                 }
-                std::cmp::Ordering::Less    => lo = mid + 1,
-                std::cmp::Ordering::Greater => { if mid == 0 { break; } hi = mid; }
+                std::cmp::Ordering::Less => lo = mid + 1,
+                std::cmp::Ordering::Greater => {
+                    if mid == 0 {
+                        break;
+                    }
+                    hi = mid;
+                }
             }
         }
         Err(AppError::Sword(format!("key not found in zLD: {key}")))
@@ -292,20 +345,26 @@ impl LexiconReader {
         let slice = &data[offset.min(data.len())..];
         let end = slice.iter().position(|&b| b == 0).unwrap_or(slice.len());
         // Some modules (e.g. StrongsGreek) include \r\n before the null byte
-        String::from_utf8_lossy(&slice[..end]).trim_end().to_string()
+        String::from_utf8_lossy(&slice[..end])
+            .trim_end()
+            .to_string()
     }
 
     fn decode(&self, bytes: &[u8]) -> Result<String> {
         use crate::sword::conf::Encoding;
         match &self.conf.encoding {
-            Encoding::Utf8   => String::from_utf8(bytes.to_vec()).map_err(|e| AppError::Sword(format!("utf8: {e}"))),
+            Encoding::Utf8 => {
+                String::from_utf8(bytes.to_vec()).map_err(|e| AppError::Sword(format!("utf8: {e}")))
+            }
             Encoding::Latin1 => Ok(bytes.iter().map(|&b| b as char).collect()),
         }
     }
 }
 
 impl super::ModuleReader for LexiconReader {
-    fn module_id(&self) -> &str { &self.conf.module_id }
+    fn module_id(&self) -> &str {
+        &self.conf.module_id
+    }
 }
 
 /// Extract the numeric part of a Strong's number like "G25" or "H430".
@@ -317,7 +376,9 @@ fn parse_strongs_number(number: &str) -> Result<u32> {
     };
     // Accept trailing letters like "3538a" — strip them before parsing
     let digits = digits.trim_end_matches(|c: char| c.is_alphabetic());
-    digits.parse::<u32>().map_err(|_| AppError::Sword(format!("invalid Strong's number: {number}")))
+    digits
+        .parse::<u32>()
+        .map_err(|_| AppError::Sword(format!("invalid Strong's number: {number}")))
 }
 
 /// Parse a raw Strong's entry (TEI XML or RawLD plain text) into a StrongsEntry.
@@ -342,8 +403,7 @@ fn parse_strongs_tei(number: &str, raw: &str) -> Result<StrongsEntry> {
         .unwrap_or_else(|| number.to_string());
 
     // Extract <orth rend="bold" type="trans"> for romanized transliteration
-    let transliteration = extract_tag_by_attr(raw, "orth", "type", "trans")
-        .unwrap_or_default();
+    let transliteration = extract_tag_by_attr(raw, "orth", "type", "trans").unwrap_or_default();
 
     // Extract <pron> for pronunciation hint (in braces like {ag-ap-ah'-o})
     let pronunciation = extract_tag_text(raw, "pron").unwrap_or_default();
@@ -361,10 +421,7 @@ fn parse_strongs_tei(number: &str, raw: &str) -> Result<StrongsEntry> {
         .collect::<Vec<_>>()
         .join(" ");
 
-    let def_clean = definition
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let def_clean = definition.split_whitespace().collect::<Vec<_>>().join(" ");
 
     // Split definition at first sentence end for short vs long
     let (short_def, long_def) = split_at_sentence(&def_clean);
@@ -374,7 +431,11 @@ fn parse_strongs_tei(number: &str, raw: &str) -> Result<StrongsEntry> {
         lemma,
         transliteration: header,
         part_of_speech: String::new(),
-        short_def: if short_def.is_empty() { def_clean.chars().take(200).collect() } else { short_def },
+        short_def: if short_def.is_empty() {
+            def_clean.chars().take(200).collect()
+        } else {
+            short_def
+        },
         long_def,
         usage_count: 0,
         usage_by_book: vec![],
@@ -393,7 +454,7 @@ fn parse_strongs_plain(number: &str, raw: &str) -> Result<StrongsEntry> {
     // format: "NUM  TRANSLIT  PRONUNCIATION"
     let parts: Vec<&str> = first.splitn(3, "  ").collect();
     let transliteration = parts.get(1).copied().unwrap_or("").trim().to_string();
-    let pronunciation   = parts.get(2).copied().unwrap_or("").trim().to_string();
+    let pronunciation = parts.get(2).copied().unwrap_or("").trim().to_string();
 
     // Remaining non-empty lines are the definition
     let definition: String = lines
@@ -418,7 +479,11 @@ fn parse_strongs_plain(number: &str, raw: &str) -> Result<StrongsEntry> {
         lemma: format!("H{}", parse_strongs_number(number).unwrap_or(0)),
         transliteration: header,
         part_of_speech: String::new(),
-        short_def: if short_def.is_empty() { definition.chars().take(200).collect() } else { short_def },
+        short_def: if short_def.is_empty() {
+            definition.chars().take(200).collect()
+        } else {
+            short_def
+        },
         long_def,
         usage_count: 0,
         usage_by_book: vec![],
@@ -447,7 +512,11 @@ fn extract_tag_text(xml: &str, tag: &str) -> Option<String> {
 }
 
 /// Extract text of the first <TAG> that has NO "type" attribute (i.e., plain orth).
-fn extract_first_tag_text(xml: &str, tag: &str, exclude_attr: Option<(&str, &str)>) -> Option<String> {
+fn extract_first_tag_text(
+    xml: &str,
+    tag: &str,
+    exclude_attr: Option<(&str, &str)>,
+) -> Option<String> {
     let open = format!("<{}", tag);
     let close = format!("</{tag}>");
     let mut pos = 0;
@@ -462,13 +531,17 @@ fn extract_first_tag_text(xml: &str, tag: &str, exclude_attr: Option<(&str, &str
             } else {
                 tag_str.contains(&format!("{attr}=\"{val}\""))
             }
-        } else { false };
+        } else {
+            false
+        };
         if !skip {
             let content_start = abs + tag_end + 1;
             if let Some(end_rel) = xml[content_start..].find(&close) {
                 let text = strip_xml_tags(&xml[content_start..content_start + end_rel]);
                 let text = text.trim().to_string();
-                if !text.is_empty() { return Some(text); }
+                if !text.is_empty() {
+                    return Some(text);
+                }
             }
         }
         pos = abs + 1;

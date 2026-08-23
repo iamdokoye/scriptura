@@ -1,3 +1,4 @@
+use crate::types::{AppError, Result};
 /// Persistent in-process file cache.
 ///
 /// SWORD module files (`.vss`, `.bdt`, `.bzv`, etc.) are a few MB each and
@@ -10,11 +11,9 @@
 ///   - Zero syscalls on every subsequent read
 ///   - No lock contention against the kernel's page reclaim
 ///   - Predictable latency regardless of memory pressure
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use crate::types::{AppError, Result};
 
 pub struct FileCache(Mutex<HashMap<PathBuf, Arc<Vec<u8>>>>);
 
@@ -40,7 +39,9 @@ impl FileCache {
 
         let mut cache = self.0.lock().unwrap();
         // Another thread may have raced us — that's fine, just use whichever entry is there.
-        cache.entry(path.to_path_buf()).or_insert_with(|| Arc::clone(&shared));
+        cache
+            .entry(path.to_path_buf())
+            .or_insert_with(|| Arc::clone(&shared));
         Ok(Arc::clone(cache.get(path).unwrap()))
     }
 }

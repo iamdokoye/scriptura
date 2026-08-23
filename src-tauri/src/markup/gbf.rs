@@ -5,7 +5,6 @@
 /// It does NOT crash on unknown tags — unknown tags produce no output.
 ///
 /// Reference: https://crosswire.org/wiki/Markup_languages_for_digital_Bibles#GBF
-
 use crate::types::{Result, TextSpan};
 
 pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
@@ -40,7 +39,11 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
                     current_strongs = Some(strongs);
                 } else if tag_upper.starts_with("WTH") || tag_upper.starts_with("WG") {
                     let digits = tag[3..].trim_start_matches('0');
-                    let prefix = if tag_upper.starts_with("WG") { "G" } else { "H" };
+                    let prefix = if tag_upper.starts_with("WG") {
+                        "G"
+                    } else {
+                        "H"
+                    };
                     current_strongs = Some(format!("{prefix}{digits}"));
                 } else if tag_upper == "WT" {
                     // End of Strong's word

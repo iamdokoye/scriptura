@@ -52,12 +52,26 @@ pub struct TextSpan {
 
 impl TextSpan {
     pub fn plain(text: impl Into<String>) -> Self {
-        Self { text: text.into(), strongs: None, morph: None, is_added: None, is_footnote: None, is_red_letter: None }
+        Self {
+            text: text.into(),
+            strongs: None,
+            morph: None,
+            is_added: None,
+            is_footnote: None,
+            is_red_letter: None,
+        }
     }
 
     #[allow(dead_code)]
     pub fn with_strongs(text: impl Into<String>, strongs: impl Into<String>) -> Self {
-        Self { text: text.into(), strongs: Some(strongs.into()), morph: None, is_added: None, is_footnote: None, is_red_letter: None }
+        Self {
+            text: text.into(),
+            strongs: Some(strongs.into()),
+            morph: None,
+            is_added: None,
+            is_footnote: None,
+            is_red_letter: None,
+        }
     }
 }
 

@@ -42,23 +42,27 @@ pub fn run() {
             // the chapter cache with the saved reading position so first render is instant.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-                let db       = handle.state::<Arc<db::Database>>();
+                let db = handle.state::<Arc<db::Database>>();
                 let registry = handle.state::<Arc<modules::ModuleRegistry>>();
                 let chapter_cache = handle.state::<commands::ChapterCache>();
-                let file_cache    = handle.state::<sword::file_cache::FileCache>();
+                let file_cache = handle.state::<sword::file_cache::FileCache>();
 
                 registry.load_installed();
 
                 let records = match db.list_installed_module_records() {
                     Ok(r) => r,
-                    Err(e) => { log::error!("[startup] list modules: {e}"); return; }
+                    Err(e) => {
+                        log::error!("[startup] list modules: {e}");
+                        return;
+                    }
                 };
 
                 // 1. Rebuild any module whose FTS index is missing or stale.
                 for (id, _name, _path, _version, _cat, index_built) in &records {
                     if !index_built {
                         log::info!("[startup] rebuilding FTS for {id}");
-                        if let Err(e) = commands::build_fts_index(id, &registry, &db, 0, |_, _| {}) {
+                        if let Err(e) = commands::build_fts_index(id, &registry, &db, 0, |_, _| {})
+                        {
                             log::error!("[startup] FTS rebuild {id}: {e}");
                         }
                     }
@@ -69,7 +73,8 @@ pub fn run() {
                 //    navigation after launch is instant.
                 let pos = db.get_reading_position().ok().flatten();
                 if let Some(pos) = pos {
-                    let bible_id = records.iter()
+                    let bible_id = records
+                        .iter()
                         .find(|(_, _, _, _, cat, _)| cat == "Bible")
                         .map(|(id, _, _, _, _, _)| id.clone())
                         .or_else(|| records.first().map(|(id, _, _, _, _, _)| id.clone()));
@@ -79,7 +84,12 @@ pub fn run() {
                         if let Some(conf) = conf {
                             let module_path = registry.module_path(&module_id);
                             let max_chapter = versification::CHAPTER_COUNTS
-                                .get(versification::BOOK_NAMES.iter().position(|&b| b == pos.book.as_str()).unwrap_or(0))
+                                .get(
+                                    versification::BOOK_NAMES
+                                        .iter()
+                                        .position(|&b| b == pos.book.as_str())
+                                        .unwrap_or(0),
+                                )
                                 .copied()
                                 .unwrap_or(1);
 
@@ -94,9 +104,16 @@ pub fn run() {
                                 if chapter_cache.get(&module_id, &pos.book, ch).is_some() {
                                     continue;
                                 }
-                                if let Ok(reader) = sword::BibleReader::open(&module_path, &conf, &file_cache) {
+                                if let Ok(reader) =
+                                    sword::BibleReader::open(&module_path, &conf, &file_cache)
+                                {
                                     if let Ok(chapter_text) = reader.get_chapter(&pos.book, ch) {
-                                        chapter_cache.insert(&module_id, &pos.book, ch, chapter_text);
+                                        chapter_cache.insert(
+                                            &module_id,
+                                            &pos.book,
+                                            ch,
+                                            chapter_text,
+                                        );
                                     }
                                 }
                             }
@@ -158,10 +175,13 @@ fn install_panic_hook(log_path: std::path::PathBuf) {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
-        let location = info.location()
+        let location = info
+            .location()
             .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
             .unwrap_or_else(|| "unknown location".into());
-        let message = info.payload().downcast_ref::<&str>()
+        let message = info
+            .payload()
+            .downcast_ref::<&str>()
             .map(|s| s.to_string())
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
             .unwrap_or_else(|| "(no message)".into());
@@ -169,7 +189,11 @@ fn install_panic_hook(log_path: std::path::PathBuf) {
         log::error!("[panic] {message} at {location}");
 
         let entry = format!("[{timestamp}] panic at {location}: {message}\n");
-        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+        {
             let _ = file.write_all(entry.as_bytes());
         }
     }));

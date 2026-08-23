@@ -9,12 +9,11 @@ pub use bible::BibleReader;
 pub use conf::{ModuleConf, ModuleType};
 pub use lexicon::LexiconReader;
 
-
 /// Shared low-level block/compression utilities used by both bible and lexicon readers.
 pub mod block {
-    use std::io::Read;
-    use flate2::read::ZlibDecoder;
     use crate::types::{AppError, Result};
+    use flate2::read::ZlibDecoder;
+    use std::io::Read;
 
     pub fn decompress_zlib(data: &[u8]) -> Result<Vec<u8>> {
         let mut out = Vec::new();

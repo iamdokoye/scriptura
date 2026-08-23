@@ -1,21 +1,23 @@
-use rusqlite::{Connection, params};
+use crate::types::*;
+use rusqlite::{params, Connection};
 use std::path::Path;
 use std::sync::Mutex;
-use crate::types::*;
 
 pub struct Database(Mutex<Connection>);
 
 impl Database {
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)?;
-        conn.execute_batch("
+        conn.execute_batch(
+            "
             PRAGMA journal_mode=WAL;
             PRAGMA foreign_keys=ON;
             PRAGMA cache_size=-65536;
             PRAGMA mmap_size=134217728;
             PRAGMA synchronous=NORMAL;
             PRAGMA temp_store=MEMORY;
-        ")?;
+        ",
+        )?;
         let db = Self(Mutex::new(conn));
         db.migrate()?;
         Ok(db)
@@ -89,7 +91,14 @@ impl Database {
         let result = conn.query_row(
             "SELECT book, chapter, verse, module_id FROM reading_position LIMIT 1",
             [],
-            |row| Ok(ReadingPosition { book: row.get(0)?, chapter: row.get(1)?, verse: row.get(2)?, module_id: row.get(3)? }),
+            |row| {
+                Ok(ReadingPosition {
+                    book: row.get(0)?,
+                    chapter: row.get(1)?,
+                    verse: row.get(2)?,
+                    module_id: row.get(3)?,
+                })
+            },
         );
         match result {
             Ok(p) => Ok(Some(p)),
@@ -108,7 +117,13 @@ impl Database {
         Ok(())
     }
 
-    pub fn add_bookmark(&self, book: &str, chapter: u32, verse: u32, module_id: &str) -> Result<Bookmark> {
+    pub fn add_bookmark(
+        &self,
+        book: &str,
+        chapter: u32,
+        verse: u32,
+        module_id: &str,
+    ) -> Result<Bookmark> {
         let conn = self.0.lock().unwrap();
         conn.execute(
             "INSERT INTO bookmarks (book, chapter, verse, module_id) VALUES (?1, ?2, ?3, ?4)",
@@ -138,15 +153,28 @@ impl Database {
         let mut stmt = conn.prepare(
             "SELECT id, book, chapter, verse, module_id, created_at, note FROM bookmarks ORDER BY created_at DESC"
         )?;
-        let rows = stmt.query_map([], |row| Ok(Bookmark {
-            id: row.get(0)?, book: row.get(1)?, chapter: row.get(2)?,
-            verse: row.get(3)?, module_id: row.get(4)?,
-            created_at: row.get(5)?, note: row.get(6)?,
-        }))?;
+        let rows = stmt.query_map([], |row| {
+            Ok(Bookmark {
+                id: row.get(0)?,
+                book: row.get(1)?,
+                chapter: row.get(2)?,
+                verse: row.get(3)?,
+                module_id: row.get(4)?,
+                created_at: row.get(5)?,
+                note: row.get(6)?,
+            })
+        })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
-    pub fn add_note(&self, book: &str, chapter: u32, verse: Option<u32>, module_id: &str, content: &str) -> Result<Note> {
+    pub fn add_note(
+        &self,
+        book: &str,
+        chapter: u32,
+        verse: Option<u32>,
+        module_id: &str,
+        content: &str,
+    ) -> Result<Note> {
         let conn = self.0.lock().unwrap();
         conn.execute(
             "INSERT INTO notes (book, chapter, verse, module_id, content) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -191,7 +219,11 @@ impl Database {
     }
 
     /// Full-text search across indexed verse content
-    pub fn search_fts(&self, query: &str, options: &SearchOptions) -> Result<Vec<crate::types::SearchResult>> {
+    pub fn search_fts(
+        &self,
+        query: &str,
+        options: &SearchOptions,
+    ) -> Result<Vec<crate::types::SearchResult>> {
         let fts_query = build_fts_query(query);
         if fts_query.is_empty() {
             return Ok(vec![]);
@@ -203,7 +235,10 @@ impl Database {
         let offset = page.saturating_mul(page_size);
 
         // Build module filter
-        let module_placeholders: String = options.modules.iter().enumerate()
+        let module_placeholders: String = options
+            .modules
+            .iter()
+            .enumerate()
             .map(|(i, _)| format!("?{}", i + 2))
             .collect::<Vec<_>>()
             .join(",");
@@ -223,7 +258,8 @@ impl Database {
             params_vec.push(Box::new(m.clone()));
         }
 
-        let params_refs: Vec<&dyn rusqlite::types::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
         let rows = stmt.query_map(params_refs.as_slice(), |row| {
             Ok(crate::types::SearchResult {
                 module_id: row.get(0)?,
@@ -247,7 +283,10 @@ impl Database {
     ) -> Result<()> {
         let mut conn = self.0.lock().unwrap();
         let tx = conn.transaction()?;
-        tx.execute("DELETE FROM verse_fts WHERE module_id=?1", params![module_id])?;
+        tx.execute(
+            "DELETE FROM verse_fts WHERE module_id=?1",
+            params![module_id],
+        )?;
         {
             let mut stmt = tx.prepare(
                 "INSERT INTO verse_fts (module_id, book, chapter, verse, content) \
@@ -261,7 +300,14 @@ impl Database {
         Ok(())
     }
 
-    pub fn record_installed_module(&self, id: &str, name: &str, path: &str, version: &str, category: &str) -> Result<()> {
+    pub fn record_installed_module(
+        &self,
+        id: &str,
+        name: &str,
+        path: &str,
+        version: &str,
+        category: &str,
+    ) -> Result<()> {
         let conn = self.0.lock().unwrap();
         conn.execute(
             "INSERT INTO installed_modules (id, name, install_path, version, category) VALUES (?1, ?2, ?3, ?4, ?5)
@@ -271,26 +317,39 @@ impl Database {
         Ok(())
     }
 
-    pub fn list_installed_module_records(&self) -> Result<Vec<(String, String, String, String, String, bool)>> {
+    pub fn list_installed_module_records(
+        &self,
+    ) -> Result<Vec<(String, String, String, String, String, bool)>> {
         let conn = self.0.lock().unwrap();
-        let mut stmt = conn.prepare("SELECT id, name, install_path, version, category, index_built FROM installed_modules")?;
-        let rows = stmt.query_map([], |row| Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?,
-            row.get::<_, String>(3)?,
-            row.get::<_, String>(4)?,
-            row.get::<_, bool>(5)?,
-        )))?;
+        let mut stmt = conn.prepare(
+            "SELECT id, name, install_path, version, category, index_built FROM installed_modules",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, bool>(5)?,
+            ))
+        })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     /// Replace all strongs occurrence counts for a module in one transaction.
     /// `counts` is `(strongs_number, book, count)`.
-    pub fn replace_strongs_counts(&self, module_id: &str, counts: &[(String, String, u32)]) -> Result<()> {
+    pub fn replace_strongs_counts(
+        &self,
+        module_id: &str,
+        counts: &[(String, String, u32)],
+    ) -> Result<()> {
         let mut conn = self.0.lock().unwrap();
         let tx = conn.transaction()?;
-        tx.execute("DELETE FROM strongs_counts WHERE module_id=?1", params![module_id])?;
+        tx.execute(
+            "DELETE FROM strongs_counts WHERE module_id=?1",
+            params![module_id],
+        )?;
         {
             let mut stmt = tx.prepare(
                 "INSERT INTO strongs_counts (module_id, strongs, book, count) VALUES (?1, ?2, ?3, ?4)",
@@ -305,7 +364,11 @@ impl Database {
 
     /// Query total occurrences and per-book breakdown for one Strong's number.
     /// Returns `(total, Vec<BookUsage>)` sorted by count descending.
-    pub fn get_strongs_counts(&self, module_id: &str, strongs: &str) -> Result<(u32, Vec<crate::types::BookUsage>)> {
+    pub fn get_strongs_counts(
+        &self,
+        module_id: &str,
+        strongs: &str,
+    ) -> Result<(u32, Vec<crate::types::BookUsage>)> {
         let conn = self.0.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT book, count FROM strongs_counts
@@ -313,7 +376,10 @@ impl Database {
              ORDER BY count DESC",
         )?;
         let rows = stmt.query_map(params![module_id, strongs], |row| {
-            Ok(crate::types::BookUsage { book: row.get(0)?, count: row.get::<_, u32>(1)? })
+            Ok(crate::types::BookUsage {
+                book: row.get(0)?,
+                count: row.get::<_, u32>(1)?,
+            })
         })?;
         let by_book: Vec<crate::types::BookUsage> = rows.collect::<rusqlite::Result<_>>()?;
         let total: u32 = by_book.iter().map(|b| b.count).sum();
@@ -322,7 +388,10 @@ impl Database {
 
     pub fn mark_index_built(&self, module_id: &str) -> Result<()> {
         let conn = self.0.lock().unwrap();
-        conn.execute("UPDATE installed_modules SET index_built=1 WHERE id=?1", params![module_id])?;
+        conn.execute(
+            "UPDATE installed_modules SET index_built=1 WHERE id=?1",
+            params![module_id],
+        )?;
         Ok(())
     }
 }
@@ -348,7 +417,11 @@ fn build_fts_query(raw: &str) -> String {
     }
 
     // Every token is a prefix query — works letter-by-letter at any position
-    tokens.iter().map(|t| format!("{}*", t)).collect::<Vec<_>>().join(" ")
+    tokens
+        .iter()
+        .map(|t| format!("{}*", t))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn row_to_note(row: &rusqlite::Row) -> rusqlite::Result<Note> {

@@ -1,12 +1,12 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager, State};
 use crate::db::Database;
 use crate::modules::ModuleRegistry;
-use crate::sword::{BibleReader, LexiconReader, conf::ModuleType, file_cache::FileCache};
+use crate::sword::{conf::ModuleType, file_cache::FileCache, BibleReader, LexiconReader};
 use crate::types::*;
 use crate::versification::BOOK_NAMES;
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 // ── Chapter cache ─────────────────────────────────────────────────────────────
 
@@ -19,18 +19,25 @@ pub struct ChapterCache {
 const MAX_CACHE_ENTRIES: usize = 60;
 
 impl ChapterCache {
-    pub fn new() -> Self { Self { map: Mutex::new(HashMap::new()) } }
+    pub fn new() -> Self {
+        Self {
+            map: Mutex::new(HashMap::new()),
+        }
+    }
 
     pub fn get(&self, module_id: &str, book: &str, chapter: u32) -> Option<ChapterText> {
         let map = self.map.lock().unwrap();
-        map.get(&(module_id.to_string(), book.to_string(), chapter)).cloned()
+        map.get(&(module_id.to_string(), book.to_string(), chapter))
+            .cloned()
     }
 
     pub fn insert(&self, module_id: &str, book: &str, chapter: u32, value: ChapterText) {
         let mut map = self.map.lock().unwrap();
         if map.len() >= MAX_CACHE_ENTRIES {
             // Evict one arbitrary entry to keep memory bounded
-            if let Some(key) = map.keys().next().cloned() { map.remove(&key); }
+            if let Some(key) = map.keys().next().cloned() {
+                map.remove(&key);
+            }
         }
         map.insert((module_id.to_string(), book.to_string(), chapter), value);
     }
@@ -56,7 +63,8 @@ pub(crate) fn build_fts_index(
     base_pct: u32,
     emit: impl Fn(u32, &str),
 ) -> Result<()> {
-    let conf = registry.conf_for(module_id)
+    let conf = registry
+        .conf_for(module_id)
         .ok_or_else(|| AppError::ModuleNotFound(module_id.to_string()))?;
 
     // Only Bible and Commentary modules have verse-keyed text to index
@@ -118,7 +126,8 @@ pub(crate) fn build_fts_index(
 
     emit(95, "Writing search index…");
 
-    let owned: Vec<(&str, u32, u32, String)> = rows.iter()
+    let owned: Vec<(&str, u32, u32, String)> = rows
+        .iter()
         .map(|(b, ch, v, t)| (*b, *ch, *v, t.clone()))
         .collect();
     db.replace_module_index(module_id, &owned)?;
@@ -127,7 +136,9 @@ pub(crate) fn build_fts_index(
     let strongs_rows: Vec<(String, String, u32)> = strongs_map
         .into_iter()
         .flat_map(|(strongs, books)| {
-            books.into_iter().map(move |(book, count)| (strongs.clone(), book, count))
+            books
+                .into_iter()
+                .map(move |(book, count)| (strongs.clone(), book, count))
         })
         .collect();
     db.replace_strongs_counts(module_id, &strongs_rows)?;
@@ -151,7 +162,8 @@ pub fn get_chapter(
     if let Some(cached) = chapter_cache.get(&module_id, &book, chapter) {
         return Ok(cached);
     }
-    let conf = registry.conf_for(&module_id)
+    let conf = registry
+        .conf_for(&module_id)
         .ok_or_else(|| AppError::ModuleNotFound(module_id.clone()))?;
     let module_path = registry.module_path(&module_id);
     let reader = BibleReader::open(&module_path, &conf, &file_cache)?;
@@ -169,7 +181,8 @@ pub fn get_verse(
     registry: State<Arc<ModuleRegistry>>,
     file_cache: State<FileCache>,
 ) -> std::result::Result<VerseText, AppError> {
-    let conf = registry.conf_for(&module_id)
+    let conf = registry
+        .conf_for(&module_id)
         .ok_or_else(|| AppError::ModuleNotFound(module_id.clone()))?;
     let module_path = registry.module_path(&module_id);
     let reader = BibleReader::open(&module_path, &conf, &file_cache)?;
@@ -180,13 +193,14 @@ pub fn get_verse(
 
 #[tauri::command]
 pub fn get_strongs_entry(
-    module_id: String,         // lexicon module, e.g. "StrongsGreek"
+    module_id: String, // lexicon module, e.g. "StrongsGreek"
     strongs_number: String,
-    bible_module_id: String,   // active Bible module, used to query occurrence counts
+    bible_module_id: String, // active Bible module, used to query occurrence counts
     db: State<'_, Arc<Database>>,
     registry: State<Arc<ModuleRegistry>>,
 ) -> std::result::Result<StrongsEntry, AppError> {
-    let conf = registry.conf_for(&module_id)
+    let conf = registry
+        .conf_for(&module_id)
         .ok_or_else(|| AppError::ModuleNotFound(module_id.clone()))?;
     let module_path = registry.module_path(&module_id);
     let reader = LexiconReader::open(&module_path, &conf)?;
@@ -210,12 +224,18 @@ pub fn get_commentary(
     registry: State<Arc<ModuleRegistry>>,
     file_cache: State<FileCache>,
 ) -> std::result::Result<String, AppError> {
-    let conf = registry.conf_for(&module_id)
+    let conf = registry
+        .conf_for(&module_id)
         .ok_or_else(|| AppError::ModuleNotFound(module_id.clone()))?;
     let module_path = registry.module_path(&module_id);
     let reader = BibleReader::open(&module_path, &conf, &file_cache)?;
     let verse_text = reader.get_verse(&book, chapter, verse)?;
-    Ok(verse_text.spans.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join(""))
+    Ok(verse_text
+        .spans
+        .iter()
+        .map(|s| s.text.as_str())
+        .collect::<Vec<_>>()
+        .join(""))
 }
 
 // ── Cross references ──────────────────────────────────────────────────────────
@@ -272,21 +292,27 @@ pub async fn rebuild_search_index(
 
     tokio::task::spawn_blocking(move || {
         build_fts_index(&module_id_clone, &registry, &db, 0, |pct, msg| {
-            let _ = app_clone.emit("index-progress", serde_json::json!({
-                "module_id": module_id_clone,
-                "progress": pct,
-                "message": msg,
-            }));
+            let _ = app_clone.emit(
+                "index-progress",
+                serde_json::json!({
+                    "module_id": module_id_clone,
+                    "progress": pct,
+                    "message": msg,
+                }),
+            );
         })
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
 
-    let _ = app.emit("index-progress", serde_json::json!({
-        "module_id": module_id,
-        "progress": 100u32,
-        "message": "Index ready",
-    }));
+    let _ = app.emit(
+        "index-progress",
+        serde_json::json!({
+            "module_id": module_id,
+            "progress": 100u32,
+            "message": "Index ready",
+        }),
+    );
 
     Ok(())
 }
@@ -302,33 +328,36 @@ pub fn list_installed_modules(
     registry.load_installed();
 
     let records = db.list_installed_module_records()?;
-    let modules = records.into_iter().filter_map(|(id, name, path, version, _category, index_built)| {
-        // The database is only an installation record. A module is usable only
-        // when its extracted configuration can also be loaded from disk. This
-        // lets the startup auto-install repair stale records left by an aborted
-        // download instead of incorrectly treating them as installed forever.
-        let conf = registry.conf_for(&id)?;
-        let category = match conf.module_type {
-            crate::sword::conf::ModuleType::Commentary => ModuleCategory::Commentary,
-            crate::sword::conf::ModuleType::Lexicon    => ModuleCategory::Lexicon,
-            crate::sword::conf::ModuleType::Dictionary => ModuleCategory::Dictionary,
-            crate::sword::conf::ModuleType::Bible      => ModuleCategory::Bible,
-        };
-        Some(InstalledModule {
-            id: id.clone(),
-            name,
-            description: String::new(),
-            language: String::new(),
-            version,
-            category,
-            installed: true,
-            requires_key: false,
-            has_strongs: false,
-            size_bytes: None,
-            install_path: path,
-            index_built,
+    let modules = records
+        .into_iter()
+        .filter_map(|(id, name, path, version, _category, index_built)| {
+            // The database is only an installation record. A module is usable only
+            // when its extracted configuration can also be loaded from disk. This
+            // lets the startup auto-install repair stale records left by an aborted
+            // download instead of incorrectly treating them as installed forever.
+            let conf = registry.conf_for(&id)?;
+            let category = match conf.module_type {
+                crate::sword::conf::ModuleType::Commentary => ModuleCategory::Commentary,
+                crate::sword::conf::ModuleType::Lexicon => ModuleCategory::Lexicon,
+                crate::sword::conf::ModuleType::Dictionary => ModuleCategory::Dictionary,
+                crate::sword::conf::ModuleType::Bible => ModuleCategory::Bible,
+            };
+            Some(InstalledModule {
+                id: id.clone(),
+                name,
+                description: String::new(),
+                language: String::new(),
+                version,
+                category,
+                installed: true,
+                requires_key: false,
+                has_strongs: false,
+                size_bytes: None,
+                install_path: path,
+                index_built,
+            })
         })
-    }).collect();
+        .collect();
     Ok(modules)
 }
 
@@ -363,13 +392,20 @@ async fn run_install(
 
     // Phase 1: download + extract (reports 5–59 via the closure)
     tokio::task::spawn_blocking(move || {
-        registry_for_install.install(&module_id_clone, key_clone.as_deref(), move |progress, message| {
-            let _ = app_clone.emit("module-install-progress", serde_json::json!({
-                "module_id": mid_for_closure,
-                "progress": progress,
-                "message": message,
-            }));
-        })
+        registry_for_install.install(
+            &module_id_clone,
+            key_clone.as_deref(),
+            move |progress, message| {
+                let _ = app_clone.emit(
+                    "module-install-progress",
+                    serde_json::json!({
+                        "module_id": mid_for_closure,
+                        "progress": progress,
+                        "message": message,
+                    }),
+                );
+            },
+        )
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -378,16 +414,25 @@ async fn run_install(
     // needed by cross-references immediately after download; making it wait for a
     // full-text index meant it could look downloaded but never installed.
     let module_path = registry.module_path(&module_id);
-    let conf = registry.conf_for(&module_id)
+    let conf = registry
+        .conf_for(&module_id)
         .ok_or_else(|| AppError::ModuleNotFound(module_id.clone()))?;
     let category_str = match conf.module_type {
         crate::sword::conf::ModuleType::Commentary => "Commentary",
-        crate::sword::conf::ModuleType::Lexicon    => "Lexicon",
+        crate::sword::conf::ModuleType::Lexicon => "Lexicon",
         crate::sword::conf::ModuleType::Dictionary => "Dictionary",
-        crate::sword::conf::ModuleType::Bible      => "Bible",
+        crate::sword::conf::ModuleType::Bible => "Bible",
     };
-    let module_name = if conf.name.is_empty() { module_id.as_str() } else { &conf.name };
-    let module_version = if conf.version.is_empty() { "1.0" } else { &conf.version };
+    let module_name = if conf.name.is_empty() {
+        module_id.as_str()
+    } else {
+        &conf.name
+    };
+    let module_version = if conf.version.is_empty() {
+        "1.0"
+    } else {
+        &conf.version
+    };
     db.record_installed_module(
         &module_id,
         module_name,
@@ -404,11 +449,14 @@ async fn run_install(
 
     if should_index {
         // Phase 2: build FTS index (60–95%), blocking
-        let _ = app.emit("module-install-progress", serde_json::json!({
-            "module_id": module_id,
-            "progress": 60u32,
-            "message": "Building search index…",
-        }));
+        let _ = app.emit(
+            "module-install-progress",
+            serde_json::json!({
+                "module_id": module_id,
+                "progress": 60u32,
+                "message": "Building search index…",
+            }),
+        );
 
         let app_clone2 = app.clone();
         let module_id_clone2 = module_id.clone();
@@ -416,13 +464,22 @@ async fn run_install(
         let db_for_index = Arc::clone(&db);
 
         tokio::task::spawn_blocking(move || {
-            build_fts_index(&module_id_clone2, &registry_for_index, &db_for_index, 60, |pct, msg| {
-                let _ = app_clone2.emit("module-install-progress", serde_json::json!({
-                    "module_id": module_id_clone2,
-                    "progress": pct,
-                    "message": msg,
-                }));
-            })
+            build_fts_index(
+                &module_id_clone2,
+                &registry_for_index,
+                &db_for_index,
+                60,
+                |pct, msg| {
+                    let _ = app_clone2.emit(
+                        "module-install-progress",
+                        serde_json::json!({
+                            "module_id": module_id_clone2,
+                            "progress": pct,
+                            "message": msg,
+                        }),
+                    );
+                },
+            )
         })
         .await
         .map_err(|e| AppError::Other(e.to_string()))??;
@@ -432,11 +489,14 @@ async fn run_install(
     }
 
     // Phase 3: done
-    let _ = app.emit("module-install-progress", serde_json::json!({
-        "module_id": module_id,
-        "progress": 100u32,
-        "message": "Done",
-    }));
+    let _ = app.emit(
+        "module-install-progress",
+        serde_json::json!({
+            "module_id": module_id,
+            "progress": 100u32,
+            "message": "Done",
+        }),
+    );
 
     Ok(())
 }
@@ -448,7 +508,14 @@ pub async fn install_module(
     db: State<'_, Arc<Database>>,
     registry: State<'_, Arc<ModuleRegistry>>,
 ) -> std::result::Result<(), AppError> {
-    run_install(module_id, None, app, db.inner().clone(), registry.inner().clone()).await
+    run_install(
+        module_id,
+        None,
+        app,
+        db.inner().clone(),
+        registry.inner().clone(),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -459,14 +526,24 @@ pub async fn install_module_with_key(
     db: State<'_, Arc<Database>>,
     registry: State<'_, Arc<ModuleRegistry>>,
 ) -> std::result::Result<(), AppError> {
-    run_install(module_id, Some(key), app, db.inner().clone(), registry.inner().clone()).await
+    run_install(
+        module_id,
+        Some(key),
+        app,
+        db.inner().clone(),
+        registry.inner().clone(),
+    )
+    .await
 }
 
 // ── Bookmarks ─────────────────────────────────────────────────────────────────
 
 #[tauri::command]
 pub fn add_bookmark(
-    book: String, chapter: u32, verse: u32, module_id: String,
+    book: String,
+    chapter: u32,
+    verse: u32,
+    module_id: String,
     db: State<Arc<Database>>,
 ) -> std::result::Result<Bookmark, AppError> {
     db.add_bookmark(&book, chapter, verse, &module_id)
@@ -486,14 +563,22 @@ pub fn list_bookmarks(db: State<Arc<Database>>) -> std::result::Result<Vec<Bookm
 
 #[tauri::command]
 pub fn add_note(
-    book: String, chapter: u32, verse: Option<u32>, module_id: String, content: String,
+    book: String,
+    chapter: u32,
+    verse: Option<u32>,
+    module_id: String,
+    content: String,
     db: State<Arc<Database>>,
 ) -> std::result::Result<Note, AppError> {
     db.add_note(&book, chapter, verse, &module_id, &content)
 }
 
 #[tauri::command]
-pub fn update_note(id: i64, content: String, db: State<Arc<Database>>) -> std::result::Result<Note, AppError> {
+pub fn update_note(
+    id: i64,
+    content: String,
+    db: State<Arc<Database>>,
+) -> std::result::Result<Note, AppError> {
     db.update_note(id, &content)
 }
 
@@ -510,16 +595,26 @@ pub fn list_notes(db: State<Arc<Database>>) -> std::result::Result<Vec<Note>, Ap
 // ── Preferences & position ────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn get_reading_position(db: State<Arc<Database>>) -> std::result::Result<Option<ReadingPosition>, AppError> {
+pub fn get_reading_position(
+    db: State<Arc<Database>>,
+) -> std::result::Result<Option<ReadingPosition>, AppError> {
     db.get_reading_position()
 }
 
 #[tauri::command]
 pub fn set_reading_position(
-    book: String, chapter: u32, verse: u32, module_id: String,
+    book: String,
+    chapter: u32,
+    verse: u32,
+    module_id: String,
     db: State<Arc<Database>>,
 ) -> std::result::Result<(), AppError> {
-    db.set_reading_position(&ReadingPosition { book, chapter, verse, module_id })
+    db.set_reading_position(&ReadingPosition {
+        book,
+        chapter,
+        verse,
+        module_id,
+    })
 }
 
 #[tauri::command]
@@ -528,15 +623,28 @@ pub fn get_preferences(db: State<Arc<Database>>) -> std::result::Result<Preferen
 }
 
 #[tauri::command]
-pub fn set_preferences(prefs: Value, db: State<Arc<Database>>) -> std::result::Result<(), AppError> {
+pub fn set_preferences(
+    prefs: Value,
+    db: State<Arc<Database>>,
+) -> std::result::Result<(), AppError> {
     // Merge partial prefs into current preferences
     let mut current = db.get_preferences()?;
     if let Some(obj) = prefs.as_object() {
-        if let Some(v) = obj.get("theme").and_then(|v| v.as_str()) { current.theme = v.to_string(); }
-        if let Some(v) = obj.get("font_size_reading").and_then(|v| v.as_u64()) { current.font_size_reading = v as u32; }
-        if let Some(v) = obj.get("show_strongs").and_then(|v| v.as_bool()) { current.show_strongs = v; }
-        if let Some(v) = obj.get("show_morph").and_then(|v| v.as_bool()) { current.show_morph = v; }
-        if let Some(v) = obj.get("verse_display").and_then(|v| v.as_str()) { current.verse_display = v.to_string(); }
+        if let Some(v) = obj.get("theme").and_then(|v| v.as_str()) {
+            current.theme = v.to_string();
+        }
+        if let Some(v) = obj.get("font_size_reading").and_then(|v| v.as_u64()) {
+            current.font_size_reading = v as u32;
+        }
+        if let Some(v) = obj.get("show_strongs").and_then(|v| v.as_bool()) {
+            current.show_strongs = v;
+        }
+        if let Some(v) = obj.get("show_morph").and_then(|v| v.as_bool()) {
+            current.show_morph = v;
+        }
+        if let Some(v) = obj.get("verse_display").and_then(|v| v.as_str()) {
+            current.verse_display = v.to_string();
+        }
     }
     db.set_preferences(&current)
 }
@@ -594,23 +702,28 @@ pub struct MonitorInfo {
 pub async fn list_monitors(app: AppHandle) -> std::result::Result<Vec<MonitorInfo>, String> {
     let window = app.get_webview_window("main").ok_or("no main window")?;
     let monitors = window.available_monitors().map_err(|e| e.to_string())?;
-    let primary_pos = window.primary_monitor()
+    let primary_pos = window
+        .primary_monitor()
         .map_err(|e| e.to_string())?
         .map(|m| *m.position());
 
-    Ok(monitors.into_iter().enumerate().map(|(index, m)| {
-        let pos = *m.position();
-        let size = *m.size();
-        MonitorInfo {
-            index,
-            name: m.name().cloned(),
-            x: pos.x,
-            y: pos.y,
-            width: size.width,
-            height: size.height,
-            is_primary: primary_pos == Some(pos),
-        }
-    }).collect())
+    Ok(monitors
+        .into_iter()
+        .enumerate()
+        .map(|(index, m)| {
+            let pos = *m.position();
+            let size = *m.size();
+            MonitorInfo {
+                index,
+                name: m.name().cloned(),
+                x: pos.x,
+                y: pos.y,
+                width: size.width,
+                height: size.height,
+                is_primary: primary_pos == Some(pos),
+            }
+        })
+        .collect())
 }
 
 #[tauri::command]
@@ -632,12 +745,13 @@ pub async fn open_presentation_window(
             .and_then(|monitors| monitors.into_iter().nth(idx))
     });
 
-    let window = WebviewWindowBuilder::new(&app, "presentation", WebviewUrl::App("index.html".into()))
-        .title("Scriptura Live")
-        .decorations(false)
-        .initialization_script("window.__SCRIPTURA_PRESENTATION__ = true;")
-        .build()
-        .map_err(|e| e.to_string())?;
+    let window =
+        WebviewWindowBuilder::new(&app, "presentation", WebviewUrl::App("index.html".into()))
+            .title("Scriptura Live")
+            .decorations(false)
+            .initialization_script("window.__SCRIPTURA_PRESENTATION__ = true;")
+            .build()
+            .map_err(|e| e.to_string())?;
 
     if let Some(monitor) = target_monitor {
         let _ = window.set_position(tauri::Position::Physical(*monitor.position()));

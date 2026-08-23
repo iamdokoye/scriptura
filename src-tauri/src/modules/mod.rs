@@ -1,28 +1,89 @@
+use crate::sword::conf::ModuleConf;
+use crate::types::{AppError, ModuleCategory, ModuleInfo, Result};
+use reqwest::blocking::Client;
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use reqwest::blocking::Client;
-use crate::sword::conf::ModuleConf;
-use crate::types::{AppError, ModuleCategory, ModuleInfo, Result};
 
 const CROSSWIRE_REPO_URL: &str = "https://www.crosswire.org/ftpmirror/pub/sword/packages/rawzip/";
-const CATALOG_URL: &str = "https://www.crosswire.org/ftpmirror/pub/sword/packages/rawzip/mods.d.tar.gz";
+const CATALOG_URL: &str =
+    "https://www.crosswire.org/ftpmirror/pub/sword/packages/rawzip/mods.d.tar.gz";
 const CATALOG_TTL: std::time::Duration = std::time::Duration::from_secs(3600);
 
 // Hardcoded fallback used only when the live catalog fetch fails.
 // (module_id, display_name, description, category, iso_lang)
 const FREE_MODULES: &[(&str, &str, &str, &str, &str)] = &[
-    ("KJV",         "King James Version",           "1769 Blayney text; most widely studied English Bible",                 "Bible", "eng"),
-    ("KJV1611",     "KJV — Original 1611 Text",     "First printed KJV with original spelling and translational choices",   "Bible", "eng"),
-    ("ASV",         "American Standard Version",    "1901 literal revision of the Revised Version; basis for NASB/RSV",     "Bible", "eng"),
-    ("BBE",         "Bible in Basic English",       "1949 simplified-vocabulary translation using only 850 core words",      "Bible", "eng"),
-    ("DBY",         "Darby Translation",            "1890 translation by J.N. Darby; emphasises literal rendering",          "Bible", "eng"),
-    ("YLT",         "Young's Literal Translation",  "1898 by Robert Young; extremely literal, preserves Hebrew tenses",      "Bible", "eng"),
-    ("StrongsGreek",  "Strong's Greek Dictionary",  "James Strong's complete Greek NT lexicon keyed to KJV",                "Lexicon", "eng"),
-    ("StrongsHebrew", "Strong's Hebrew Dictionary", "James Strong's complete Hebrew/Aramaic OT lexicon keyed to KJV",       "Lexicon", "eng"),
-    ("MHC",    "Matthew Henry Complete",   "Exhaustive verse-by-verse commentary by Matthew Henry (1662–1714)",     "Commentary", "eng"),
-    ("TSK",    "Treasury of Scripture Knowledge", "Over 340,000 cross-references compiled by R. A. Torrey (1896)", "Commentary", "eng"),
+    (
+        "KJV",
+        "King James Version",
+        "1769 Blayney text; most widely studied English Bible",
+        "Bible",
+        "eng",
+    ),
+    (
+        "KJV1611",
+        "KJV — Original 1611 Text",
+        "First printed KJV with original spelling and translational choices",
+        "Bible",
+        "eng",
+    ),
+    (
+        "ASV",
+        "American Standard Version",
+        "1901 literal revision of the Revised Version; basis for NASB/RSV",
+        "Bible",
+        "eng",
+    ),
+    (
+        "BBE",
+        "Bible in Basic English",
+        "1949 simplified-vocabulary translation using only 850 core words",
+        "Bible",
+        "eng",
+    ),
+    (
+        "DBY",
+        "Darby Translation",
+        "1890 translation by J.N. Darby; emphasises literal rendering",
+        "Bible",
+        "eng",
+    ),
+    (
+        "YLT",
+        "Young's Literal Translation",
+        "1898 by Robert Young; extremely literal, preserves Hebrew tenses",
+        "Bible",
+        "eng",
+    ),
+    (
+        "StrongsGreek",
+        "Strong's Greek Dictionary",
+        "James Strong's complete Greek NT lexicon keyed to KJV",
+        "Lexicon",
+        "eng",
+    ),
+    (
+        "StrongsHebrew",
+        "Strong's Hebrew Dictionary",
+        "James Strong's complete Hebrew/Aramaic OT lexicon keyed to KJV",
+        "Lexicon",
+        "eng",
+    ),
+    (
+        "MHC",
+        "Matthew Henry Complete",
+        "Exhaustive verse-by-verse commentary by Matthew Henry (1662–1714)",
+        "Commentary",
+        "eng",
+    ),
+    (
+        "TSK",
+        "Treasury of Scripture Knowledge",
+        "Over 340,000 cross-references compiled by R. A. Torrey (1896)",
+        "Commentary",
+        "eng",
+    ),
 ];
 
 struct CatalogCache {
@@ -46,7 +107,9 @@ impl ModuleRegistry {
     }
 
     #[allow(dead_code)]
-    pub fn modules_dir(&self) -> &Path { &self.modules_dir }
+    pub fn modules_dir(&self) -> &Path {
+        &self.modules_dir
+    }
 
     pub fn conf_for(&self, module_id: &str) -> Option<Arc<ModuleConf>> {
         let loaded = self.loaded.lock().unwrap();
@@ -63,8 +126,12 @@ impl ModuleRegistry {
     }
 
     pub fn load_installed(&self) {
-        if !self.modules_dir.exists() { return; }
-        let Ok(entries) = std::fs::read_dir(&self.modules_dir) else { return; };
+        if !self.modules_dir.exists() {
+            return;
+        }
+        let Ok(entries) = std::fs::read_dir(&self.modules_dir) else {
+            return;
+        };
         for entry in entries.flatten() {
             let module_dir = entry.path();
             let module_id = entry.file_name().to_string_lossy().to_string();
@@ -78,7 +145,9 @@ impl ModuleRegistry {
                 continue;
             }
 
-            let conf_path = module_dir.join("mods.d").join(format!("{}.conf", module_id.to_lowercase()));
+            let conf_path = module_dir
+                .join("mods.d")
+                .join(format!("{}.conf", module_id.to_lowercase()));
             if let Ok(conf) = ModuleConf::parse(&module_id, &conf_path) {
                 self.register(conf);
             }
@@ -105,28 +174,47 @@ impl ModuleRegistry {
 
         let entries = match archive.entries() {
             Ok(e) => e,
-            Err(e) => { log::warn!("[modules] catalog tar open: {e}"); return None; }
+            Err(e) => {
+                log::warn!("[modules] catalog tar open: {e}");
+                return None;
+            }
         };
 
         let mut modules = Vec::new();
         for entry in entries {
             let Ok(mut entry) = entry else { continue };
 
-            let is_conf = entry.path().ok()
-                .map(|p| p.extension().map_or(false, |e| e.eq_ignore_ascii_case("conf")))
+            let is_conf = entry
+                .path()
+                .ok()
+                .map(|p| {
+                    p.extension()
+                        .map_or(false, |e| e.eq_ignore_ascii_case("conf"))
+                })
                 .unwrap_or(false);
-            if !is_conf { continue; }
+            if !is_conf {
+                continue;
+            }
 
             let mut content = String::new();
-            if entry.read_to_string(&mut content).is_err() { continue; }
+            if entry.read_to_string(&mut content).is_err() {
+                continue;
+            }
 
             if let Some(info) = parse_sword_conf(&content) {
                 modules.push(info);
             }
         }
 
-        log::info!("[modules] live catalog: {} modules from CrossWire", modules.len());
-        if modules.is_empty() { None } else { Some(modules) }
+        log::info!(
+            "[modules] live catalog: {} modules from CrossWire",
+            modules.len()
+        );
+        if modules.is_empty() {
+            None
+        } else {
+            Some(modules)
+        }
     }
 
     /// Return the full list of available free modules, marking which are installed.
@@ -157,26 +245,32 @@ impl ModuleRegistry {
             modules
         } else {
             log::info!("[modules] using hardcoded fallback module list");
-            FREE_MODULES.iter().map(|(id, name, desc, cat, lang)| ModuleInfo {
-                id: id.to_string(),
-                name: name.to_string(),
-                description: desc.to_string(),
-                language: lang.to_string(),
-                version: "1.0".to_string(),
-                category: parse_category(cat),
-                installed: false,
-                requires_key: false,
-                has_strongs: matches!(*cat, "Lexicon"),
-                size_bytes: None,
-            }).collect()
+            FREE_MODULES
+                .iter()
+                .map(|(id, name, desc, cat, lang)| ModuleInfo {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    description: desc.to_string(),
+                    language: lang.to_string(),
+                    version: "1.0".to_string(),
+                    category: parse_category(cat),
+                    installed: false,
+                    requires_key: false,
+                    has_strongs: matches!(*cat, "Lexicon"),
+                    size_bytes: None,
+                })
+                .collect()
         };
 
         // Apply current installed status
         let loaded = self.loaded.lock().unwrap();
-        raw_modules.into_iter().map(|mut m| {
-            m.installed = loaded.contains_key(&m.id);
-            m
-        }).collect()
+        raw_modules
+            .into_iter()
+            .map(|mut m| {
+                m.installed = loaded.contains_key(&m.id);
+                m
+            })
+            .collect()
     }
 
     /// Download and install a module from CrossWire.
@@ -209,17 +303,20 @@ impl ModuleRegistry {
             .build()
             .map_err(|e| AppError::Network(e.to_string()))?;
 
-        let mut response = client.get(&url).send()
+        let mut response = client
+            .get(&url)
+            .send()
             .map_err(|e| AppError::Network(format!("download failed: {e}")))?;
 
         if !response.status().is_success() {
             return Err(AppError::Network(format!(
-                "HTTP {} for {url}", response.status()
+                "HTTP {} for {url}",
+                response.status()
             )));
         }
 
         const MAX_DOWNLOAD_BYTES: u64 = 512 * 1024 * 1024; // 500 MB
-        const MAX_ENTRY_BYTES: u64 = 256 * 1024 * 1024;   // 256 MB per entry
+        const MAX_ENTRY_BYTES: u64 = 256 * 1024 * 1024; // 256 MB per entry
 
         let content_length = response.content_length().unwrap_or(0);
         if content_length > MAX_DOWNLOAD_BYTES {
@@ -232,12 +329,17 @@ impl ModuleRegistry {
         let mut downloaded = 0u64;
         progress_cb(10, "Downloading module…");
         loop {
-            let n = response.read(&mut buf)
+            let n = response
+                .read(&mut buf)
                 .map_err(|e| AppError::Network(format!("read body: {e}")))?;
-            if n == 0 { break; }
+            if n == 0 {
+                break;
+            }
             downloaded += n as u64;
             if downloaded > MAX_DOWNLOAD_BYTES {
-                return Err(AppError::Network("module archive exceeds size limit".into()));
+                return Err(AppError::Network(
+                    "module archive exceeds size limit".into(),
+                ));
             }
             data.extend_from_slice(&buf[..n]);
             if content_length > 0 {
@@ -273,7 +375,8 @@ impl ModuleRegistry {
                 .map_err(|e| AppError::Sword(format!("zip open: {e}")))?;
 
             for i in 0..zip.len() {
-                let mut file = zip.by_index(i)
+                let mut file = zip
+                    .by_index(i)
                     .map_err(|e| AppError::Sword(format!("zip entry {i}: {e}")))?;
 
                 // enclosed_name() returns None for paths with ".." or absolute components
@@ -300,7 +403,8 @@ impl ModuleRegistry {
                     }
                     if file.size() > MAX_ENTRY_BYTES {
                         return Err(AppError::Sword(format!(
-                            "zip entry {} exceeds size limit", file.name()
+                            "zip entry {} exceeds size limit",
+                            file.name()
                         )));
                     }
                     // std::io::copy surfaces a zip CRC32 mismatch as an error here,
@@ -341,7 +445,9 @@ impl ModuleRegistry {
                 .map_err(|e| AppError::Sword(format!("failed to stage previous install: {e}")))?;
             if let Err(e) = std::fs::rename(&tmp_dir, &dest_dir) {
                 let _ = std::fs::rename(&backup_dir, &dest_dir); // best-effort rollback
-                return Err(AppError::Sword(format!("failed to finalize module install: {e}")));
+                return Err(AppError::Sword(format!(
+                    "failed to finalize module install: {e}"
+                )));
             }
             let _ = std::fs::remove_dir_all(&backup_dir);
         } else {
@@ -356,17 +462,27 @@ impl ModuleRegistry {
     }
 
     fn find_conf(module_dir: &Path, module_id: &str) -> Result<PathBuf> {
-        let candidate = module_dir.join("mods.d").join(format!("{}.conf", module_id.to_lowercase()));
-        if candidate.exists() { return Ok(candidate); }
+        let candidate = module_dir
+            .join("mods.d")
+            .join(format!("{}.conf", module_id.to_lowercase()));
+        if candidate.exists() {
+            return Ok(candidate);
+        }
 
         for entry in walkdir::WalkDir::new(module_dir).max_depth(4) {
             let entry = entry.map_err(|e| AppError::Other(e.to_string()))?;
             let path = entry.path();
-            if path.extension().map_or(false, |e| e.eq_ignore_ascii_case("conf")) {
+            if path
+                .extension()
+                .map_or(false, |e| e.eq_ignore_ascii_case("conf"))
+            {
                 return Ok(path.to_path_buf());
             }
         }
-        Err(AppError::Sword(format!("no .conf found in {}", module_dir.display())))
+        Err(AppError::Sword(format!(
+            "no .conf found in {}",
+            module_dir.display()
+        )))
     }
 }
 
@@ -384,7 +500,9 @@ fn parse_sword_conf(content: &str) -> Option<ModuleInfo> {
 
     for line in content.lines() {
         let line = line.trim();
-        if line.is_empty() || line.starts_with('#') { continue; }
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
 
         // Section header [ModuleId]
         if line.starts_with('[') && line.ends_with(']') && module_id.is_empty() {
@@ -398,12 +516,16 @@ fn parse_sword_conf(content: &str) -> Option<ModuleInfo> {
 
         match key.as_str() {
             "description" => description = val.to_string(),
-            "about"       => if about.is_empty() { about = val.to_string(); },
-            "lang"        => lang = val.to_string(),
-            "version"     => version = val.to_string(),
-            "moddrv"      => mod_drv = val.to_lowercase(),
-            "category"    => category_str = val.to_string(),
-            "cipherkey"   => cipher_key = val.to_string(),
+            "about" => {
+                if about.is_empty() {
+                    about = val.to_string();
+                }
+            }
+            "lang" => lang = val.to_string(),
+            "version" => version = val.to_string(),
+            "moddrv" => mod_drv = val.to_lowercase(),
+            "category" => category_str = val.to_string(),
+            "cipherkey" => cipher_key = val.to_string(),
             _ => {}
         }
     }
@@ -416,18 +538,18 @@ fn parse_sword_conf(content: &str) -> Option<ModuleInfo> {
 
     let category = if !category_str.is_empty() {
         match category_str.as_str() {
-            "Biblical Texts" | "Texts"                  => ModuleCategory::Bible,
-            "Commentaries"                               => ModuleCategory::Commentary,
+            "Biblical Texts" | "Texts" => ModuleCategory::Bible,
+            "Commentaries" => ModuleCategory::Commentary,
             "Lexicons / Dictionaries" | "Lexicons" | "Dictionaries" => ModuleCategory::Lexicon,
-            "Daily Devotional" | "Devotionals"           => ModuleCategory::Devotional,
-            _                                            => ModuleCategory::Other,
+            "Daily Devotional" | "Devotionals" => ModuleCategory::Devotional,
+            _ => ModuleCategory::Other,
         }
     } else {
         match mod_drv.as_str() {
             "rawtext" | "rawtext4" | "ztext" | "ztext4" | "hrefcom" => ModuleCategory::Bible,
-            "rawcom"  | "rawcom4"  | "zcom"  | "rawfiles"           => ModuleCategory::Commentary,
-            "rawld"   | "rawld4"   | "zld"                          => ModuleCategory::Lexicon,
-            _                                                        => ModuleCategory::Other,
+            "rawcom" | "rawcom4" | "zcom" | "rawfiles" => ModuleCategory::Commentary,
+            "rawld" | "rawld4" | "zld" => ModuleCategory::Lexicon,
+            _ => ModuleCategory::Other,
         }
     };
 
@@ -448,8 +570,16 @@ fn parse_sword_conf(content: &str) -> Option<ModuleInfo> {
         id: module_id,
         name: description,
         description: desc,
-        language: if lang.is_empty() { "eng".to_string() } else { lang },
-        version: if version.is_empty() { "1.0".to_string() } else { version },
+        language: if lang.is_empty() {
+            "eng".to_string()
+        } else {
+            lang
+        },
+        version: if version.is_empty() {
+            "1.0".to_string()
+        } else {
+            version
+        },
         category,
         installed: false,
         requires_key,
@@ -460,11 +590,11 @@ fn parse_sword_conf(content: &str) -> Option<ModuleInfo> {
 
 fn parse_category(s: &str) -> ModuleCategory {
     match s {
-        "Bible"       => ModuleCategory::Bible,
-        "Commentary"  => ModuleCategory::Commentary,
-        "Lexicon"     => ModuleCategory::Lexicon,
-        "Dictionary"  => ModuleCategory::Dictionary,
-        "Devotional"  => ModuleCategory::Devotional,
-        _             => ModuleCategory::Other,
+        "Bible" => ModuleCategory::Bible,
+        "Commentary" => ModuleCategory::Commentary,
+        "Lexicon" => ModuleCategory::Lexicon,
+        "Dictionary" => ModuleCategory::Dictionary,
+        "Devotional" => ModuleCategory::Devotional,
+        _ => ModuleCategory::Other,
     }
 }
