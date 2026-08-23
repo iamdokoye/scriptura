@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { listenPresentation, type PresentState } from "../lib/presentation";
 import { api, type ChapterText } from "../lib/tauri";
 import StrongsSheet from "../components/StrongsSheet";
+import { useShrinkToFit } from "../hooks/useShrinkToFit";
 import { useAppStore, type DisplayPrefs } from "../store/app";
 
 const FONT_FAMILY_CSS: Record<string, string> = {
@@ -140,23 +141,22 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
   }
 
   const ref = `${state.book} ${state.chapter}:${state.verse}`;
-  const activeStyle = makeTextStyle(prefs, fontSize);
   // Context verses (prev/next) render at 68% of the active size
   const contextStyle = makeTextStyle(prefs, Math.round(fontSize * 0.68));
   const refSize = Math.max(12, Math.round(fontSize * 0.28));
 
-  // Single verse — vertically centred
+  // Single verse — vertically centred, shrunk to fit if it's long
   if (ctx === 1) {
     return (
       <div className="h-full flex items-center justify-center" style={{ paddingLeft: hPad, paddingRight: hPad }}>
         {state.parallelMode && parallelChapter ? (
-          <div className="w-full grid grid-cols-2 gap-16 items-center">
-            <VerseColumn text={verseText(active)} reference={ref} module={state.primaryModule} textStyle={activeStyle} refSize={refSize} />
-            <VerseColumn text={parallelText(active)} reference={ref} module={state.parallelModule ?? ""} textStyle={activeStyle} refSize={refSize} dim />
+          <div className="w-full h-full py-10 grid grid-cols-2 gap-16">
+            <VerseColumn text={verseText(active)} reference={ref} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} refSize={refSize} />
+            <VerseColumn text={parallelText(active)} reference={ref} module={state.parallelModule ?? ""} prefs={prefs} maxFontSize={fontSize} refSize={refSize} dim />
           </div>
         ) : (
-          <div className="w-full max-w-[900px] mx-auto text-center">
-            <VerseColumn text={verseText(active)} reference={ref} module={state.primaryModule} textStyle={activeStyle} refSize={refSize} centered />
+          <div className="w-full h-full py-10 text-center">
+            <VerseColumn text={verseText(active)} reference={ref} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} refSize={refSize} centered widen />
           </div>
         )}
       </div>
@@ -172,21 +172,29 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
   // Keep state changes instantaneous: macOS can defer CSS animation frames for
   // an unfocused presentation WKWebView.
 
+  // The active row gets a definite (vh, not %) height budget to shrink text
+  // against — prev/next stay at their fixed context size since they're already
+  // small and typically short.
+  const activeRowHeight = ctx === 3 ? "50vh" : "60vh";
+
   return (
     <div className="h-full flex flex-col justify-center gap-0 py-10" style={{ paddingLeft: hPad, paddingRight: hPad }}>
       {rows.map(({ v, label, role }) => {
         const isActive = role === "active";
         const opacity = isActive ? "opacity-100" : role === "prev" ? "opacity-25" : "opacity-50";
-        const ts = isActive ? activeStyle : contextStyle;
         return (
-          <div key={role} className={`${opacity} ${isActive ? "py-8 border-y border-white/10" : "py-5"}`}>
+          <div
+            key={role}
+            className={`${opacity} ${isActive ? "py-8 border-y border-white/10 box-border" : "py-5"}`}
+            style={isActive ? { height: activeRowHeight } : undefined}
+          >
             {state.parallelMode && parallelChapter ? (
-              <div className="grid grid-cols-2 gap-12">
-                <ContextVerseBlock text={verseText(v)} label={label} module={state.primaryModule} textStyle={ts} refSize={refSize} active={isActive} />
-                <ContextVerseBlock text={parallelText(v)} label={label} module={state.parallelModule ?? ""} textStyle={ts} refSize={refSize} active={isActive} dim />
+              <div className="grid grid-cols-2 gap-12 h-full">
+                <ContextVerseBlock text={verseText(v)} label={label} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} contextStyle={contextStyle} refSize={refSize} active={isActive} />
+                <ContextVerseBlock text={parallelText(v)} label={label} module={state.parallelModule ?? ""} prefs={prefs} maxFontSize={fontSize} contextStyle={contextStyle} refSize={refSize} active={isActive} dim />
               </div>
             ) : (
-              <ContextVerseBlock text={verseText(v)} label={label} module={state.primaryModule} textStyle={ts} refSize={refSize} active={isActive} />
+              <ContextVerseBlock text={verseText(v)} label={label} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} contextStyle={contextStyle} refSize={refSize} active={isActive} />
             )}
           </div>
         );
@@ -195,24 +203,64 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
   );
 }
 
-function ContextVerseBlock({ text, label, module, textStyle, refSize, active, dim }: {
+function ContextVerseBlock({ text, label, module, prefs, maxFontSize, contextStyle, refSize, active, dim }: {
   text: string;
   label: string;
   module: string;
-  textStyle: TextStyle;
+  prefs: DisplayPrefs;
+  maxFontSize: number;
+  contextStyle: TextStyle;
   refSize: number;
   active: boolean;
   dim?: boolean;
 }) {
+  if (!active) {
+    return (
+      <div className={`flex flex-col gap-3 ${dim ? "opacity-60" : ""}`}>
+        <p className="text-white" style={contextStyle}>{text}</p>
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex flex-col gap-3 ${dim ? "opacity-60" : ""}`}>
-      <p className="text-white" style={textStyle}>{text}</p>
-      {active && (
-        <div className="flex items-center gap-3">
-          <span className="font-metadata-mono text-white/60" style={{ fontSize: refSize }}>{label}</span>
-          <span className="font-metadata-mono text-white/30 border border-white/20 rounded px-2 py-0.5" style={{ fontSize: Math.max(10, refSize - 3) }}>{module}</span>
-        </div>
-      )}
+    <div className={`flex flex-col gap-3 h-full ${dim ? "opacity-60" : ""}`}>
+      <ShrinkingVerseText text={text} maxFontSize={maxFontSize} prefs={prefs} />
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="font-metadata-mono text-white/60" style={{ fontSize: refSize }}>{label}</span>
+        <span className="font-metadata-mono text-white/30 border border-white/20 rounded px-2 py-0.5" style={{ fontSize: Math.max(10, refSize - 3) }}>{module}</span>
+      </div>
+    </div>
+  );
+}
+
+// Shrinks its text to fit the vertical space its (definite-height) parent
+// gives it — used for the active verse in every context mode, since that's
+// always rendered at the large, operator-configured font size and is the one
+// that can overflow on a long verse.
+// Single verse gets to grow up to full width before its font shrinks — a short
+// verse still reads as an intentional, narrower centered block.
+const SINGLE_VERSE_WIDTH_RANGE = { min: 55, max: 100 };
+
+function ShrinkingVerseText({ text, maxFontSize, prefs, centered, widen }: {
+  text: string;
+  maxFontSize: number;
+  prefs: DisplayPrefs;
+  centered?: boolean;
+  widen?: boolean;
+}) {
+  const { containerRef, textRef, fontSize, widthPct } = useShrinkToFit({
+    text,
+    maxSize: maxFontSize,
+    widthRange: widen ? SINGLE_VERSE_WIDTH_RANGE : undefined,
+  });
+  const style = makeTextStyle(prefs, fontSize);
+  return (
+    <div
+      ref={containerRef}
+      className="flex-1 min-h-0 flex flex-col justify-center overflow-hidden"
+      style={widen ? { width: `${widthPct}%` } : undefined}
+    >
+      <p ref={textRef} className={`text-white ${centered ? "text-center" : ""}`} style={style}>{text}</p>
     </div>
   );
 }
@@ -300,19 +348,21 @@ function ScrollVerseBlock({ verse, text, active, textStyle, verseNumSize, dim }:
   );
 }
 
-function VerseColumn({ text, reference, module, textStyle, refSize, dim, centered }: {
+function VerseColumn({ text, reference, module, prefs, maxFontSize, refSize, dim, centered, widen }: {
   text: string;
   reference: string;
   module: string;
-  textStyle: TextStyle;
+  prefs: DisplayPrefs;
+  maxFontSize: number;
   refSize: number;
   dim?: boolean;
   centered?: boolean;
+  widen?: boolean;
 }) {
   return (
-    <div className={`flex flex-col gap-6 ${centered ? "items-center" : ""} ${dim ? "opacity-60" : ""}`}>
-      <p className={`text-white ${centered ? "text-center" : ""}`} style={textStyle}>{text}</p>
-      <div className={`flex items-center gap-3 ${centered ? "justify-center" : ""}`}>
+    <div className={`flex flex-col gap-6 h-full ${centered ? "items-center" : ""} ${dim ? "opacity-60" : ""}`}>
+      <ShrinkingVerseText text={text} maxFontSize={maxFontSize} prefs={prefs} centered={centered} widen={widen} />
+      <div className={`flex items-center gap-3 shrink-0 ${centered ? "justify-center" : ""}`}>
         <span className="font-metadata-mono text-white/60" style={{ fontSize: refSize }}>{reference}</span>
         <span className="font-metadata-mono text-white/30 border border-white/20 rounded px-2 py-0.5" style={{ fontSize: Math.max(10, refSize - 3) }}>{module}</span>
       </div>

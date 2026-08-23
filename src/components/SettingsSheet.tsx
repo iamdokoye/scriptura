@@ -340,7 +340,7 @@ export default function SettingsSheet() {
               <div className="px-8 py-3 space-y-3.5">
                 {([
                   { q: "How do I install Bible modules?", a: "Go to the Modules view (bookshelf icon), search for a translation, and click Install." },
-                  { q: "How do I start a presentation?", a: "Click the slideshow icon in the top bar to open the Presentation window, then navigate verses from the reading view. Use Ctrl+Q to open the service queue." },
+                  { q: "How do I start a presentation?", a: "Click the slideshow icon in the top bar to open the Presentation window, then navigate verses from the reading view. Press Ctrl+Alt+Q to add the current verse to the service queue, and Ctrl+Q to open the queue panel." },
                   { q: "What are Strong's numbers?", a: "Strong's numbers link each word to its original Hebrew or Greek dictionary entry. Enable them in Study Tools settings." },
                   { q: "How do I change the font or size?", a: "Open Settings → Appearance → Text Settings to adjust font family, size, margins, and spacing." },
                   { q: "How do I use the presentation verse context shortcuts?", a: "Press Ctrl+1–4 while presentation is active: 1 = active verse only, 2 = active + next, 3 = prev + active + next, 4 = full chapter scroll." },
@@ -628,10 +628,17 @@ const SHORTCUT_GROUPS: Array<{
     ],
   },
   {
+    label: "Service queue",
+    icon: "queue_play_next",
+    shortcuts: [
+      { keys: ["Ctrl", "Q"], description: "Toggle service queue panel" },
+      { keys: ["Ctrl", "Alt", "Q"], description: "Add current verse to queue" },
+    ],
+  },
+  {
     label: "Presentation",
     icon: "slideshow",
     shortcuts: [
-      { keys: ["Ctrl", "Q"], description: "Toggle service queue" },
       { keys: ["Ctrl", "1"], description: "Active verse only", note: "Presentation active" },
       { keys: ["Ctrl", "2"], description: "Active + next verse", note: "Presentation active" },
       { keys: ["Ctrl", "3"], description: "Prev + active + next", note: "Presentation active" },
@@ -670,7 +677,12 @@ export function ShortcutsOverlay({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
+        {/* min-h-0 is required here: a flex child defaults to min-height:auto,
+            which stops it from ever shrinking below its content size — without
+            it, this content just grows past the parent's max-h-[80vh] instead
+            of activating this div's own overflow-y-auto scroll, so the last
+            group(s) get cut off instead of being reachable by scrolling. */}
+        <div className="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-5">
           {SHORTCUT_GROUPS.map((group) => (
             <div key={group.label}>
               <div className="flex items-center gap-1.5 mb-2">

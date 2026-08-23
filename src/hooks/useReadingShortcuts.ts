@@ -24,6 +24,8 @@ interface Args {
   setServiceOrderOpen: (v: boolean) => void;
   presentationActive: boolean;
   setDisplayPrefs: (p: Partial<DisplayPrefs>) => void;
+  /** Adds the currently active verse to the service queue (Ctrl+Alt+Q). */
+  addCurrentVerseToQueue: () => void;
 }
 
 /**
@@ -38,6 +40,7 @@ export function useReadingShortcuts(args: Args) {
     readingFontSize, setReadingFontSize, currentRef, setCurrentRef,
     currentSearchResults, searchResultIndex, setSearchResultIndex, navTo, setLastHistoryRef,
     setView, serviceOrderOpen, setServiceOrderOpen, presentationActive, setDisplayPrefs,
+    addCurrentVerseToQueue,
   } = args;
 
   useEffect(() => {
@@ -160,8 +163,15 @@ export function useReadingShortcuts(args: Args) {
         return;
       }
 
+      // Ctrl+Alt+Q: add the current verse to the service queue
+      if (ctrl && alt && e.code === "KeyQ") {
+        e.preventDefault();
+        addCurrentVerseToQueue();
+        return;
+      }
+
       // Ctrl+Q: toggle service order panel
-      if (ctrl && e.code === "KeyQ") {
+      if (ctrl && !alt && e.code === "KeyQ") {
         e.preventDefault();
         setServiceOrderOpen(!serviceOrderOpen);
         return;
@@ -189,6 +199,6 @@ export function useReadingShortcuts(args: Args) {
     serviceOrderOpen, setServiceOrderOpen,
     setIsFullscreen, setCurrentRef, navTo,
     setSearchResultIndex, setView, setReadingFontSize, setLastHistoryRef,
-    setDisplayPrefs,
+    setDisplayPrefs, addCurrentVerseToQueue,
   ]);
 }

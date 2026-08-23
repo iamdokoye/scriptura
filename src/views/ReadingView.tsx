@@ -108,6 +108,7 @@ export default function ReadingView() {
     readingFontSize, setReadingFontSize, currentRef, setCurrentRef,
     currentSearchResults, searchResultIndex, setSearchResultIndex, navTo, setLastHistoryRef,
     setView, serviceOrderOpen, setServiceOrderOpen, presentationActive, setDisplayPrefs,
+    addCurrentVerseToQueue: () => handleAddToService(currentRef.verse),
   });
 
   function handleStrongsClick(strongs: string) {
