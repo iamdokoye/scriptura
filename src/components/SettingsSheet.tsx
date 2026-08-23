@@ -14,6 +14,17 @@ const DEFAULT_PREFS: Preferences = {
   show_morph: false,
   verse_display: "verse-per-line",
   default_commentary: null,
+  show_commentary: true,
+  show_notes: true,
+  show_cross_refs: true,
+  show_red_letter: true,
+  font_family: "system",
+  text_align: "left",
+  margins: 0,
+  line_spacing: 0.6,
+  letter_spacing: 0,
+  strongs_sheet_height: 360,
+  presentation_context: 1,
 };
 
 const FONTS: { id: DisplayPrefs["fontFamily"]; label: string }[] = [

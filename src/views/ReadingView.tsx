@@ -17,6 +17,7 @@ import { useReadingShortcuts } from "../hooks/useReadingShortcuts";
 import { useScrollSync } from "../hooks/useScrollSync";
 import { useChapterData } from "../hooks/useChapterData";
 import { usePresentationSync } from "../hooks/usePresentationSync";
+import { useReadingPositionPersistence } from "../hooks/useReadingPositionPersistence";
 
 export default function ReadingView() {
   const {
@@ -94,6 +95,8 @@ export default function ReadingView() {
   );
 
   useScrollSync(syncScroll, primaryScrollRef, parallelScrollRef, parallelChapter);
+
+  useReadingPositionPersistence(primaryModule, currentRef);
 
   usePresentationSync({
     presentationActive, primaryModule, currentRef, parallelModule,

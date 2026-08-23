@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useAppStore } from "./store/app";
 import { api } from "./lib/tauri";
+import { importLegacyLocalStorageIfNeeded } from "./lib/legacyImport";
 import TopBar from "./components/TopBar";
 import ReadingView from "./views/ReadingView";
 import EmptyLibrary from "./views/EmptyLibrary";
@@ -12,8 +13,11 @@ import ServiceOrderPanel from "./components/ServiceOrderPanel";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 export default function App() {
-  const { view, theme, setTheme, hasModules, setHasModules, setPrimaryModule, setCurrentRef, setView, setShowStrongs, setReadingFontSize, isFullscreen, serviceOrderOpen, setServiceOrderOpen } =
-    useAppStore();
+  const {
+    view, theme, setTheme, hasModules, setHasModules, setPrimaryModule, setCurrentRef, setView,
+    setShowStrongs, setReadingFontSize, isFullscreen, serviceOrderOpen, setServiceOrderOpen,
+    hydrateDisplayPrefs, hydrateStudyTools, hydrateSearchHistory, hydrateServiceOrder,
+  } = useAppStore();
 
   // Apply theme class to root element
   useEffect(() => {
@@ -27,19 +31,32 @@ export default function App() {
     }
   }, [theme]);
 
-  // On launch: load preferences + reading position + check for installed modules
+  // On launch: import any pre-consolidation localStorage data (one-time, see
+  // lib/legacyImport.ts), then load preferences + reading position + search
+  // history + service order + check for installed modules. The import must
+  // finish before the hydration fetches below run, so a device upgrading from
+  // an older version sees its imported data immediately instead of only after
+  // a second launch.
   useEffect(() => {
     async function init() {
       try {
-        const [modules, pos, prefs] = await Promise.all([
+        await importLegacyLocalStorageIfNeeded();
+
+        const [modules, pos, prefs, searchHistory, serviceOrder] = await Promise.all([
           api.listInstalledModules(),
           api.getReadingPosition(),
           api.getPreferences(),
+          api.listSearchHistory(),
+          api.listServiceOrder(),
         ]);
 
         setTheme(prefs.theme);
         setShowStrongs(prefs.show_strongs);
         setReadingFontSize(prefs.font_size_reading);
+        hydrateDisplayPrefs(prefs);
+        hydrateStudyTools(prefs);
+        hydrateSearchHistory(searchHistory);
+        hydrateServiceOrder(serviceOrder);
 
         // Auto-install reference modules silently — always, even on first launch
         const installedIds = new Set(modules.map((m) => m.id));

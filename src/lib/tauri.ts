@@ -118,6 +118,19 @@ export interface Preferences {
   show_morph: boolean;
   verse_display: "paragraph" | "verse-per-line";
   default_commentary: string | null;
+
+  show_commentary: boolean;
+  show_notes: boolean;
+  show_cross_refs: boolean;
+  show_red_letter: boolean;
+
+  font_family: "system" | "serif" | "times" | "mono";
+  text_align: "left" | "justify";
+  margins: number;
+  line_spacing: number;
+  letter_spacing: number;
+  strongs_sheet_height: number;
+  presentation_context: 1 | 2 | 3 | 4;
 }
 
 export interface ReadingPosition {
@@ -125,6 +138,45 @@ export interface ReadingPosition {
   chapter: number;
   verse: number;
   module_id: string;
+}
+
+export interface SearchHistoryEntry {
+  id: number;
+  query: string;
+  timestamp: number;
+  ref_book: string | null;
+  ref_chapter: number | null;
+  ref_verse: number | null;
+}
+
+export interface ServiceOrderItem {
+  id: string;
+  book: string;
+  chapter: number;
+  verse: number;
+  text: string;
+  module: string;
+}
+
+/** Legacy browser localStorage payloads for the one-time import into SQLite. */
+export interface LegacyLocalStorageImport {
+  search_history: { query: string; timestamp: number; selected_ref?: { book: string; chapter: number; verse: number } }[];
+  service_order: ServiceOrderItem[];
+  display_prefs: {
+    font_family: string;
+    text_align: string;
+    margins: number;
+    line_spacing: number;
+    letter_spacing: number;
+    strongs_sheet_height: number;
+    presentation_context: number;
+  } | null;
+  study_ui: {
+    show_commentary: boolean;
+    show_notes: boolean;
+    show_cross_refs: boolean;
+    show_red_letter: boolean;
+  } | null;
 }
 
 export interface CrossReference {
@@ -212,8 +264,10 @@ export const api = {
   getPreferences: () =>
     invoke<Preferences>("get_preferences"),
 
+  // Returns the full merged Preferences, so callers can sync their local state
+  // from the authoritative result instead of assuming their patch applied as-is.
   setPreferences: (prefs: Partial<Preferences>) =>
-    invoke<void>("set_preferences", { prefs }),
+    invoke<Preferences>("set_preferences", { prefs }),
 
   listMonitors: () =>
     invoke<MonitorInfo[]>("list_monitors"),
@@ -223,4 +277,28 @@ export const api = {
 
   closePresentationWindow: () =>
     invoke<void>("close_presentation_window"),
+
+  listSearchHistory: () =>
+    invoke<SearchHistoryEntry[]>("list_search_history"),
+
+  addSearchHistoryEntry: (query: string) =>
+    invoke<void>("add_search_history_entry", { query }),
+
+  setLastSearchHistoryRef: (book: string, chapter: number, verse: number) =>
+    invoke<void>("set_last_search_history_ref", { book, chapter, verse }),
+
+  clearSearchHistory: () =>
+    invoke<void>("clear_search_history"),
+
+  listServiceOrder: () =>
+    invoke<ServiceOrderItem[]>("list_service_order"),
+
+  setServiceOrder: (items: ServiceOrderItem[]) =>
+    invoke<void>("set_service_order", { items }),
+
+  legacyImportDone: () =>
+    invoke<boolean>("legacy_import_done"),
+
+  importLegacyLocalStorage: (payload: LegacyLocalStorageImport) =>
+    invoke<void>("import_legacy_local_storage", { payload }),
 };

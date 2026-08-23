@@ -1,13 +1,6 @@
 import type { StateCreator } from "zustand";
+import { api } from "../../lib/tauri";
 import type { AppState, ServiceItem } from "../app";
-
-const SERVICE_ORDER_KEY = "scriptura-service-order-v1";
-function loadServiceOrder(): ServiceItem[] {
-  try { return JSON.parse(localStorage.getItem(SERVICE_ORDER_KEY) ?? "[]"); } catch { return []; }
-}
-function saveServiceOrder(items: ServiceItem[]) {
-  try { localStorage.setItem(SERVICE_ORDER_KEY, JSON.stringify(items)); } catch {}
-}
 
 export interface ServiceOrderSlice {
   serviceOrder: ServiceItem[];
@@ -17,10 +10,19 @@ export interface ServiceOrderSlice {
   removeFromServiceOrder: (id: string) => void;
   reorderServiceOrder: (fromIdx: number, toIdx: number) => void;
   clearServiceOrder: () => void;
+  /** Populates from the backend at startup. */
+  hydrateServiceOrder: (items: ServiceItem[]) => void;
+}
+
+// Persisted to SQLite as a whole ordered list — matches how this was already
+// treated as one unit against localStorage (add/remove/reorder are local array
+// edits, persisted afterward), just replacing the storage backend underneath.
+function persist(items: ServiceItem[]) {
+  api.setServiceOrder(items).catch((e) => console.error("[serviceOrder] failed to persist", e));
 }
 
 export const createServiceOrderSlice: StateCreator<AppState, [], [], ServiceOrderSlice> = (set) => ({
-  serviceOrder: loadServiceOrder(),
+  serviceOrder: [],
   serviceOrderOpen: false,
   setServiceOrderOpen: (serviceOrderOpen) => set({ serviceOrderOpen }),
   addToServiceOrder: (item) =>
@@ -31,13 +33,13 @@ export const createServiceOrderSlice: StateCreator<AppState, [], [], ServiceOrde
       );
       if (exists) return s;
       const next = [...s.serviceOrder, { ...item, id: crypto.randomUUID() }];
-      saveServiceOrder(next);
+      persist(next);
       return { serviceOrder: next };
     }),
   removeFromServiceOrder: (id) =>
     set((s) => {
       const next = s.serviceOrder.filter((x) => x.id !== id);
-      saveServiceOrder(next);
+      persist(next);
       return { serviceOrder: next };
     }),
   reorderServiceOrder: (fromIdx, toIdx) =>
@@ -45,11 +47,13 @@ export const createServiceOrderSlice: StateCreator<AppState, [], [], ServiceOrde
       const next = [...s.serviceOrder];
       const [moved] = next.splice(fromIdx, 1);
       next.splice(toIdx, 0, moved);
-      saveServiceOrder(next);
+      persist(next);
       return { serviceOrder: next };
     }),
   clearServiceOrder: () => {
-    saveServiceOrder([]);
+    persist([]);
     set({ serviceOrder: [] });
   },
+
+  hydrateServiceOrder: (serviceOrder) => set({ serviceOrder }),
 });

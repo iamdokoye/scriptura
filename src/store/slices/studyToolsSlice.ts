@@ -1,38 +1,14 @@
 import type { StateCreator } from "zustand";
+import { api, type Preferences } from "../../lib/tauri";
 import type { AppState } from "../app";
-
-const STUDY_UI_KEY = "scriptura-study-ui-v2";
-
-interface StudyUiPrefs {
-  showCommentary: boolean;
-  showNotes: boolean;
-  showCrossRefs: boolean;
-  showRedLetter: boolean;
-}
-
-function loadStudyUi(): StudyUiPrefs {
-  try {
-    const p = JSON.parse(localStorage.getItem(STUDY_UI_KEY) ?? "{}");
-    return {
-      showCommentary: p.showCommentary !== false,
-      showNotes: p.showNotes !== false,
-      showCrossRefs: p.showCrossRefs !== false,
-      showRedLetter: p.showRedLetter !== false,
-    };
-  } catch {
-    return { showCommentary: true, showNotes: true, showCrossRefs: true, showRedLetter: true };
-  }
-}
-function saveStudyUi(prefs: StudyUiPrefs) {
-  try { localStorage.setItem(STUDY_UI_KEY, JSON.stringify(prefs)); } catch {}
-}
 
 export interface StudyToolsSlice {
   // From backend preferences
   showStrongs: boolean;
   setShowStrongs: (v: boolean) => void;
 
-  // Study panel section visibility (persisted to localStorage)
+  // Study panel section visibility — also backend preferences (moved off
+  // localStorage; see displayPrefsSlice for why).
   showCommentary: boolean;
   setShowCommentary: (v: boolean) => void;
   showNotes: boolean;
@@ -41,36 +17,41 @@ export interface StudyToolsSlice {
   setShowCrossRefs: (v: boolean) => void;
   showRedLetter: boolean;
   setShowRedLetter: (v: boolean) => void;
-}
 
-const studyUi = loadStudyUi();
+  /** Populates the four study-panel toggles from the backend at startup. */
+  hydrateStudyTools: (prefs: Preferences) => void;
+}
 
 export const createStudyToolsSlice: StateCreator<AppState, [], [], StudyToolsSlice> = (set) => ({
   showStrongs: true,
   setShowStrongs: (showStrongs) => set({ showStrongs }),
 
-  showCommentary: studyUi.showCommentary,
-  setShowCommentary: (showCommentary) =>
-    set((s) => {
-      saveStudyUi({ showCommentary, showNotes: s.showNotes, showCrossRefs: s.showCrossRefs, showRedLetter: s.showRedLetter });
-      return { showCommentary };
-    }),
-  showNotes: studyUi.showNotes,
-  setShowNotes: (showNotes) =>
-    set((s) => {
-      saveStudyUi({ showCommentary: s.showCommentary, showNotes, showCrossRefs: s.showCrossRefs, showRedLetter: s.showRedLetter });
-      return { showNotes };
-    }),
-  showCrossRefs: studyUi.showCrossRefs,
-  setShowCrossRefs: (showCrossRefs) =>
-    set((s) => {
-      saveStudyUi({ showCommentary: s.showCommentary, showNotes: s.showNotes, showCrossRefs, showRedLetter: s.showRedLetter });
-      return { showCrossRefs };
-    }),
-  showRedLetter: studyUi.showRedLetter,
-  setShowRedLetter: (showRedLetter) =>
-    set((s) => {
-      saveStudyUi({ showCommentary: s.showCommentary, showNotes: s.showNotes, showCrossRefs: s.showCrossRefs, showRedLetter });
-      return { showRedLetter };
+  showCommentary: true,
+  setShowCommentary: (showCommentary) => {
+    set({ showCommentary });
+    api.setPreferences({ show_commentary: showCommentary }).catch((e) => console.error("[studyTools] failed to persist", e));
+  },
+  showNotes: true,
+  setShowNotes: (showNotes) => {
+    set({ showNotes });
+    api.setPreferences({ show_notes: showNotes }).catch((e) => console.error("[studyTools] failed to persist", e));
+  },
+  showCrossRefs: true,
+  setShowCrossRefs: (showCrossRefs) => {
+    set({ showCrossRefs });
+    api.setPreferences({ show_cross_refs: showCrossRefs }).catch((e) => console.error("[studyTools] failed to persist", e));
+  },
+  showRedLetter: true,
+  setShowRedLetter: (showRedLetter) => {
+    set({ showRedLetter });
+    api.setPreferences({ show_red_letter: showRedLetter }).catch((e) => console.error("[studyTools] failed to persist", e));
+  },
+
+  hydrateStudyTools: (prefs) =>
+    set({
+      showCommentary: prefs.show_commentary,
+      showNotes: prefs.show_notes,
+      showCrossRefs: prefs.show_cross_refs,
+      showRedLetter: prefs.show_red_letter,
     }),
 });
