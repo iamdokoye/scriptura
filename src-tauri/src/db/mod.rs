@@ -1,7 +1,7 @@
 use crate::types::*;
 use rusqlite::{params, Connection};
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 pub struct Database(Mutex<Connection>);
 
@@ -23,8 +23,25 @@ impl Database {
         Ok(db)
     }
 
+    /// Every query in this module goes through here instead of locking self.0
+    /// directly. A plain `.lock().unwrap()` panics forever on every future call
+    /// once poisoned — a panic in *any* one query (even one triggered by unrelated,
+    /// buggy caller input) would permanently break notes, bookmarks, search,
+    /// preferences, reading position, and installed-module records all at once,
+    /// since they all share this one connection/mutex. Recovering the guard from
+    /// a poisoned lock instead means one bad query degrades to "that query failed,"
+    /// not "the entire persistence layer is dead until the app restarts." This is
+    /// safe here specifically because a panic on the Rust side (e.g. an unwrap on a
+    /// row conversion) doesn't leave the underlying SQLite connection itself in a
+    /// corrupt state — the connection is fine, only the guard was poisoned.
+    fn conn(&self) -> MutexGuard<'_, Connection> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     fn migrate(&self) -> Result<()> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         // Create all permanent tables first (idempotent)
         conn.execute_batch(SCHEMA_TABLES)?;
         // Upgrade FTS table to unicode61 tokenizer if this is an old DB
@@ -44,7 +61,7 @@ impl Database {
     }
 
     pub fn get_preferences(&self) -> Result<Preferences> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         let result = conn.query_row(
             "SELECT theme, font_size_reading, show_strongs, show_morph, verse_display, default_commentary FROM preferences LIMIT 1",
             [],
@@ -67,7 +84,7 @@ impl Database {
     }
 
     pub fn set_preferences(&self, prefs: &Preferences) -> Result<()> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
             "INSERT INTO preferences (id, theme, font_size_reading, show_strongs, show_morph, verse_display, default_commentary)
              VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)
@@ -87,7 +104,7 @@ impl Database {
     }
 
     pub fn get_reading_position(&self) -> Result<Option<ReadingPosition>> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         let result = conn.query_row(
             "SELECT book, chapter, verse, module_id FROM reading_position LIMIT 1",
             [],
@@ -108,7 +125,7 @@ impl Database {
     }
 
     pub fn set_reading_position(&self, pos: &ReadingPosition) -> Result<()> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
             "INSERT INTO reading_position (id, book, chapter, verse, module_id) VALUES (1, ?1, ?2, ?3, ?4)
              ON CONFLICT(id) DO UPDATE SET book=excluded.book, chapter=excluded.chapter, verse=excluded.verse, module_id=excluded.module_id",
@@ -124,7 +141,7 @@ impl Database {
         verse: u32,
         module_id: &str,
     ) -> Result<Bookmark> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
             "INSERT INTO bookmarks (book, chapter, verse, module_id) VALUES (?1, ?2, ?3, ?4)",
             params![book, chapter, verse, module_id],
@@ -143,13 +160,13 @@ impl Database {
     }
 
     pub fn remove_bookmark(&self, id: i64) -> Result<()> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         conn.execute("DELETE FROM bookmarks WHERE id=?1", params![id])?;
         Ok(())
     }
 
     pub fn list_bookmarks(&self) -> Result<Vec<Bookmark>> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT id, book, chapter, verse, module_id, created_at, note FROM bookmarks ORDER BY created_at DESC"
         )?;
@@ -175,7 +192,7 @@ impl Database {
         module_id: &str,
         content: &str,
     ) -> Result<Note> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
             "INSERT INTO notes (book, chapter, verse, module_id, content) VALUES (?1, ?2, ?3, ?4, ?5)",
             params![book, chapter, verse, module_id, content],
@@ -190,7 +207,7 @@ impl Database {
     }
 
     pub fn update_note(&self, id: i64, content: &str) -> Result<Note> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
             "UPDATE notes SET content=?1, updated_at=datetime('now') WHERE id=?2",
             params![content, id],
@@ -204,13 +221,13 @@ impl Database {
     }
 
     pub fn delete_note(&self, id: i64) -> Result<()> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         conn.execute("DELETE FROM notes WHERE id=?1", params![id])?;
         Ok(())
     }
 
     pub fn list_notes(&self) -> Result<Vec<Note>> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT id, book, chapter, verse, module_id, content, created_at, updated_at FROM notes ORDER BY updated_at DESC"
         )?;
@@ -229,7 +246,7 @@ impl Database {
             return Ok(vec![]);
         }
 
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         let page = options.page.unwrap_or(0).min(10_000);
         let page_size = options.page_size.unwrap_or(100).clamp(1, 500);
         let offset = page.saturating_mul(page_size);
@@ -281,7 +298,7 @@ impl Database {
         module_id: &str,
         verses: &[(&str, u32, u32, String)],
     ) -> Result<()> {
-        let mut conn = self.0.lock().unwrap();
+        let mut conn = self.conn();
         let tx = conn.transaction()?;
         tx.execute(
             "DELETE FROM verse_fts WHERE module_id=?1",
@@ -308,7 +325,7 @@ impl Database {
         version: &str,
         category: &str,
     ) -> Result<()> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
             "INSERT INTO installed_modules (id, name, install_path, version, category) VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(id) DO UPDATE SET name=excluded.name, install_path=excluded.install_path, version=excluded.version",
@@ -320,7 +337,7 @@ impl Database {
     pub fn list_installed_module_records(
         &self,
     ) -> Result<Vec<(String, String, String, String, String, bool)>> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT id, name, install_path, version, category, index_built FROM installed_modules",
         )?;
@@ -344,7 +361,7 @@ impl Database {
         module_id: &str,
         counts: &[(String, String, u32)],
     ) -> Result<()> {
-        let mut conn = self.0.lock().unwrap();
+        let mut conn = self.conn();
         let tx = conn.transaction()?;
         tx.execute(
             "DELETE FROM strongs_counts WHERE module_id=?1",
@@ -369,7 +386,7 @@ impl Database {
         module_id: &str,
         strongs: &str,
     ) -> Result<(u32, Vec<crate::types::BookUsage>)> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT book, count FROM strongs_counts
              WHERE module_id=?1 AND strongs=?2
@@ -387,7 +404,7 @@ impl Database {
     }
 
     pub fn mark_index_built(&self, module_id: &str) -> Result<()> {
-        let conn = self.0.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
             "UPDATE installed_modules SET index_built=1 WHERE id=?1",
             params![module_id],
@@ -737,6 +754,37 @@ mod tests {
         assert_eq!(total, 8);
         assert_eq!(by_book.len(), 2);
         assert_eq!(by_book[0].book, "John"); // ordered by count DESC
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn survives_a_poisoned_mutex_from_an_unrelated_panic() {
+        // Simulates the exact scenario this fix targets: some unrelated command
+        // panics while holding the connection lock (a bug in search, module
+        // install progress reporting, whatever — anything that locks self.0).
+        // Before this fix, every future self.0.lock().unwrap() would panic
+        // forever afterward, taking down notes/bookmarks/preferences/etc. with
+        // it. After this fix, self.conn() recovers the guard instead.
+        let (db, path) = temp_db("poison");
+        let db = std::sync::Arc::new(db);
+
+        let db_clone = db.clone();
+        let result = std::thread::spawn(move || {
+            let _guard = db_clone.0.lock().unwrap();
+            panic!("simulated bug in an unrelated feature");
+        })
+        .join();
+        assert!(result.is_err(), "the spawned thread should have panicked");
+
+        // The mutex is now poisoned. A naive self.0.lock().unwrap() here would
+        // panic; going through self.conn() must not.
+        let bm = db.add_bookmark("John", 3, 16, "KJV");
+        assert!(
+            bm.is_ok(),
+            "database should keep working after an unrelated panic poisoned the mutex"
+        );
+        assert_eq!(db.list_bookmarks().unwrap().len(), 1);
 
         cleanup(&path);
     }
