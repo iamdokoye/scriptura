@@ -12,6 +12,7 @@ import NotesSheet from "../components/NotesSheet";
 import FullscreenSearchPalette from "../components/FullscreenSearchPalette";
 import ScriptureNav from "../components/ScriptureNav";
 import ServiceOrderPanel from "../components/ServiceOrderPanel";
+import ErrorBoundary from "../components/ErrorBoundary";
 
 const FONT_SIZE_PRESETS = [14, 16, 32, 48, 64, 72, 98] as const;
 
@@ -334,39 +335,71 @@ export default function ReadingView() {
     });
   }
 
-  // Shared bottom sheets — rendered once, fixed-positioned, always above any overlay
+  // Shared bottom sheets — rendered once, fixed-positioned, always above any overlay.
+  // Each gets its own error boundary so a crash in one (e.g. cross-references) can't
+  // blank the whole reading view — see ErrorBoundary.tsx. Keyed on isOpen + the verse
+  // reference so closing and reopening (even to the same verse) remounts a fresh,
+  // un-errored instance rather than staying stuck showing the fallback forever.
   const sheets = (
     <>
-      <FullscreenSearchPalette isOpen={fsSearchOpen} onClose={() => setFsSearchOpen(false)} />
-      <StrongsSheet />
-      <CrossRefSheet
-        isOpen={showCrossRefs && crossRefVerse !== null}
-        book={crossRefVerse?.book ?? ""}
-        chapter={crossRefVerse?.chapter ?? 1}
-        verse={crossRefVerse?.verse ?? 1}
-        onClose={() => setCrossRefVerse(null)}
-      />
-      <CompareSheet
-        isOpen={compareVerse !== null}
-        book={compareVerse?.book ?? ""}
-        chapter={compareVerse?.chapter ?? 1}
-        verse={compareVerse?.verse ?? 1}
-        onClose={() => setCompareVerse(null)}
-      />
-      <CommentarySheet
-        isOpen={showCommentary && commentaryVerse !== null}
-        book={commentaryVerse?.book ?? ""}
-        chapter={commentaryVerse?.chapter ?? 1}
-        verse={commentaryVerse?.verse ?? 1}
-        onClose={() => setCommentaryVerse(null)}
-      />
-      <NotesSheet
-        isOpen={showNotes && notesVerse !== null}
-        book={notesVerse?.book ?? ""}
-        chapter={notesVerse?.chapter ?? 1}
-        verse={notesVerse?.verse ?? 1}
-        onClose={() => setNotesVerse(null)}
-      />
+      <ErrorBoundary compact label="Search">
+        <FullscreenSearchPalette isOpen={fsSearchOpen} onClose={() => setFsSearchOpen(false)} />
+      </ErrorBoundary>
+      <ErrorBoundary compact label="Strong's lookup" key={`strongs-${selectedStrongs ?? "closed"}`}>
+        <StrongsSheet />
+      </ErrorBoundary>
+      <ErrorBoundary
+        compact
+        label="Cross-references"
+        key={`crossref-${showCrossRefs && crossRefVerse !== null}-${crossRefVerse?.book}-${crossRefVerse?.chapter}-${crossRefVerse?.verse}`}
+      >
+        <CrossRefSheet
+          isOpen={showCrossRefs && crossRefVerse !== null}
+          book={crossRefVerse?.book ?? ""}
+          chapter={crossRefVerse?.chapter ?? 1}
+          verse={crossRefVerse?.verse ?? 1}
+          onClose={() => setCrossRefVerse(null)}
+        />
+      </ErrorBoundary>
+      <ErrorBoundary
+        compact
+        label="Compare translations"
+        key={`compare-${compareVerse !== null}-${compareVerse?.book}-${compareVerse?.chapter}-${compareVerse?.verse}`}
+      >
+        <CompareSheet
+          isOpen={compareVerse !== null}
+          book={compareVerse?.book ?? ""}
+          chapter={compareVerse?.chapter ?? 1}
+          verse={compareVerse?.verse ?? 1}
+          onClose={() => setCompareVerse(null)}
+        />
+      </ErrorBoundary>
+      <ErrorBoundary
+        compact
+        label="Commentary"
+        key={`commentary-${showCommentary && commentaryVerse !== null}-${commentaryVerse?.book}-${commentaryVerse?.chapter}-${commentaryVerse?.verse}`}
+      >
+        <CommentarySheet
+          isOpen={showCommentary && commentaryVerse !== null}
+          book={commentaryVerse?.book ?? ""}
+          chapter={commentaryVerse?.chapter ?? 1}
+          verse={commentaryVerse?.verse ?? 1}
+          onClose={() => setCommentaryVerse(null)}
+        />
+      </ErrorBoundary>
+      <ErrorBoundary
+        compact
+        label="Notes"
+        key={`notes-${showNotes && notesVerse !== null}-${notesVerse?.book}-${notesVerse?.chapter}-${notesVerse?.verse}`}
+      >
+        <NotesSheet
+          isOpen={showNotes && notesVerse !== null}
+          book={notesVerse?.book ?? ""}
+          chapter={notesVerse?.chapter ?? 1}
+          verse={notesVerse?.verse ?? 1}
+          onClose={() => setNotesVerse(null)}
+        />
+      </ErrorBoundary>
     </>
   );
 

@@ -9,6 +9,7 @@ import SearchResults from "./views/SearchResults";
 import SearchHistory from "./views/SearchHistory";
 import BookmarksNotes from "./views/BookmarksNotes";
 import ServiceOrderPanel from "./components/ServiceOrderPanel";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 export default function App() {
   const { view, theme, setTheme, hasModules, setHasModules, setPrimaryModule, setCurrentRef, setView, setShowStrongs, setReadingFontSize, isFullscreen, serviceOrderOpen, setServiceOrderOpen } =
@@ -82,11 +83,34 @@ export default function App() {
 
       <div className="relative flex flex-1 overflow-hidden">
         <div className="flex flex-1 overflow-hidden">
-          {view === "reading" && (hasModules ? <ReadingView /> : <EmptyLibrary />)}
-          {view === "modules" && <ModuleManager />}
-          {view === "search" && <SearchResults />}
-          {view === "history" && <SearchHistory />}
-          {(view === "bookmarks" || view === "notes") && <BookmarksNotes />}
+          {/* Each view gets its own boundary so a crash in one (e.g. Modules) can't
+              take TopBar and the rest of the shell down with it — "Go back" just
+              switches views, which unmounts the crashed tree instead of reloading. */}
+          {view === "reading" && (
+            <ErrorBoundary label="Reading" onReset={() => setView("modules")} resetLabel="Go to Modules">
+              {hasModules ? <ReadingView /> : <EmptyLibrary />}
+            </ErrorBoundary>
+          )}
+          {view === "modules" && (
+            <ErrorBoundary label="Modules" onReset={() => setView("reading")} resetLabel="Go to Reading">
+              <ModuleManager />
+            </ErrorBoundary>
+          )}
+          {view === "search" && (
+            <ErrorBoundary label="Search" onReset={() => setView("reading")} resetLabel="Go to Reading">
+              <SearchResults />
+            </ErrorBoundary>
+          )}
+          {view === "history" && (
+            <ErrorBoundary label="History" onReset={() => setView("reading")} resetLabel="Go to Reading">
+              <SearchHistory />
+            </ErrorBoundary>
+          )}
+          {(view === "bookmarks" || view === "notes") && (
+            <ErrorBoundary key={view} label={view === "bookmarks" ? "Bookmarks" : "Notes"} onReset={() => setView("reading")} resetLabel="Go to Reading">
+              <BookmarksNotes />
+            </ErrorBoundary>
+          )}
         </div>
         {!isFullscreen && (
           <div
