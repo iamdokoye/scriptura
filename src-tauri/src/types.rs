@@ -38,8 +38,13 @@ pub type Result<T> = std::result::Result<T, AppError>;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextSpan {
     pub text: String,
+    /// Every Strong's number attached to this source-language word/phrase.
+    ///
+    /// A single English phrase in the KJV may represent more than one original
+    /// word (for example, "created" in Genesis 1:1 has H0853 and H01254), so
+    /// this must not be collapsed to one number.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub strongs: Option<String>,
+    pub strongs: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub morph: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -66,7 +71,7 @@ impl TextSpan {
     pub fn with_strongs(text: impl Into<String>, strongs: impl Into<String>) -> Self {
         Self {
             text: text.into(),
-            strongs: Some(strongs.into()),
+            strongs: Some(vec![strongs.into()]),
             morph: None,
             is_added: None,
             is_footnote: None,
@@ -107,6 +112,11 @@ pub struct StrongsEntry {
     pub long_def: String,
     pub usage_count: u32,
     pub usage_by_book: Vec<BookUsage>,
+    /// True when Strong's own definition marks this as a grammatical particle
+    /// with no independent English rendering (e.g. H0853, the Hebrew
+    /// direct-object marker) rather than a translated content word — see
+    /// `is_untranslated_marker_text` in sword/lexicon.rs.
+    pub is_untranslated_marker: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

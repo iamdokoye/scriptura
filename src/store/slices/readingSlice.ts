@@ -19,6 +19,13 @@ export interface ReadingSlice {
   // Selected word for Strong's sheet
   selectedStrongs: string | null;
   setSelectedStrongs: (n: string | null) => void;
+
+  // Set when a phrase carries more than one Strong's number (e.g. a Hebrew
+  // word tagged with both its content word and an untranslated grammatical
+  // marker). StrongsSheet resolves all of these and picks the real content
+  // word as the default view instead of guessing at the first number.
+  strongsGroup: string[] | null;
+  setStrongsGroup: (numbers: string[] | null) => void;
 }
 
 export const createReadingSlice: StateCreator<AppState, [], [], ReadingSlice> = (set) => ({
@@ -37,4 +44,7 @@ export const createReadingSlice: StateCreator<AppState, [], [], ReadingSlice> = 
 
   selectedStrongs: null,
   setSelectedStrongs: (selectedStrongs) => set({ selectedStrongs }),
+
+  strongsGroup: null,
+  setStrongsGroup: (strongsGroup) => set({ strongsGroup }),
 });

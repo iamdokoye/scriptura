@@ -70,7 +70,7 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
                 }
                 spans.push(TextSpan {
                     text,
-                    strongs: pending_strongs.take(),
+                    strongs: pending_strongs.take().map(|strongs| vec![strongs]),
                     morph: None,
                     is_added: None,
                     is_footnote: None,

@@ -72,10 +72,13 @@ pub(crate) fn build_fts_index(
                         }
                         // Tally Strong's numbers while we have the parsed spans
                         for span in &v.spans {
-                            if let Some(ref s) = span.strongs {
-                                if !s.is_empty() {
+                            if let Some(strongs_numbers) = &span.strongs {
+                                for strongs in strongs_numbers {
+                                    if strongs.is_empty() {
+                                        continue;
+                                    }
                                     *strongs_map
-                                        .entry(s.clone())
+                                        .entry(strongs.clone())
                                         .or_default()
                                         .entry(book.to_string())
                                         .or_insert(0) += 1;

@@ -121,12 +121,13 @@ const FONT_FAMILY_CSS: Record<string, string> = {
  * that window is activated.
  */
 export default function StrongsSheet({ immediate = false }: { immediate?: boolean }) {
-  const { selectedStrongs, setSelectedStrongs, primaryModule, readingFontSize, isFullscreen, displayPrefs, setDisplayPrefs } = useAppStore();
+  const { selectedStrongs, setSelectedStrongs, strongsGroup, setStrongsGroup, primaryModule, readingFontSize, isFullscreen, displayPrefs, setDisplayPrefs } = useAppStore();
   const fontFamily = FONT_FAMILY_CSS[displayPrefs.fontFamily] ?? FONT_FAMILY_CSS.system;
-  const [entry, setEntry] = useState<StrongsEntry | null>(null);
+  const [entries, setEntries] = useState<StrongsEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
+  const [showMarkers, setShowMarkers] = useState(false);
 
   const drag = useDraggableHeight(
     displayPrefs.strongsSheetHeight,
@@ -136,6 +137,20 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
   const isOpen = selectedStrongs !== null;
   const prefix: "H" | "G" = selectedStrongs?.startsWith("H") ? "H" : "G";
 
+  // A phrase with more than one Strong's number is resolved as: the real
+  // content word (shown as the entry, same as a single-number lookup) plus
+  // any grammatical markers (e.g. H0853, the Hebrew direct-object marker —
+  // see is_untranslated_marker in src-tauri/src/sword/lexicon.rs) tucked
+  // behind a disclosure instead of presented as a second, equally-weighted
+  // definition. If every number in the group turns out to be a marker (a
+  // word that's ONLY the direct-object marker, like "and" in Genesis 1:1),
+  // fall back to showing it — but labelled as a marker, not a plain entry.
+  const contentEntries = entries.filter((e) => !e.is_untranslated_marker);
+  const markerEntries = entries.filter((e) => e.is_untranslated_marker);
+  const entry = contentEntries[0] ?? entries[0] ?? null;
+  const extraContentEntries = contentEntries.filter((e) => e.number !== entry?.number);
+  const hiddenMarkers = markerEntries.filter((e) => e.number !== entry?.number);
+
   // The presentation window deliberately skips this animation (`immediate`); its
   // state must be visible even while the operator window has focus.
   const visible = useSheetVisibility(isOpen, { skip: immediate });
@@ -143,25 +158,39 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
   const lookup = useCallback(
     (num: string) => {
       setHistory((h) => [num, ...h.filter((x) => x !== num)]);
+      setStrongsGroup(null);
       setSelectedStrongs(num);
     },
-    [setSelectedStrongs]
+    [setSelectedStrongs, setStrongsGroup]
   );
 
+  const close = useCallback(() => {
+    setSelectedStrongs(null);
+    setStrongsGroup(null);
+  }, [setSelectedStrongs, setStrongsGroup]);
+
   useEffect(() => {
-    if (!selectedStrongs || !primaryModule) return;
+    const numbers = strongsGroup && strongsGroup.length > 1
+      ? strongsGroup
+      : selectedStrongs
+      ? [selectedStrongs]
+      : [];
+    if (numbers.length === 0 || !primaryModule) return;
+
     setLoading(true);
     setError(null);
-    setEntry(null);
-    const lexModule = selectedStrongs.startsWith("G")
-      ? "StrongsGreek"
-      : "StrongsHebrew";
-    api
-      .getStrongsEntry(lexModule, selectedStrongs, primaryModule)
-      .then(setEntry)
+    setEntries([]);
+    setShowMarkers(false);
+    Promise.all(
+      numbers.map((num) => {
+        const lexModule = num.startsWith("G") ? "StrongsGreek" : "StrongsHebrew";
+        return api.getStrongsEntry(lexModule, num, primaryModule);
+      })
+    )
+      .then(setEntries)
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [selectedStrongs, primaryModule]);
+  }, [selectedStrongs, strongsGroup, primaryModule]);
 
   // Escape key closes sheet
   useEffect(() => {
@@ -169,12 +198,12 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
-        setSelectedStrongs(null);
+        close();
       }
     }
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [isOpen, setSelectedStrongs]);
+  }, [isOpen, close]);
 
   if (!isOpen) return null;
 
@@ -183,7 +212,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
-        onClick={() => setSelectedStrongs(null)}
+        onClick={close}
       />
 
       {/* Sheet */}
@@ -232,6 +261,14 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                         {entry.part_of_speech}
                       </span>
                     )}
+                    {entry.is_untranslated_marker && (
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 rounded bg-secondary-container text-on-secondary-container font-body-ui text-[11px]"
+                        title="This Strong's number has no independent English rendering — it's grammatical, not a translated word."
+                      >
+                        Grammatical marker
+                      </span>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -250,6 +287,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                   onClick={() => {
                     const [, ...rest] = history;
                     setHistory(rest);
+                    setStrongsGroup(null);
                     setSelectedStrongs(rest[0] ?? null);
                   }}
                 >
@@ -258,7 +296,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
               )}
               <button
                 className="p-1.5 rounded text-secondary hover:bg-surface-container-low transition-colors"
-                onClick={() => setSelectedStrongs(null)}
+                onClick={close}
                 title="Close (Esc)"
               >
                 <span className="material-symbols-outlined text-[20px]">close</span>
@@ -326,6 +364,63 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                         onLookup={lookup}
                       />
                     </p>
+                  </section>
+                )}
+
+                {/* Rare: the phrase genuinely compounds two content words
+                    (not a grammatical marker riding along), so both carry
+                    real meaning and are shown as peers rather than tucked away. */}
+                {extraContentEntries.map((extra) => (
+                  <section key={extra.number} className="pt-4 border-t border-outline-variant">
+                    <p className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-2">
+                      Also in this phrase — Strong's {extra.number}
+                    </p>
+                    <div className="flex items-baseline gap-2 mb-1.5">
+                      <span className="font-body-reading text-[18px] font-semibold text-primary leading-tight">
+                        {extra.lemma}
+                      </span>
+                      {extra.transliteration && (
+                        <span className="font-metadata-mono text-[12px] text-on-surface-variant">
+                          {extra.transliteration}
+                        </span>
+                      )}
+                    </div>
+                    <p className="font-body-ui leading-relaxed text-on-surface" style={{ fontSize: `${readingFontSize - 1}px`, fontFamily }}>
+                      <TextWithLinks text={extra.short_def} prefix={prefix} onLookup={lookup} />
+                    </p>
+                  </section>
+                ))}
+
+                {/* Grammatical markers (e.g. H0853) tucked behind a disclosure —
+                    real data, but not a competing definition for the phrase. */}
+                {hiddenMarkers.length > 0 && (
+                  <section className="pt-4 border-t border-outline-variant">
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 font-metadata-mono text-[11px] text-on-surface-variant hover:text-on-surface transition-colors"
+                      onClick={() => setShowMarkers((v) => !v)}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">
+                        {showMarkers ? "expand_less" : "expand_more"}
+                      </span>
+                      {hiddenMarkers.length === 1 ? "1 grammatical marker also in this phrase" : `${hiddenMarkers.length} grammatical markers also in this phrase`}
+                    </button>
+                    {showMarkers && (
+                      <div className="mt-3 space-y-3">
+                        {hiddenMarkers.map((marker) => (
+                          <div key={marker.number} className="pl-1 border-l-2 border-outline-variant">
+                            <div className="flex items-center gap-2 pl-3 mb-1">
+                              <span className="font-metadata-mono text-[11px] text-on-surface-variant">
+                                Strong's {marker.number} · {marker.lemma}
+                              </span>
+                            </div>
+                            <p className="pl-3 font-body-ui text-[12px] text-on-surface-variant leading-relaxed">
+                              <TextWithLinks text={marker.short_def} prefix={prefix} onLookup={lookup} />
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </section>
                 )}
               </div>

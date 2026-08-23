@@ -62,7 +62,7 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
             if !text.is_empty() {
                 spans.push(TextSpan {
                     text: text.to_string(),
-                    strongs: current_strongs.clone(),
+                    strongs: current_strongs.clone().map(|strongs| vec![strongs]),
                     morph: None,
                     is_added: None,
                     is_footnote: None,

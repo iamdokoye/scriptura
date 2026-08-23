@@ -57,6 +57,7 @@ impl Database {
             (2, SCHEMA_FTS_V2),
             (3, SCHEMA_V3_STRONGS_RESET),
             (4, SCHEMA_V4_CONSOLIDATE_STORAGE),
+            (5, SCHEMA_V5_STRONGS_MULTIPLE_KEYS_RESET),
         ]
     }
 
@@ -878,6 +879,14 @@ CREATE TABLE IF NOT EXISTS strongs_counts (
 /// Clear the table and force all modules to re-index so counts get rebuilt
 /// with correct G-/H-prefixed Strong's number keys.
 const SCHEMA_V3_STRONGS_RESET: &str = r#"
+DELETE FROM strongs_counts;
+UPDATE installed_modules SET index_built = 0;
+"#;
+
+/// v5: KJV OSIS phrases can contain more than one Strong's number. Earlier
+/// indexes kept only the first, which both hid valid concordance entries and
+/// made their per-book usage counts incomplete. Rebuild all module indexes.
+const SCHEMA_V5_STRONGS_MULTIPLE_KEYS_RESET: &str = r#"
 DELETE FROM strongs_counts;
 UPDATE installed_modules SET index_built = 0;
 "#;

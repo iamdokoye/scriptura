@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export interface TextSpan {
   text: string;
-  strongs?: string;     // e.g. "G25"
+  strongs?: string[];   // e.g. ["G25"] or multiple source words for one phrase
   morph?: string;       // morphology tag
   is_added?: boolean;   // italics / added words
   is_footnote?: boolean;
@@ -34,6 +34,10 @@ export interface StrongsEntry {
   long_def: string;
   usage_count: number;
   usage_by_book: BookUsage[];
+  // True when this is a grammatical particle with no independent English
+  // rendering (e.g. H0853, the Hebrew direct-object marker) rather than a
+  // translated content word.
+  is_untranslated_marker: boolean;
 }
 
 export interface BookUsage {

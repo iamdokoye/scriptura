@@ -16,7 +16,7 @@ export function PrimaryPane({
   loading: boolean;
   error: string | null;
   currentVerse: number;
-  onStrongsClick: (s: string) => void;
+  onStrongsClick: (numbers: string[]) => void;
   onVerseClick: (verse: number) => void;
   onCrossRefClick: (verse: number) => void;
   onCompareClick: (verse: number) => void;
@@ -89,7 +89,7 @@ export function PrimaryPane({
   );
 }
 
-export function ParallelPane({ chapter, onStrongsClick, showStrongs, readingFontSize, displayPrefs, scrollContainerRef }: { chapter: ChapterText; onStrongsClick: (s: string) => void; showStrongs: boolean; readingFontSize: number; displayPrefs: DisplayPrefs; scrollContainerRef?: React.RefObject<HTMLDivElement | null> }) {
+export function ParallelPane({ chapter, onStrongsClick, showStrongs, readingFontSize, displayPrefs, scrollContainerRef }: { chapter: ChapterText; onStrongsClick: (numbers: string[]) => void; showStrongs: boolean; readingFontSize: number; displayPrefs: DisplayPrefs; scrollContainerRef?: React.RefObject<HTMLDivElement | null> }) {
   const horizPadding = `max(16px, ${displayPrefs.margins / 2}%)`;
   const textStyle: React.CSSProperties = {
     fontSize: `${readingFontSize}px`,
@@ -136,7 +136,7 @@ export const VerseRow = memo(function VerseRow({
   verse: number;
   spans: TextSpan[];
   active: boolean;
-  onStrongsClick: (s: string) => void;
+  onStrongsClick: (numbers: string[]) => void;
   onVerseClick: () => void;
   onCrossRefClick: () => void;
   onCompareClick: () => void;
@@ -173,16 +173,28 @@ export const VerseRow = memo(function VerseRow({
       >
         {spans.map((span, i) => {
           const red = showRedLetter && span.is_red_letter;
-          if (span.strongs && showStrongs) {
+          const strongsNumbers = span.strongs ?? [];
+          if (strongsNumbers.length > 0 && showStrongs) {
             return (
               <span
                 key={i}
                 className={`strongs-word relative group/word border-b border-dashed hover:bg-secondary/10 pb-0.5 ${red ? "text-red-600 dark:text-red-400 border-red-400" : "border-primary"}`}
-                title="Double-click to look up in concordance"
-                onDoubleClick={(e) => { e.stopPropagation(); onStrongsClick(span.strongs!); }}
+                title={strongsNumbers.length === 1 ? "Double-click to look up in concordance" : "Double-click to look up this phrase's Strong's numbers"}
+                onDoubleClick={(e) => { e.stopPropagation(); onStrongsClick(strongsNumbers); }}
               >
-                <span className="strongs-tag absolute -top-3 left-1/2 -translate-x-1/2 font-metadata-mono text-[9px] text-secondary opacity-0 transition-opacity">
-                  {span.strongs}
+                <span className="strongs-tag absolute -top-3 left-1/2 -translate-x-1/2 flex gap-1 whitespace-nowrap font-metadata-mono text-[9px] text-secondary opacity-0 transition-opacity">
+                  {strongsNumbers.map((strongs) => (
+                    <button
+                      key={strongs}
+                      type="button"
+                      className="hover:text-primary hover:underline"
+                      title={`Look up ${strongs}`}
+                      onClick={(e) => { e.stopPropagation(); onStrongsClick([strongs]); }}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                    >
+                      {strongs}
+                    </button>
+                  ))}
                 </span>
                 {span.text}
               </span>

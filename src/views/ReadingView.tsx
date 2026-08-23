@@ -17,6 +17,7 @@ import { useReadingShortcuts } from "../hooks/useReadingShortcuts";
 import { useScrollSync } from "../hooks/useScrollSync";
 import { useChapterData } from "../hooks/useChapterData";
 import { usePresentationSync } from "../hooks/usePresentationSync";
+import { usePresentationCloseSync } from "../hooks/usePresentationCloseSync";
 import { useReadingPositionPersistence } from "../hooks/useReadingPositionPersistence";
 
 export default function ReadingView() {
@@ -24,7 +25,7 @@ export default function ReadingView() {
     currentRef, setCurrentRef, primaryModule, parallelModule, parallelMode,
     setParallelMode, setParallelModule,
     showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes,
-    setSelectedStrongs, isFullscreen, setIsFullscreen,
+    setSelectedStrongs, setStrongsGroup, isFullscreen, setIsFullscreen,
     currentSearchResults, searchResultIndex, setSearchResultIndex, setCurrentRef: navTo,
     setView, readingFontSize, setReadingFontSize, setLastHistoryRef,
     displayPrefs, setDisplayPrefs, addToServiceOrder,
@@ -102,6 +103,7 @@ export default function ReadingView() {
     presentationActive, primaryModule, currentRef, parallelModule,
     parallelMode, selectedStrongs, displayPrefs, readingFontSize,
   });
+  usePresentationCloseSync(setPresentationActive);
 
   useReadingShortcuts({
     isFullscreen, setIsFullscreen, fsSearchOpenRef, setFsSearchOpen, fsScriptureRef,
@@ -111,8 +113,9 @@ export default function ReadingView() {
     addCurrentVerseToQueue: () => handleAddToService(currentRef.verse),
   });
 
-  function handleStrongsClick(strongs: string) {
-    setSelectedStrongs(strongs);
+  function handleStrongsClick(numbers: string[]) {
+    setSelectedStrongs(numbers[0] ?? null);
+    setStrongsGroup(numbers.length > 1 ? numbers : null);
   }
 
   function handleVerseClick(verse: number) {

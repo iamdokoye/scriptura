@@ -22,8 +22,10 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
     let mut buf = Vec::new();
 
     // State
-    let mut current_strongs: Option<String> = None;
-    let mut current_morph: Option<String> = None;
+    // `w` elements can carry several Strong's numbers. Keep a stack rather
+    // than one mutable value so nested OSIS words cannot leak their metadata
+    // into the surrounding text.
+    let mut word_stack: Vec<(Vec<String>, Option<String>)> = Vec::new();
     let mut is_added = false;
     let mut is_red_letter = false;
     let mut in_note = false;
@@ -42,6 +44,8 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
                     }
                     "w" => {
                         // Extract lemma and morph attributes
+                        let mut strongs = Vec::new();
+                        let mut morph = None;
                         for attr in e.attributes().flatten() {
                             let key = std::str::from_utf8(attr.key.as_ref())
                                 .unwrap_or("")
@@ -50,33 +54,12 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
                                 .unwrap_or("")
                                 .to_string();
                             if key == "lemma" || key == "l" {
-                                // Lemma may be "strong:G25", "G25", or compound "strong:G1 strong:G2 robinson:ε"
-                                // Extract the first "strong:NNN" token, or fall back to the full value
-                                let num = val
-                                    .split_whitespace()
-                                    .find_map(|tok| {
-                                        if tok.to_lowercase().starts_with("strong:") {
-                                            let after = &tok[7..]; // skip "strong:"
-                                            if !after.is_empty() {
-                                                return Some(after.to_string());
-                                            }
-                                        }
-                                        None
-                                    })
-                                    .unwrap_or_else(|| {
-                                        // No "strong:" prefix: take whole value if it looks like G/H + digits
-                                        val.trim().to_string()
-                                    });
-                                // Only store if it starts with a known prefix or looks numeric
-                                if num.starts_with(|c: char| {
-                                    c == 'G' || c == 'H' || c.is_ascii_digit()
-                                }) {
-                                    current_strongs = Some(num);
-                                }
+                                strongs.extend(strongs_from_lemma(&val));
                             } else if key == "morph" || key == "m" {
-                                current_morph = Some(val);
+                                morph = Some(val);
                             }
                         }
+                        word_stack.push((strongs, morph));
                     }
                     "transchange" => {
                         for attr in e.attributes().flatten() {
@@ -128,8 +111,7 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
                         }
                     }
                     "w" => {
-                        current_strongs = None;
-                        current_morph = None;
+                        word_stack.pop();
                     }
                     "transchange" => {
                         is_added = false;
@@ -189,8 +171,10 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
 
                 let span = TextSpan {
                     text,
-                    strongs: current_strongs.clone(),
-                    morph: current_morph.clone(),
+                    strongs: word_stack
+                        .last()
+                        .and_then(|(strongs, _)| (!strongs.is_empty()).then(|| strongs.clone())),
+                    morph: word_stack.last().and_then(|(_, morph)| morph.clone()),
                     is_added: if is_added { Some(true) } else { None },
                     is_footnote: None,
                     is_red_letter: if is_red_letter { Some(true) } else { None },
@@ -212,6 +196,39 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
     }
 
     Ok(normalize_spans(spans))
+}
+
+/// Extract every valid Strong's number from an OSIS `lemma` attribute.
+///
+/// The standard form is a whitespace-separated list such as
+/// `strong:H0853 strong:H01254`; modules may also provide a lone `G25`/`H430`.
+fn strongs_from_lemma(value: &str) -> Vec<String> {
+    let mut strongs = Vec::new();
+
+    for token in value.split_whitespace() {
+        let candidate = token
+            .strip_prefix("strong:")
+            .or_else(|| token.strip_prefix("Strong:"))
+            .or_else(|| token.strip_prefix("STRONG:"))
+            .unwrap_or(token);
+        let mut chars = candidate.chars();
+        let Some(prefix) = chars.next() else { continue };
+        let prefix = prefix.to_ascii_uppercase();
+        let suffix = chars.as_str();
+        if matches!(prefix, 'G' | 'H')
+            && !suffix.is_empty()
+            && suffix
+                .chars()
+                .all(|c| c.is_ascii_digit() || c.is_ascii_alphabetic())
+        {
+            let number = format!("{prefix}{suffix}");
+            if !strongs.contains(&number) {
+                strongs.push(number);
+            }
+        }
+    }
+
+    strongs
 }
 
 /// Merge consecutive plain spans and trim leading/trailing whitespace.
@@ -257,4 +274,37 @@ fn strip_xml_tags(s: &str) -> &str {
     // Very naive: if we fail to parse at all, return the raw string truncated
     // A proper strip would use a regex, but we avoid adding regex overhead here.
     s.trim()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse;
+
+    #[test]
+    fn preserves_every_strongs_number_on_a_word() {
+        let spans = parse(
+            r#"<w lemma="strong:H0853 strong:H01254" morph="strongMorph:TH8804">created</w>"#,
+        )
+        .unwrap();
+
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].text, "created");
+        assert_eq!(
+            spans[0].strongs.as_ref().unwrap(),
+            &vec!["H0853".to_string(), "H01254".to_string()]
+        );
+        assert_eq!(spans[0].morph.as_deref(), Some("strongMorph:TH8804"));
+    }
+
+    #[test]
+    fn does_not_leak_nested_word_metadata() {
+        let spans =
+            parse(r#"<w lemma="strong:G1">outer <w lemma="strong:G2">inner</w> outer</w> plain"#)
+                .unwrap();
+
+        assert_eq!(spans[0].strongs.as_ref().unwrap(), &vec!["G1".to_string()]);
+        assert_eq!(spans[1].strongs.as_ref().unwrap(), &vec!["G2".to_string()]);
+        assert_eq!(spans[2].strongs.as_ref().unwrap(), &vec!["G1".to_string()]);
+        assert_eq!(spans[3].strongs, None);
+    }
 }

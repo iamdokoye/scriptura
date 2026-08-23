@@ -1,6 +1,6 @@
 use serde_json::Value;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Persisted presentation state so the presentation window can fetch it immediately on load.
 pub struct PresentationState(pub Mutex<Option<Value>>);
@@ -98,25 +98,41 @@ pub async fn open_presentation_window(
             .and_then(|monitors| monitors.into_iter().nth(idx))
     });
 
+    // A normal, decorated, resizable window rather than OS fullscreen — a
+    // borderless fullscreen window is the standard reason capture tools like
+    // OBS's Window Capture fail to enumerate or correctly bind to a window on
+    // Windows. Decorated + maximized behaves like any ordinary app window
+    // (title bar, restore/maximize button, movable, resizable) that an
+    // operator can drag onto a second display and maximize themselves, while
+    // still landing there automatically by default.
     let window =
         WebviewWindowBuilder::new(&app, "presentation", WebviewUrl::App("index.html".into()))
             .title("Scriptura Live")
-            .decorations(false)
+            .inner_size(1024.0, 640.0)
             .initialization_script("window.__SCRIPTURA_PRESENTATION__ = true;")
             .build()
             .map_err(|e| e.to_string())?;
 
     if let Some(monitor) = target_monitor {
         let _ = window.set_position(tauri::Position::Physical(*monitor.position()));
-        let _ = window.set_size(tauri::Size::Physical(*monitor.size()));
-        // A short delay before entering fullscreen gives the window manager time to
-        // actually finish moving the window first — without it, the OS can decide
-        // fullscreen based on where the window was *before* the move (observed on
-        // macOS, where fullscreen opens a new Space tied to whichever screen the
-        // window appears to be on at the moment the transition starts).
+        // A short delay before maximizing gives the window manager time to
+        // actually finish moving the window first — without it, the OS can
+        // maximize onto whichever screen the window appeared to be on *before*
+        // the move finished (the same race we previously hit with fullscreen).
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }
-    let _ = window.set_fullscreen(true);
+    let _ = window.maximize();
+
+    // Now that the window has a real title bar (see above), the operator can
+    // close it with the native close button, not just Scriptura's own "Stop
+    // presentation" toggle. Either path ends up here, so the main window's
+    // "LIVE" state doesn't go stale regardless of which one was used.
+    let app_for_close = app.clone();
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { .. } = event {
+            let _ = app_for_close.emit("presentation-closed", ());
+        }
+    });
 
     Ok(())
 }

@@ -425,6 +425,7 @@ fn parse_strongs_tei(number: &str, raw: &str) -> Result<StrongsEntry> {
 
     // Split definition at first sentence end for short vs long
     let (short_def, long_def) = split_at_sentence(&def_clean);
+    let is_untranslated_marker = is_untranslated_marker_text(&def_clean);
 
     Ok(StrongsEntry {
         number: number.to_string(),
@@ -439,6 +440,7 @@ fn parse_strongs_tei(number: &str, raw: &str) -> Result<StrongsEntry> {
         long_def,
         usage_count: 0,
         usage_by_book: vec![],
+        is_untranslated_marker,
     })
 }
 
@@ -473,6 +475,7 @@ fn parse_strongs_plain(number: &str, raw: &str) -> Result<StrongsEntry> {
         .join("  ");
 
     let (short_def, long_def) = split_at_sentence(&definition);
+    let is_untranslated_marker = is_untranslated_marker_text(&definition);
 
     Ok(StrongsEntry {
         number: number.to_string(),
@@ -487,7 +490,21 @@ fn parse_strongs_plain(number: &str, raw: &str) -> Result<StrongsEntry> {
         long_def,
         usage_count: 0,
         usage_by_book: vec![],
+        is_untranslated_marker,
     })
+}
+
+/// Strong's own 1890 definitions use a consistent form of words for particles
+/// that have no independent English rendering (e.g. H0853, the Hebrew
+/// direct-object marker: "...unrepresented in English)."). Detecting that
+/// wording lets the UI tell a real content word from grammatical scaffolding
+/// that just happened to get attached to the nearest visible word during
+/// tagging, without maintaining a hand-picked list of Strong's numbers.
+fn is_untranslated_marker_text(definition: &str) -> bool {
+    let lower = definition.to_lowercase();
+    lower.contains("unrepresented in english")
+        || lower.contains("not translated in")
+        || lower.contains("is untranslated")
 }
 
 fn split_at_sentence(s: &str) -> (String, String) {
@@ -583,4 +600,24 @@ fn strip_xml_tags(s: &str) -> String {
         }
     }
     out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+#[cfg(test)]
+mod marker_tests {
+    use super::is_untranslated_marker_text;
+
+    #[test]
+    fn flags_h0853_style_direct_object_marker() {
+        let def = "apparent contracted from 226 in the demonstrative sense of \
+                    entity; properly, self (but generally used to point out more \
+                    definitely the object of a verb or preposition, even or \
+                    namely):--(as such unrepresented in English).";
+        assert!(is_untranslated_marker_text(def));
+    }
+
+    #[test]
+    fn does_not_flag_a_normal_content_word() {
+        let def = "a primitive root; to shine; (transitively) to illuminate.";
+        assert!(!is_untranslated_marker_text(def));
+    }
 }
