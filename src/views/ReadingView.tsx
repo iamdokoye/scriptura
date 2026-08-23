@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useAppStore } from "../store/app";
-import { api, type ChapterText, type InstalledModule, type TextSpan } from "../lib/tauri";
+import { api, type ChapterText, type InstalledModule, type MonitorInfo, type TextSpan } from "../lib/tauri";
 import { emitPresentation } from "../lib/presentation";
 import BookNavigator from "../components/BookNavigator";
 import SideNav from "../components/SideNav";
@@ -49,6 +49,9 @@ export default function ReadingView() {
   const primaryScrollRef = useRef<HTMLDivElement>(null);
   const parallelScrollRef = useRef<HTMLDivElement>(null);
   const isSyncing = useRef(false);
+  const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
+  const [showMonitorPicker, setShowMonitorPicker] = useState(false);
+  const monitorPickerRef = useRef<HTMLDivElement>(null);
 
   const openCrossRef = useCallback((verse: number) => {
     setCrossRefVerse({ book: currentRef.book, chapter: currentRef.chapter, verse });
@@ -73,9 +76,16 @@ export default function ReadingView() {
   }, []);
 
   useEffect(() => {
+    api.listMonitors().then(setMonitors).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     function onMouseDown(e: MouseEvent) {
       if (fsParallelPickerRef.current && !fsParallelPickerRef.current.contains(e.target as Node)) {
         setShowFsParallelPicker(false);
+      }
+      if (monitorPickerRef.current && !monitorPickerRef.current.contains(e.target as Node)) {
+        setShowMonitorPicker(false);
       }
     }
     document.addEventListener("mousedown", onMouseDown);
@@ -466,28 +476,60 @@ export default function ReadingView() {
             </button>
 
             {/* Go Live / Stop */}
-            <button
-              onClick={async () => {
-                if (presentationActive) {
-                  await api.closePresentationWindow().catch(() => {});
-                  setPresentationActive(false);
-                } else {
-                  await api.openPresentationWindow().catch(() => {});
-                  setPresentationActive(true);
-                }
-              }}
-              title={presentationActive ? "Stop presentation" : "Go live — open presentation window"}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-DEFAULT text-[13px] font-body-ui font-semibold transition-colors ${
-                presentationActive
-                  ? "bg-error text-on-error hover:bg-error/90"
-                  : "bg-primary text-on-primary hover:bg-primary/90"
-              }`}
-            >
-              <span className="material-symbols-outlined text-[16px]">
-                {presentationActive ? "stop_circle" : "slideshow"}
-              </span>
-              {presentationActive ? "● LIVE" : "Go Live"}
-            </button>
+            <div ref={monitorPickerRef} className="relative flex items-center">
+              <button
+                onClick={async () => {
+                  if (presentationActive) {
+                    await api.closePresentationWindow().catch(() => {});
+                    setPresentationActive(false);
+                  } else if (monitors.length > 1) {
+                    setShowMonitorPicker((v) => !v);
+                  } else {
+                    await api.openPresentationWindow(monitors[0]?.index).catch(() => {});
+                    setPresentationActive(true);
+                  }
+                }}
+                title={presentationActive ? "Stop presentation" : "Go live — open presentation window"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-DEFAULT text-[13px] font-body-ui font-semibold transition-colors ${
+                  presentationActive
+                    ? "bg-error text-on-error hover:bg-error/90"
+                    : "bg-primary text-on-primary hover:bg-primary/90"
+                }`}
+              >
+                <span className="material-symbols-outlined text-[16px]">
+                  {presentationActive ? "stop_circle" : "slideshow"}
+                </span>
+                {presentationActive ? "● LIVE" : "Go Live"}
+                {!presentationActive && monitors.length > 1 && (
+                  <span className="material-symbols-outlined text-[14px]">expand_more</span>
+                )}
+              </button>
+              {showMonitorPicker && monitors.length > 1 && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg min-w-[220px] overflow-hidden">
+                  <div className="px-3 py-1.5 bg-surface-container-low border-b border-outline-variant">
+                    <span className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest">
+                      Present on…
+                    </span>
+                  </div>
+                  {monitors.map((m) => (
+                    <button
+                      key={m.index}
+                      onClick={async () => {
+                        setShowMonitorPicker(false);
+                        await api.openPresentationWindow(m.index).catch(() => {});
+                        setPresentationActive(true);
+                      }}
+                      className="w-full flex items-center justify-between gap-2 text-left px-3 py-2 font-body-ui text-body-ui text-on-surface hover:bg-surface-container-high transition-colors"
+                    >
+                      <span>{m.name ?? `Display ${m.index + 1}`}</span>
+                      <span className="font-metadata-mono text-[11px] text-on-surface-variant shrink-0">
+                        {m.is_primary ? "Primary · " : ""}{m.width}×{m.height}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Exit fullscreen */}
             <button

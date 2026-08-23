@@ -579,8 +579,45 @@ pub async fn get_presentation_state(
     Ok(state.0.lock().unwrap().clone())
 }
 
+#[derive(serde::Serialize)]
+pub struct MonitorInfo {
+    pub index: usize,
+    pub name: Option<String>,
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub is_primary: bool,
+}
+
 #[tauri::command]
-pub async fn open_presentation_window(app: AppHandle) -> std::result::Result<(), String> {
+pub async fn list_monitors(app: AppHandle) -> std::result::Result<Vec<MonitorInfo>, String> {
+    let window = app.get_webview_window("main").ok_or("no main window")?;
+    let monitors = window.available_monitors().map_err(|e| e.to_string())?;
+    let primary_pos = window.primary_monitor()
+        .map_err(|e| e.to_string())?
+        .map(|m| *m.position());
+
+    Ok(monitors.into_iter().enumerate().map(|(index, m)| {
+        let pos = *m.position();
+        let size = *m.size();
+        MonitorInfo {
+            index,
+            name: m.name().cloned(),
+            x: pos.x,
+            y: pos.y,
+            width: size.width,
+            height: size.height,
+            is_primary: primary_pos == Some(pos),
+        }
+    }).collect())
+}
+
+#[tauri::command]
+pub async fn open_presentation_window(
+    app: AppHandle,
+    monitor_index: Option<usize>,
+) -> std::result::Result<(), String> {
     use tauri::{WebviewUrl, WebviewWindowBuilder};
 
     // If already open, just focus it
@@ -589,13 +626,30 @@ pub async fn open_presentation_window(app: AppHandle) -> std::result::Result<(),
         return Ok(());
     }
 
-    WebviewWindowBuilder::new(&app, "presentation", WebviewUrl::App("index.html".into()))
+    let target_monitor = monitor_index.and_then(|idx| {
+        app.get_webview_window("main")
+            .and_then(|w| w.available_monitors().ok())
+            .and_then(|monitors| monitors.into_iter().nth(idx))
+    });
+
+    let window = WebviewWindowBuilder::new(&app, "presentation", WebviewUrl::App("index.html".into()))
         .title("Scriptura Live")
-        .fullscreen(true)
         .decorations(false)
         .initialization_script("window.__SCRIPTURA_PRESENTATION__ = true;")
         .build()
         .map_err(|e| e.to_string())?;
+
+    if let Some(monitor) = target_monitor {
+        let _ = window.set_position(tauri::Position::Physical(*monitor.position()));
+        let _ = window.set_size(tauri::Size::Physical(*monitor.size()));
+        // A short delay before entering fullscreen gives the window manager time to
+        // actually finish moving the window first — without it, the OS can decide
+        // fullscreen based on where the window was *before* the move (observed on
+        // macOS, where fullscreen opens a new Space tied to whichever screen the
+        // window appears to be on at the moment the transition starts).
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let _ = window.set_fullscreen(true);
 
     Ok(())
 }

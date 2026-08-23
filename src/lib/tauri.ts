@@ -76,6 +76,16 @@ export interface InstalledModule extends ModuleInfo {
   index_built: boolean;
 }
 
+export interface MonitorInfo {
+  index: number;
+  name: string | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  is_primary: boolean;
+}
+
 export interface Bookmark {
   id: number;
   book: string;
@@ -201,8 +211,11 @@ export const api = {
   setPreferences: (prefs: Partial<Preferences>) =>
     invoke<void>("set_preferences", { prefs }),
 
-  openPresentationWindow: () =>
-    invoke<void>("open_presentation_window"),
+  listMonitors: () =>
+    invoke<MonitorInfo[]>("list_monitors"),
+
+  openPresentationWindow: (monitorIndex?: number) =>
+    invoke<void>("open_presentation_window", { monitorIndex }),
 
   closePresentationWindow: () =>
     invoke<void>("close_presentation_window"),

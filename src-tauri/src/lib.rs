@@ -132,6 +132,7 @@ pub fn run() {
             commands::rebuild_search_index,
             commands::relay_presentation,
             commands::get_presentation_state,
+            commands::list_monitors,
             commands::open_presentation_window,
             commands::close_presentation_window,
         ])
