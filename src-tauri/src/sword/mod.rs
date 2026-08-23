@@ -3,6 +3,7 @@ pub mod conf;
 pub mod crossref;
 pub mod file_cache;
 pub mod lexicon;
+pub mod stepbible;
 
 pub use bible::BibleReader;
 #[allow(unused_imports)]

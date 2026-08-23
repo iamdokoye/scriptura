@@ -109,7 +109,20 @@ impl LexiconReader {
 
     fn lookup_strongs_zld(&self, number: &str) -> Result<String> {
         let n = parse_strongs_number(number)?;
+        if let Ok(found) = self.lookup_strongs_zld_windowed(n) {
+            return Ok(found);
+        }
+        // Supplementary lexicons (Abbott-Smith, BDB, Dodson) don't share
+        // StrongsGreek/StrongsHebrew's "n=\"NNN\", ~30 entries/block, ascending
+        // numeric order" layout — Abbott-Smith in particular sorts
+        // alphabetically by lemma with the number embedded as a suffix
+        // ("λόγος|03056"), so the windowed numeric estimate above can't find
+        // it at all. Fall back to a full scan trying every key form we've
+        // observed in the wild.
+        self.lookup_strongs_zld_exhaustive(n, number)
+    }
 
+    fn lookup_strongs_zld_windowed(&self, n: u32) -> Result<String> {
         let zdx = self.read_file("zdx")?;
         let zdt = self.read_file("zdt")?;
         let num_blocks = zdx.len() / 8; // 8 bytes per zdx entry
@@ -155,6 +168,60 @@ impl LexiconReader {
                 let content = &blk[entry_off..entry_off + entry_sz];
                 let txt = String::from_utf8_lossy(content);
                 if txt.contains(&target_attr) {
+                    return self.decode(content);
+                }
+            }
+        }
+
+        Err(AppError::Sword(format!("Strong's number {n} not found (windowed)")))
+    }
+
+    fn lookup_strongs_zld_exhaustive(&self, n: u32, number: &str) -> Result<String> {
+        let zdx = self.read_file("zdx")?;
+        let zdt = self.read_file("zdt")?;
+        let num_blocks = zdx.len() / 8;
+
+        let prefix = number.chars().next().unwrap_or('H');
+        // Every n= convention observed across CrossWire's supplementary
+        // lexicons: bare "26" (handled by the windowed path already, kept
+        // here too since exhaustive is also a full correctness fallback),
+        // zero-padded+prefixed "G0026"/"H0026" (Dodson, BDB), and
+        // Abbott-Smith's "<lemma>|00026" suffix form.
+        let candidates = [
+            format!("n=\"{n}\""),
+            format!("n=\"{prefix}{n:04}\""),
+            format!("|{n:05}\""),
+        ];
+
+        for bnum in 0..num_blocks {
+            let blk_off = read_u32_le(&zdx, bnum * 8).unwrap_or(0) as usize;
+            let blk_csz = read_u32_le(&zdx, bnum * 8 + 4).unwrap_or(0) as usize;
+            if blk_off + blk_csz > zdt.len() || blk_csz == 0 {
+                continue;
+            }
+            let blk = match decompress_zlib(&zdt[blk_off..blk_off + blk_csz]) {
+                Ok(b) => b,
+                Err(_) => continue,
+            };
+            let num_entries = match read_u32_le(&blk, 0) {
+                Some(n) => n as usize,
+                None => continue,
+            };
+            for eidx in 0..num_entries {
+                let entry_off = match read_u32_le(&blk, 4 + eidx * 8) {
+                    Some(o) => o as usize,
+                    None => break,
+                };
+                let entry_sz = match read_u32_le(&blk, 4 + eidx * 8 + 4) {
+                    Some(s) => s as usize,
+                    None => break,
+                };
+                if entry_sz == 0 || entry_off + entry_sz > blk.len() {
+                    continue;
+                }
+                let content = &blk[entry_off..entry_off + entry_sz];
+                let txt = String::from_utf8_lossy(content);
+                if candidates.iter().any(|c| txt.contains(c.as_str())) {
                     return self.decode(content);
                 }
             }
@@ -368,7 +435,7 @@ impl super::ModuleReader for LexiconReader {
 }
 
 /// Extract the numeric part of a Strong's number like "G25" or "H430".
-fn parse_strongs_number(number: &str) -> Result<u32> {
+pub(crate) fn parse_strongs_number(number: &str) -> Result<u32> {
     // Skip leading alphabetic character (G/H prefix), respecting UTF-8 char boundaries
     let digits = match number.chars().next() {
         Some(c) if c.is_alphabetic() => &number[c.len_utf8()..],
@@ -383,7 +450,17 @@ fn parse_strongs_number(number: &str) -> Result<u32> {
 
 /// Parse a raw Strong's entry (TEI XML or RawLD plain text) into a StrongsEntry.
 fn parse_strongs_entry(number: &str, raw: &str) -> Result<StrongsEntry> {
-    let raw = raw.trim();
+    // Entries at the end of a compressed block can carry a trailing NUL
+    // padding byte through decode() — harmless in the raw bytes, but str::trim()
+    // doesn't consider NUL whitespace, so it survived into displayed text
+    // (found testing Abbott-Smith/BDB, whose entries hit this more often).
+    let cleaned;
+    let raw = if raw.contains('\0') {
+        cleaned = raw.replace('\0', "");
+        cleaned.trim()
+    } else {
+        raw.trim()
+    };
 
     // Detect format: TEI XML has matching <tag>...</tag> pairs. A bare '<'
     // isn't a safe signal on its own — found via a full-lexicon audit: H6848's
@@ -401,9 +478,12 @@ fn parse_strongs_entry(number: &str, raw: &str) -> Result<StrongsEntry> {
 /// Structure: <orth>WORD</orth> ... <orth rend="bold" type="trans">TRANS</orth>
 ///            <pron>PRONUNCIATION</pron> ... <def>DEFINITION</def>
 fn parse_strongs_tei(number: &str, raw: &str) -> Result<StrongsEntry> {
-    // Extract first <orth> (the Greek/Hebrew word itself, no type attribute)
+    // Extract first <orth> (the Greek/Hebrew word itself, no type attribute).
+    // Supplementary lexicons (Abbott-Smith, BDB) don't use <orth> at all —
+    // the lemma is just the first <foreign> element instead.
     let lemma = extract_first_tag_text(raw, "orth", Some(("type", "")))
         .or_else(|| extract_tag_text(raw, "orth"))
+        .or_else(|| extract_tag_text(raw, "foreign"))
         .unwrap_or_else(|| number.to_string());
 
     // Extract <orth rend="bold" type="trans"> for romanized transliteration
@@ -422,6 +502,33 @@ fn parse_strongs_tei(number: &str, raw: &str) -> Result<StrongsEntry> {
         .map(|s| s.trim().to_string())
         .unwrap_or_default();
 
+    // Abbott-Smith and BDB don't use a flat <def> block at all: Abbott-Smith
+    // nests numbered <sense> elements directly under <entry> (no single
+    // "definition" span to grab), and BDB just puts a bare gloss inside
+    // <entryFree> with no wrapper tag identifying it as the definition.
+    // Fall back to converting the whole entry into readable text instead of
+    // leaving this empty.
+    let is_rich_fallback = definition.is_empty();
+    // A short_def-only variant with <etym> also stripped: Abbott-Smith opens
+    // every entry with an etymology/Septuagint-equivalence clause inside
+    // <etym> (e.g. "[in LXX for ..., which is also rendered by ...;]")
+    // *before* the actual gloss — without stripping it, short_def's prefix
+    // truncation below would surface that cross-reference clutter as the
+    // headline instead of the real meaning ("love, goodwill, esteem").
+    let short_source = if is_rich_fallback {
+        Some(tei_senses_to_text(&remove_tag_block(&remove_tag_block(raw, "title"), "etym")))
+    } else {
+        None
+    };
+    let definition = if is_rich_fallback {
+        // <title>H157</title> just repeats the number our own UI already
+        // shows elsewhere (as a "Strong's H157" badge) — drop it so the body
+        // doesn't open with a redundant repeat of the number.
+        tei_senses_to_text(&remove_tag_block(raw, "title"))
+    } else {
+        definition
+    };
+
     // Build short_def: transliteration + pronunciation + core definition
     let header = [transliteration.as_str(), pronunciation.as_str()]
         .iter()
@@ -432,8 +539,32 @@ fn parse_strongs_tei(number: &str, raw: &str) -> Result<StrongsEntry> {
 
     let def_clean = definition.split_whitespace().collect::<Vec<_>>().join(" ");
 
-    // Split definition at first sentence end for short vs long
-    let (short_def, long_def) = split_at_sentence(&def_clean);
+    // split_at_sentence assumes Strong's own rigid "[etymology]; [core
+    // meaning]:--[KJV list]." template to find the core-meaning clause. Rich
+    // academic prose (Abbott-Smith, BDB's fallback path above) doesn't follow
+    // that template at all — semicolons there separate citations, not
+    // clauses — so "last clause" can land on a nonsense fragment like a
+    // trailing "(cf. MM, VGT, s.v.)" citation. For that case, just take a
+    // sensible word-bounded prefix instead of trying to be clever about it.
+    let (short_def, long_def) = if is_rich_fallback {
+        let short_clean = short_source
+            .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "))
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| def_clean.clone());
+        let short = if short_clean.chars().count() > 180 {
+            let mut cut = 180;
+            while !short_clean.is_char_boundary(cut) { cut -= 1; }
+            match short_clean[..cut].rfind(' ') {
+                Some(space) => format!("{}…", &short_clean[..space]),
+                None => short_clean[..cut].to_string(),
+            }
+        } else {
+            short_clean
+        };
+        (short, def_clean.clone())
+    } else {
+        split_at_sentence(&def_clean)
+    };
     let is_untranslated_marker = is_untranslated_marker_text(&def_clean);
 
     Ok(StrongsEntry {
@@ -513,7 +644,7 @@ fn parse_strongs_plain(number: &str, raw: &str) -> Result<StrongsEntry> {
 /// the UI tell a real content word from grammatical scaffolding that just
 /// happened to get attached to the nearest visible word during tagging,
 /// without maintaining a hand-picked list of Strong's numbers.
-fn is_untranslated_marker_text(definition: &str) -> bool {
+pub(crate) fn is_untranslated_marker_text(definition: &str) -> bool {
     let lower = definition.to_lowercase();
     lower.contains("unrepresented in english")
         || lower.contains("not translated in")
@@ -690,8 +821,77 @@ fn extract_tag_by_attr(xml: &str, tag: &str, attr: &str, val: &str) -> Option<St
     None
 }
 
+/// Removes every `<TAG>...</TAG>` block (tag and content) from `xml`.
+fn remove_tag_block(xml: &str, tag: &str) -> String {
+    let open = format!("<{tag}");
+    let close = format!("</{tag}>");
+    let mut out = String::with_capacity(xml.len());
+    let mut pos = 0;
+    while let Some(rel) = xml[pos..].find(&open) {
+        let abs = pos + rel;
+        out.push_str(&xml[pos..abs]);
+        match xml[abs..].find(&close) {
+            Some(end_rel) => pos = abs + end_rel + close.len(),
+            None => {
+                pos = xml.len();
+                break;
+            }
+        }
+    }
+    out.push_str(&xml[pos..]);
+    out
+}
+
+/// Converts TEI markup into readable multi-line text for lexicons that
+/// structure their entry as a nested `<sense n="...">` hierarchy (Abbott-
+/// Smith) rather than a flat `<def>` block. Unlike `strip_xml_tags`, this
+/// keeps each `<sense>` on its own line — with its number/letter prefix
+/// (Abbott-Smith numbers usage senses "1.", "(a)", "(b)", etc.) — instead of
+/// collapsing the whole numbered breakdown into one run-on paragraph.
+fn tei_senses_to_text(raw: &str) -> String {
+    let mut out = String::new();
+    let mut in_tag = false;
+    let mut i = 0;
+    while i < raw.len() {
+        let c = raw[i..].chars().next().unwrap();
+        if c == '<' {
+            if raw[i..].starts_with("<sense") {
+                if !out.is_empty() && !out.ends_with('\n') {
+                    out.push('\n');
+                }
+                if let Some(tag_end) = raw[i..].find('>') {
+                    let tag_str = &raw[i..i + tag_end];
+                    if let Some(n_start) = tag_str.find("n=\"") {
+                        let after = &tag_str[n_start + 3..];
+                        if let Some(n_end) = after.find('"') {
+                            let label = after[..n_end].trim();
+                            if !label.is_empty() {
+                                out.push_str(label);
+                                out.push(' ');
+                            }
+                        }
+                    }
+                }
+            }
+            in_tag = true;
+        }
+        if !in_tag {
+            out.push(c);
+        }
+        if c == '>' {
+            in_tag = false;
+        }
+        i += c.len_utf8();
+    }
+    out.lines()
+        .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Strip XML/HTML tags from a string for plain-text display.
-fn strip_xml_tags(s: &str) -> String {
+pub(crate) fn strip_xml_tags(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut in_tag = false;
     for ch in s.chars() {
@@ -840,3 +1040,42 @@ mod cjk_stripping_tests {
         assert!(entry.transliteration.contains("ook"));
     }
 }
+
+#[cfg(test)]
+mod rich_lexicon_tests {
+    use super::parse_strongs_entry;
+
+    // Real Abbott-Smith TEI text for G26 (agape) — this lexicon has no flat
+    // <def> block at all; the gloss follows a bracketed <etym> Septuagint
+    // cross-reference clause, then a numbered <sense> usage breakdown.
+    const ABBOTT_G26: &str = r#"<entry n="ἀγάπη|00026">
+  <form>† <foreign xml:lang="grc"><hi rend="bold">ἀγάπη</hi></foreign>, <foreign xml:lang="grc">-ης, ἡ</foreign> </form>
+<etym>
+  <seg type="septuagint">[in LXX for <foreign n="H160" xml:lang="heb">אַהֲבָה</foreign>, which is also rendered by <ref><foreign xml:lang="grc">ἀγάπησις</foreign></ref> and <ref><foreign xml:lang="grc">φιλία</foreign></ref>;]</seg>
+</etym>
+  <gramGrp/>
+  <sense><hi rend="italic">love</hi>, <hi rend="italic">goodwill</hi>, <hi rend="italic">esteem</hi>.
+    <sense n="1. ">Of men's love:
+    <sense n="(a) ">to one another, <ref osisRef="John.13.35">Jo 13:35</ref>; </sense>
+    </sense>
+  </sense>
+</entry>"#;
+
+    #[test]
+    fn parses_entry_with_no_def_tag_via_sense_hierarchy() {
+        let entry = parse_strongs_entry("G26", ABBOTT_G26).unwrap();
+        assert!(entry.long_def.contains("love"));
+        assert!(entry.long_def.contains("1."));
+        assert!(entry.long_def.contains("Jo 13:35"));
+    }
+
+    #[test]
+    fn short_def_leads_with_the_gloss_not_the_septuagint_cross_reference() {
+        // Without stripping <etym> first, short_def's prefix truncation used
+        // to surface "[in LXX for ...]" instead of the actual meaning.
+        let entry = parse_strongs_entry("G26", ABBOTT_G26).unwrap();
+        assert!(entry.short_def.contains("love"));
+        assert!(!entry.short_def.contains("LXX"));
+    }
+}
+

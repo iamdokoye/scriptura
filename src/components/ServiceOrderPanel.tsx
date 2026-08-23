@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useAppStore, type ServiceItem } from "../store/app";
+import type { PresentationItemOverride, PresentationTheme } from "../lib/tauri";
 
 export default function ServiceOrderPanel() {
   const {
@@ -11,10 +12,13 @@ export default function ServiceOrderPanel() {
     setCurrentRef,
     setView,
     currentRef,
+    presentationThemes,
+    updateServiceItemOverride,
   } = useAppStore();
 
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
+  const [overrideOpenId, setOverrideOpenId] = useState<string | null>(null);
   const dragNodeRef = useRef<HTMLDivElement | null>(null);
 
   function navigateTo(item: ServiceItem) {
@@ -110,6 +114,10 @@ export default function ServiceOrderPanel() {
                 isOver={overIdx === idx}
                 onNavigate={() => navigateTo(item)}
                 onRemove={() => removeFromServiceOrder(item.id)}
+                overrideOpen={overrideOpenId === item.id}
+                onToggleOverride={() => setOverrideOpenId((open) => open === item.id ? null : item.id)}
+                onUpdateOverride={(presentation_override) => updateServiceItemOverride(item.id, presentation_override)}
+                presentationThemes={presentationThemes}
                 onPointerEnter={() => onItemPointerEnter(idx)}
                 onDragHandlePointerDown={(e) => onDragHandlePointerDown(e, idx)}
                 dragNodeRef={dragIdx === idx ? dragNodeRef : undefined}
@@ -166,6 +174,10 @@ function ServiceCard({
   isOver,
   onNavigate,
   onRemove,
+  overrideOpen,
+  onToggleOverride,
+  onUpdateOverride,
+  presentationThemes,
   onPointerEnter,
   onDragHandlePointerDown,
   dragNodeRef,
@@ -177,6 +189,10 @@ function ServiceCard({
   isOver: boolean;
   onNavigate: () => void;
   onRemove: () => void;
+  overrideOpen: boolean;
+  onToggleOverride: () => void;
+  onUpdateOverride: (presentation_override: PresentationItemOverride | null) => void;
+  presentationThemes: PresentationTheme[];
   onPointerEnter: () => void;
   onDragHandlePointerDown: (e: React.PointerEvent) => void;
   dragNodeRef?: React.RefObject<HTMLDivElement | null>;
@@ -237,6 +253,14 @@ function ServiceCard({
           </p>
         </button>
 
+        <button
+          onClick={(event) => { event.stopPropagation(); onToggleOverride(); }}
+          className={`mt-0.5 p-0.5 rounded transition-all shrink-0 ${item.presentation_override ? "text-primary opacity-100" : "text-secondary opacity-0 group-hover:opacity-100 hover:bg-surface-container"}`}
+          title="Presentation overrides"
+        >
+          <span className="material-symbols-outlined text-[16px]">tune</span>
+        </button>
+
         {/* Remove */}
         <button
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
@@ -246,6 +270,32 @@ function ServiceCard({
           <span className="material-symbols-outlined text-[16px]">close</span>
         </button>
       </div>
+      {overrideOpen && <ItemOverrideEditor item={item} themes={presentationThemes} onChange={onUpdateOverride} />}
     </li>
   );
+}
+
+function ItemOverrideEditor({ item, themes, onChange }: { item: ServiceItem; themes: PresentationTheme[]; onChange: (value: PresentationItemOverride | null) => void }) {
+  const value = item.presentation_override ?? {};
+  const update = (patch: Partial<PresentationItemOverride>) => onChange({ ...value, ...patch });
+  const customBoxes = value.verse_box_x !== undefined;
+  const updateCustomBoxes = (enabled: boolean) => onChange(enabled
+    ? { ...value, verse_box_x: 10, verse_box_y: 24, verse_box_width: 80, verse_box_height: 48, reference_box_x: 10, reference_box_y: 76, reference_box_width: 80, reference_box_height: 10 }
+    : Object.fromEntries(Object.entries(value).filter(([key]) => !key.startsWith("verse_box_") && !key.startsWith("reference_box_"))) as PresentationItemOverride);
+
+  return <div className="border-t border-outline-variant bg-surface-container-low px-3 py-3 space-y-3">
+    <div className="flex items-center justify-between gap-2"><p className="font-metadata-mono text-[10px] uppercase tracking-widest text-primary">Item presentation overrides</p><button onClick={() => onChange(null)} className="text-[11px] font-body-ui text-secondary hover:text-error">Clear overrides</button></div>
+    <label className="block"><span className="field-label">Base theme</span><select value={value.theme_id ?? ""} onChange={(event) => update({ theme_id: event.target.value || undefined })} className="field-input text-[12px]"><option value="">Inherit active theme</option>{themes.map((theme) => <option key={theme.id} value={theme.id}>{theme.name}</option>)}</select></label>
+    <OverrideRange label="Text scale" value={value.font_scale ?? 1} min={0.7} max={1.5} step={0.05} format={(number) => `${Math.round(number * 100)}%`} onChange={(font_scale) => update({ font_scale })} />
+    <label className="block"><span className="field-label">Reference position</span><select value={value.reference_position ?? ""} onChange={(event) => update({ reference_position: (event.target.value || undefined) as PresentationItemOverride["reference_position"] })} className="field-input text-[12px]"><option value="">Inherit theme</option>{["top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"].map((position) => <option key={position} value={position}>{position.replace("-", " ")}</option>)}</select></label>
+    <div className="grid grid-cols-2 gap-2"><label className="block"><span className="field-label">Transition</span><select value={value.transition_type ?? ""} onChange={(event) => update({ transition_type: (event.target.value || undefined) as PresentationItemOverride["transition_type"] })} className="field-input text-[12px]"><option value="">Inherit</option><option value="fade">Fade</option><option value="slide">Slide up</option><option value="none">None</option></select></label><OverrideRange label="Duration" value={value.transition_duration ?? 300} min={0} max={1200} step={50} format={(number) => number ? `${number}ms` : "Instant"} onChange={(transition_duration) => update({ transition_duration })} /></div>
+    <label className="flex items-center justify-between gap-3 font-body-ui text-[12px] text-on-surface"><span>Auto-fit this verse</span><input type="checkbox" checked={value.auto_layout ?? true} onChange={(event) => update({ auto_layout: event.target.checked })} className="accent-primary" /></label>
+    <label className="flex items-center justify-between gap-3 font-body-ui text-[12px] text-on-surface"><span>Custom text boxes</span><input type="checkbox" checked={customBoxes} onChange={(event) => updateCustomBoxes(event.target.checked)} className="accent-primary" /></label>
+    {customBoxes && <div className="grid grid-cols-2 gap-x-3 gap-y-2"><OverrideRange label="Verse left" value={value.verse_box_x ?? 10} min={0} max={80} step={1} format={(number) => `${number}%`} onChange={(verse_box_x) => update({ verse_box_x })} /><OverrideRange label="Verse top" value={value.verse_box_y ?? 24} min={0} max={80} step={1} format={(number) => `${number}%`} onChange={(verse_box_y) => update({ verse_box_y })} /><OverrideRange label="Verse width" value={value.verse_box_width ?? 80} min={20} max={100} step={1} format={(number) => `${number}%`} onChange={(verse_box_width) => update({ verse_box_width })} /><OverrideRange label="Verse height" value={value.verse_box_height ?? 48} min={18} max={100} step={1} format={(number) => `${number}%`} onChange={(verse_box_height) => update({ verse_box_height })} /><OverrideRange label="Label left" value={value.reference_box_x ?? 10} min={0} max={80} step={1} format={(number) => `${number}%`} onChange={(reference_box_x) => update({ reference_box_x })} /><OverrideRange label="Label top" value={value.reference_box_y ?? 76} min={0} max={90} step={1} format={(number) => `${number}%`} onChange={(reference_box_y) => update({ reference_box_y })} /><OverrideRange label="Label width" value={value.reference_box_width ?? 80} min={16} max={100} step={1} format={(number) => `${number}%`} onChange={(reference_box_width) => update({ reference_box_width })} /><OverrideRange label="Label height" value={value.reference_box_height ?? 10} min={8} max={40} step={1} format={(number) => `${number}%`} onChange={(reference_box_height) => update({ reference_box_height })} /></div>}
+    <p className="font-body-ui text-[10px] leading-relaxed text-on-surface-variant">Only values set here override the selected theme for {item.book} {item.chapter}:{item.verse}.</p>
+  </div>;
+}
+
+function OverrideRange({ label, value, min, max, step, format, onChange }: { label: string; value: number; min: number; max: number; step: number; format: (value: number) => string; onChange: (value: number) => void }) {
+  return <label className="block"><span className="field-label flex justify-between gap-2"><span>{label}</span><span>{format(value)}</span></span><input className="w-full accent-primary" type="range" value={value} min={min} max={max} step={step} onChange={(event) => onChange(Number(event.target.value))} /></label>;
 }

@@ -13,6 +13,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "history",   icon: "history",    label: "History"   },
   { id: "modules",   icon: "extension",  label: "Modules"   },
   { id: "notes",     icon: "edit_note",  label: "Notes"     },
+  { id: "customize", icon: "palette",    label: "Customize" },
 ];
 
 interface Props {

@@ -22,10 +22,12 @@ import { createSearchSlice, type SearchSlice } from "./slices/searchSlice";
 import { createPresentationSlice, type PresentationSlice } from "./slices/presentationSlice";
 import { createServiceOrderSlice, type ServiceOrderSlice } from "./slices/serviceOrderSlice";
 import { createDisplayPrefsSlice, type DisplayPrefsSlice } from "./slices/displayPrefsSlice";
+import { createPresentationThemeSlice, type PresentationThemeSlice } from "./slices/presentationThemeSlice";
+import type { PresentationItemOverride } from "../lib/tauri";
 
 // ── Shared types (used by more than one slice, or by consumers outside the store) ──
 
-export type View = "reading" | "search" | "modules" | "bookmarks" | "notes" | "history";
+export type View = "reading" | "search" | "modules" | "bookmarks" | "notes" | "history" | "customize";
 export type Theme = "light" | "dark" | "system";
 export type SearchMode = "word" | "scripture";
 export type FontFamily = "system" | "serif" | "times" | "mono";
@@ -44,6 +46,7 @@ export interface ServiceItem {
   verse: number;
   text: string;   // plain-text preview (first ~100 chars of verse)
   module: string; // module ID active when added
+  presentation_override?: PresentationItemOverride | null;
 }
 
 export interface SearchHistoryEntry {
@@ -77,7 +80,8 @@ export type AppState = NavigationSlice &
   SearchSlice &
   PresentationSlice &
   ServiceOrderSlice &
-  DisplayPrefsSlice;
+  DisplayPrefsSlice &
+  PresentationThemeSlice;
 
 export const useAppStore = create<AppState>()((...a) => ({
   ...createNavigationSlice(...a),
@@ -88,4 +92,5 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createPresentationSlice(...a),
   ...createServiceOrderSlice(...a),
   ...createDisplayPrefsSlice(...a),
+  ...createPresentationThemeSlice(...a),
 }));

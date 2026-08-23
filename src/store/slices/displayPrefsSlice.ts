@@ -8,7 +8,9 @@ const DEFAULT_DISPLAY_PREFS: DisplayPrefs = {
   margins: 0,
   lineSpacing: 0.6,
   letterSpacing: 0,
-  strongsSheetHeight: 360,
+  // 0 is a sentinel StrongsSheet resolves to half the viewport height
+  // instead of a fixed pixel value — see resolveHeight in StrongsSheet.tsx.
+  strongsSheetHeight: 0,
   presentationContext: 1,
 };
 

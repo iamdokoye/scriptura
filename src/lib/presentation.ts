@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { DisplayPrefs } from "../store/app";
+import type { PresentationTheme } from "./tauri";
 
 export interface PresentState {
   book: string;
@@ -11,6 +12,7 @@ export interface PresentState {
   selectedStrongs: string | null;
   displayPrefs: DisplayPrefs;
   readingFontSize: number;
+  presentationTheme: PresentationTheme | null;
 }
 
 declare global {

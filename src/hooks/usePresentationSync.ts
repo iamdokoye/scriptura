@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { emitPresentation } from "../lib/presentation";
 import type { VerseRef, DisplayPrefs } from "../store/app";
+import type { PresentationTheme } from "../lib/tauri";
 
 /** Broadcasts the current reading state to the Scriptura Live window whenever it changes. */
 export function usePresentationSync(args: {
@@ -12,10 +13,11 @@ export function usePresentationSync(args: {
   selectedStrongs: string | null;
   displayPrefs: DisplayPrefs;
   readingFontSize: number;
+  presentationTheme: PresentationTheme | null;
 }) {
   const {
     presentationActive, primaryModule, currentRef, parallelModule,
-    parallelMode, selectedStrongs, displayPrefs, readingFontSize,
+    parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme,
   } = args;
 
   useEffect(() => {
@@ -30,6 +32,7 @@ export function usePresentationSync(args: {
       selectedStrongs,
       displayPrefs,
       readingFontSize,
+      presentationTheme,
     });
-  }, [presentationActive, currentRef, primaryModule, parallelModule, parallelMode, selectedStrongs, displayPrefs, readingFontSize]);
+  }, [presentationActive, currentRef, primaryModule, parallelModule, parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme]);
 }

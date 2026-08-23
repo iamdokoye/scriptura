@@ -53,7 +53,9 @@ export async function importLegacyLocalStorageIfNeeded(): Promise<void> {
           margins: Number(rawDisplayPrefs.margins ?? 0),
           line_spacing: Number(rawDisplayPrefs.lineSpacing ?? 0.6),
           letter_spacing: Number(rawDisplayPrefs.letterSpacing ?? 0),
-          strongs_sheet_height: Number(rawDisplayPrefs.strongsSheetHeight ?? 360),
+          // 0 is a sentinel StrongsSheet resolves to half the viewport
+          // height — see resolveHeight in StrongsSheet.tsx.
+          strongs_sheet_height: Number(rawDisplayPrefs.strongsSheetHeight ?? 0),
           presentation_context: Number(rawDisplayPrefs.presentationContext ?? 1),
         }
       : null,

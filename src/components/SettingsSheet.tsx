@@ -23,7 +23,9 @@ const DEFAULT_PREFS: Preferences = {
   margins: 0,
   line_spacing: 0.6,
   letter_spacing: 0,
-  strongs_sheet_height: 360,
+  // 0 is a sentinel StrongsSheet resolves to half the viewport height —
+  // see resolveHeight in StrongsSheet.tsx.
+  strongs_sheet_height: 0,
   presentation_context: 1,
 };
 

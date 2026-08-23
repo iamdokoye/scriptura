@@ -145,7 +145,6 @@ impl ModuleRegistry {
         }
     }
 
-    #[allow(dead_code)]
     pub fn modules_dir(&self) -> &Path {
         &self.modules_dir
     }

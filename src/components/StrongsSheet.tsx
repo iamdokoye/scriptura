@@ -3,11 +3,30 @@ import { useAppStore } from "../store/app";
 import { api, type StrongsEntry } from "../lib/tauri";
 import { useSheetVisibility } from "../hooks/useSheetVisibility";
 
-function useDraggableHeight(initial: number, onCommit: (h: number) => void) {
-  const [height, setHeight] = useState(initial);
-  const dragging = useRef(false);
+// 0 means "never explicitly set" (the persisted preference's own default) —
+// resolved to half the viewport height instead of a fixed pixel value so it
+// scales with the actual window rather than being cramped/oversized
+// depending on screen size. Once dragged even once, the real committed
+// pixel height persists from then on and this sentinel never applies again.
+function resolveHeight(stored: number): number {
+  return stored || Math.round(window.innerHeight * 0.5);
+}
 
-  useEffect(() => { setHeight(initial); }, [initial]);
+function useDraggableHeight(initial: number, onCommit: (h: number) => void) {
+  const [height, setHeight] = useState(() => resolveHeight(initial));
+  const dragging = useRef(false);
+  // onPointerMove can fire (and call setHeight) several times before React
+  // re-renders and re-attaches a fresh onPointerUp closure — reading `height`
+  // straight from that closure risked committing a stale, pre-drag value.
+  // This ref is updated in the same place as setHeight, so it's always
+  // current regardless of render timing.
+  const heightRef = useRef(height);
+
+  useEffect(() => {
+    const resolved = resolveHeight(initial);
+    heightRef.current = resolved;
+    setHeight(resolved);
+  }, [initial]);
 
   function onPointerDown(e: React.PointerEvent) {
     e.preventDefault();
@@ -21,13 +40,14 @@ function useDraggableHeight(initial: number, onCommit: (h: number) => void) {
       Math.max(180, window.innerHeight - e.clientY),
       Math.round(window.innerHeight * 0.9),
     );
+    heightRef.current = next;
     setHeight(next);
   }
 
   function onPointerUp() {
     if (!dragging.current) return;
     dragging.current = false;
-    onCommit(height);
+    onCommit(heightRef.current);
   }
 
   return { height, onPointerDown, onPointerMove, onPointerUp };
@@ -114,6 +134,34 @@ const FONT_FAMILY_CSS: Record<string, string> = {
   mono:   `"Courier New", Courier, monospace`,
 };
 
+// "ours" is always our bundled bare Strong's data; anything else is a
+// module_id understood by the get_strongs_entry command — either a SWORD
+// module or (for these) a STEPBible-Data source id handled by
+// src-tauri/src/sword/stepbible.rs, fetched from GitHub on first use and
+// cached locally.
+type LexiconSourceId = "ours" | string;
+
+interface LexiconPill {
+  id: LexiconSourceId;
+  label: string;
+}
+
+// Richer, public-domain companion lexicons keyed to the same Strong's
+// numbers as our bundled data, from STEPBible-Data (Tyndale House Cambridge,
+// CC BY 4.0). Language-specific, so the pill switcher only offers the ones
+// that apply to the number's own prefix.
+// - TBESG: Abbott-Smith (1922), corrected and gap-filled by Tyndale
+//   scholars, with a clean human-curated one-word gloss.
+// - TBESH: Hebrew, the full numbered Brown-Driver-Briggs sense breakdown
+//   (not just a short gloss).
+// - TFLSJ: the complete Liddell-Scott-Jones lexicon reformatted for Bible
+//   words — the deepest option (covers all of Greek literature, not just
+//   NT usage), Greek only.
+const LEXICON_PILLS: Record<"H" | "G", LexiconPill[]> = {
+  H: [{ id: "TBESH", label: "BDB" }],
+  G: [{ id: "TBESG", label: "Abbott-Smith" }, { id: "TFLSJ", label: "Full LSJ" }],
+};
+
 /**
  * `immediate` is used by the external presentation window. macOS may pause
  * requestAnimationFrame callbacks for an unfocused WKWebView, so a sheet that
@@ -134,6 +182,13 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [showMarkers, setShowMarkers] = useState(false);
+  const [showUsage, setShowUsage] = useState(false);
+  // Which lexicon to fetch from: our bundled bare Strong's data, or a richer
+  // supplementary lexicon for comparison (Abbott-Smith for Greek, BDB for
+  // Hebrew — see LEXICON_SOURCES below). Resets to "ours" on every new
+  // lookup so switching sources is a deliberate per-word choice.
+  const [source, setSource] = useState<LexiconSourceId>("ours");
+  useEffect(() => { setSource("ours"); }, [selectedStrongs, strongsGroup]);
 
   const drag = useDraggableHeight(
     displayPrefs.strongsSheetHeight,
@@ -187,16 +242,20 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
     setError(null);
     setEntries([]);
     setShowMarkers(false);
+    setShowUsage(false);
     Promise.all(
       numbers.map((num) => {
-        const lexModule = num.startsWith("G") ? "StrongsGreek" : "StrongsHebrew";
+        const lang = num.startsWith("G") ? "G" : "H";
+        const lexModule = source === "ours"
+          ? (lang === "G" ? "StrongsGreek" : "StrongsHebrew")
+          : source;
         return api.getStrongsEntry(lexModule, num, primaryModule);
       })
     )
       .then(setEntries)
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [selectedStrongs, strongsGroup, primaryModule]);
+  }, [selectedStrongs, strongsGroup, primaryModule, source]);
 
   // Escape key closes sheet
   useEffect(() => {
@@ -311,6 +370,25 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
           </div>
         </div>
 
+        {/* Lexicon source switcher — compare our bundled Strong's data
+            against richer companion lexicons for the same number. */}
+        <div className="flex items-center gap-1.5 px-6 py-2.5 border-b border-outline-variant shrink-0">
+          {([{ id: "ours", label: "Ours" }, ...LEXICON_PILLS[prefix]] as LexiconPill[]).map((pill) => (
+            <button
+              key={pill.id}
+              type="button"
+              className={`px-3 py-1 rounded-full font-body-ui text-[12px] font-medium transition-colors ${
+                source === pill.id
+                  ? "bg-primary text-on-primary"
+                  : "bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest"
+              }`}
+              onClick={() => setSource(pill.id)}
+            >
+              {pill.label}
+            </button>
+          ))}
+        </div>
+
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
           {loading && (
@@ -329,24 +407,25 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                     menu_book
                   </span>
                   <p className="font-body-ui text-[14px] text-on-surface-variant">
-                    {selectedStrongs?.startsWith("G")
-                      ? "Strong's Greek Dictionary"
-                      : "Strong's Hebrew Dictionary"}{" "}
+                    {source === "ours"
+                      ? (prefix === "G" ? "Strong's Greek Dictionary" : "Strong's Hebrew Dictionary")
+                      : LEXICON_PILLS[prefix].find((p) => p.id === source)?.label ?? source}{" "}
                     not installed.
                   </p>
                 </div>
               ) : error.includes("not found") ? (
                 // The dictionary module IS installed — this specific number
                 // just isn't in it (a real, if rare, gap in that module's own
-                // data — a full-Bible audit found ~30 such Greek numbers).
-                // "Not installed" would be actively misleading here.
+                // data — a full-Bible audit found ~30 such Greek numbers, and
+                // the supplementary lexicons cover a partial, if large,
+                // subset of numbers too). "Not installed" would be actively
+                // misleading here.
                 <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
                   <span className="material-symbols-outlined text-[40px] text-on-surface-variant">
                     search_off
                   </span>
                   <p className="font-body-ui text-[14px] text-on-surface-variant">
-                    No dictionary entry for Strong's {selectedStrongs} — this appears to be a gap
-                    in this Strong's {selectedStrongs?.startsWith("G") ? "Greek" : "Hebrew"} module's own data.
+                    No entry for Strong's {selectedStrongs} in {source === "ours" ? "this dictionary" : (LEXICON_PILLS[prefix].find((p) => p.id === source)?.label ?? source)}.
                   </p>
                 </div>
               ) : (
@@ -356,8 +435,53 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
           )}
 
           {!loading && !error && entry && (
-            <div className="px-6 py-5 grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-6">
-              {/* Left: Definition + Full entry */}
+            <div className="px-6 py-5 space-y-5">
+              {/* Usage was a persistent 220px side column that squeezed the
+                  definition down to a narrower measure on every screen — now
+                  a collapsed bar so the definition/lexicon entry can use the
+                  sheet's full width, matching how the marker disclosure
+                  below already behaves. */}
+              <button
+                type="button"
+                className="w-full flex items-center justify-between px-3 py-2 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant font-metadata-mono text-[11px] uppercase tracking-widest transition-colors"
+                onClick={() => setShowUsage((v) => !v)}
+              >
+                <span>{entry.usage_count > 0 ? `Occurs ${entry.usage_count}× in the Bible` : "Usage"}</span>
+                <span className="material-symbols-outlined text-[16px]">
+                  {showUsage ? "expand_less" : "expand_more"}
+                </span>
+              </button>
+              {showUsage && (
+                <div className="rounded border border-outline-variant p-4">
+                  {entry.usage_count > 0 ? (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5">
+                        {entry.usage_by_book.map((u) => (
+                          <div
+                            key={u.book}
+                            className="flex items-center justify-between py-1 px-1.5 rounded hover:bg-surface-container-low transition-colors"
+                          >
+                            <span className="font-body-ui text-[13px] text-on-surface">
+                              {u.book}
+                            </span>
+                            <span className="font-metadata-mono text-[11px] text-on-surface-variant tabular-nums">
+                              {u.count}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <button className="mt-3 w-full py-1.5 border border-outline-variant text-on-surface font-body-ui text-[12px] rounded hover:bg-surface-container-low transition-colors">
+                        Search all occurrences
+                      </button>
+                    </>
+                  ) : (
+                    <p className="font-body-ui text-[13px] text-on-surface-variant italic">
+                      Usage data will be available after the index finishes building.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-5">
                 <section>
                   <p className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-2">
@@ -442,42 +566,6 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                       </div>
                     )}
                   </section>
-                )}
-              </div>
-
-              {/* Right: Usage */}
-              <div>
-                <p className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-3">
-                  {entry.usage_count > 0
-                    ? `Occurs ${entry.usage_count}× in the Bible`
-                    : "Usage"}
-                </p>
-
-                {entry.usage_count > 0 ? (
-                  <>
-                    <div className="space-y-0.5">
-                      {entry.usage_by_book.map((u) => (
-                        <div
-                          key={u.book}
-                          className="flex items-center justify-between py-1 px-1.5 rounded hover:bg-surface-container-low transition-colors"
-                        >
-                          <span className="font-body-ui text-[13px] text-on-surface">
-                            {u.book}
-                          </span>
-                          <span className="font-metadata-mono text-[11px] text-on-surface-variant tabular-nums">
-                            {u.count}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    <button className="mt-3 w-full py-1.5 border border-outline-variant text-on-surface font-body-ui text-[12px] rounded hover:bg-surface-container-low transition-colors">
-                      Search all occurrences
-                    </button>
-                  </>
-                ) : (
-                  <p className="font-body-ui text-[13px] text-on-surface-variant italic">
-                    Usage data will be available after the index finishes building.
-                  </p>
                 )}
               </div>
             </div>

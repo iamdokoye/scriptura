@@ -11,12 +11,13 @@ import SearchHistory from "./views/SearchHistory";
 import BookmarksNotes from "./views/BookmarksNotes";
 import ServiceOrderPanel from "./components/ServiceOrderPanel";
 import ErrorBoundary from "./components/ErrorBoundary";
+import CustomizationStudio from "./views/CustomizationStudio";
 
 export default function App() {
   const {
     view, theme, setTheme, hasModules, setHasModules, setPrimaryModule, setCurrentRef, setView,
     setShowStrongs, setReadingFontSize, isFullscreen, serviceOrderOpen, setServiceOrderOpen,
-    hydrateDisplayPrefs, hydrateStudyTools, hydrateSearchHistory, hydrateServiceOrder,
+    hydrateDisplayPrefs, hydrateStudyTools, hydrateSearchHistory, hydrateServiceOrder, hydratePresentationThemes,
   } = useAppStore();
 
   // Apply theme class to root element
@@ -42,12 +43,13 @@ export default function App() {
       try {
         await importLegacyLocalStorageIfNeeded();
 
-        const [modules, pos, prefs, searchHistory, serviceOrder] = await Promise.all([
+        const [modules, pos, prefs, searchHistory, serviceOrder, presentationThemes] = await Promise.all([
           api.listInstalledModules(),
           api.getReadingPosition(),
           api.getPreferences(),
           api.listSearchHistory(),
           api.listServiceOrder(),
+          api.listPresentationThemes(),
         ]);
 
         setTheme(prefs.theme);
@@ -57,6 +59,7 @@ export default function App() {
         hydrateStudyTools(prefs);
         hydrateSearchHistory(searchHistory);
         hydrateServiceOrder(serviceOrder);
+        hydratePresentationThemes(presentationThemes);
 
         // Auto-install reference modules silently — always, even on first launch
         const installedIds = new Set(modules.map((m) => m.id));
@@ -65,6 +68,15 @@ export default function App() {
             api.installModule(id).catch(() => {});
           }
         }
+
+        // STEPBible-Data's richer companion lexicons (see the Strong's sheet's
+        // pill switcher) aren't SWORD modules, so they don't go through
+        // installModule — pre-fetch the two smaller ones now so the first
+        // pill click doesn't have to wait on a multi-second download. The
+        // full LSJ lexicon (~32MB, opt-in "deep dive" tier) stays lazy —
+        // fetched on first actual use instead.
+        api.ensureStepBibleLexicon("TBESG").catch(() => {});
+        api.ensureStepBibleLexicon("TBESH").catch(() => {});
 
         if (modules.length === 0) {
           setHasModules(false);
@@ -121,6 +133,11 @@ export default function App() {
           {view === "history" && (
             <ErrorBoundary label="History" onReset={() => setView("reading")} resetLabel="Go to Reading">
               <SearchHistory />
+            </ErrorBoundary>
+          )}
+          {view === "customize" && (
+            <ErrorBoundary label="Customization Studio" onReset={() => setView("reading")} resetLabel="Go to Reading">
+              <CustomizationStudio />
             </ErrorBoundary>
           )}
           {(view === "bookmarks" || view === "notes") && (

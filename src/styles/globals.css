@@ -146,6 +146,38 @@
 ::-webkit-scrollbar-thumb { background: rgb(var(--col-outline-variant)); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgb(var(--col-outline)); }
 
+@layer components {
+  .field-label { @apply block mb-1.5 font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant; }
+  .field-input { @apply w-full h-9 px-2.5 rounded-DEFAULT border border-outline-variant bg-surface text-on-surface font-body-ui text-[13px] outline-none focus:border-primary; }
+}
+
+/* Live output uses CSS variables so a saved theme updates every Scripture
+   layout—single verse, context, and chapter—without divergent rules. */
+.presentation-output .text-white { color: var(--presentation-text) !important; }
+.presentation-output .text-white\/60 { color: var(--presentation-reference) !important; }
+.presentation-output .text-white\/40,
+.presentation-output .text-white\/30,
+.presentation-output .text-white\/25,
+.presentation-output .text-white\/20 { color: color-mix(in srgb, var(--presentation-reference), transparent 55%) !important; }
+.presentation-output p { text-shadow: var(--presentation-shadow); }
+
+.presentation-transition-fade { animation: presentation-fade var(--presentation-transition-duration, 300ms) ease-out both; }
+.presentation-transition-slide { animation: presentation-slide-up var(--presentation-transition-duration, 300ms) cubic-bezier(.2, .8, .2, 1) both; }
+
+@keyframes presentation-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes presentation-slide-up {
+  from { opacity: 0; transform: translateY(3%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .presentation-transition-fade, .presentation-transition-slide { animation: none; }
+}
+
 /* ── Material Symbols ──────────────────────────────────────────────────── */
 /* These rules replicate what the Google Fonts CDN stylesheet provided.
    font-family assigns the custom font; font-feature-settings enables the

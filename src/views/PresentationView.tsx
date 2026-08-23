@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { listenPresentation, type PresentState } from "../lib/presentation";
-import { api, type ChapterText } from "../lib/tauri";
+import { api, type ChapterText, type PresentationTheme } from "../lib/tauri";
 import StrongsSheet from "../components/StrongsSheet";
 import { useShrinkToFit } from "../hooks/useShrinkToFit";
 import { useAppStore, type DisplayPrefs } from "../store/app";
@@ -17,15 +17,52 @@ interface TextStyle {
   fontFamily: string;
   lineHeight: number;
   letterSpacing: string;
+  color: string;
+  textAlign: "left" | "center" | "right" | "justify";
+  fontWeight: number;
+  textShadow?: string;
 }
 
-function makeTextStyle(prefs: DisplayPrefs, fontSize: number): TextStyle {
+const PresentationThemeContext = createContext<PresentationTheme | null>(null);
+
+function makeTextStyle(prefs: DisplayPrefs, fontSize: number, theme: PresentationTheme | null): TextStyle {
   return {
-    fontSize: `${fontSize}px`,
-    fontFamily: FONT_FAMILY_CSS[prefs.fontFamily] ?? FONT_FAMILY_CSS.system,
+    fontSize: `${fontSize * (theme?.font_scale ?? 1)}px`,
+    fontFamily: FONT_FAMILY_CSS[theme?.font_family ?? prefs.fontFamily] ?? FONT_FAMILY_CSS.system,
     lineHeight: 1 + prefs.lineSpacing,
     letterSpacing: `${prefs.letterSpacing * 0.1}em`,
+    color: theme?.text_color ?? "#ffffff",
+    textAlign: (theme?.text_align as TextStyle["textAlign"] | undefined) ?? prefs.textAlign,
+    fontWeight: theme?.text_font_weight ?? 600,
+    textShadow: theme?.text_shadow ? "0 2px 12px rgba(0,0,0,.75)" : undefined,
   };
+}
+
+function referenceStyle(theme: PresentationTheme | null, fontSize: number): React.CSSProperties {
+  return {
+    color: theme?.reference_color ?? "#b8c4d8",
+    fontSize: `${fontSize * (theme?.reference_font_scale ?? 1)}px`,
+    fontWeight: theme?.reference_font_weight ?? 500,
+  };
+}
+
+function referenceIsTop(theme: PresentationTheme | null) {
+  return (theme?.reference_position ?? "bottom-center").startsWith("top-");
+}
+
+function referenceAlignment(theme: PresentationTheme | null) {
+  const position = theme?.reference_position ?? "bottom-center";
+  return position.endsWith("-left") ? "justify-start" : position.endsWith("-right") ? "justify-end" : "justify-center";
+}
+
+function ReferenceLabel({ label, module, fontSize }: { label: string; module: string; fontSize: number }) {
+  const presentationTheme = useContext(PresentationThemeContext);
+  return (
+    <div className={`flex items-center gap-3 shrink-0 w-full ${referenceAlignment(presentationTheme)}`}>
+      <span className="font-metadata-mono text-white/60" style={referenceStyle(presentationTheme, fontSize)}>{label}</span>
+      <span className="font-metadata-mono text-white/30 border border-white/20 rounded px-2 py-0.5" style={referenceStyle(presentationTheme, Math.max(10, fontSize - 3))}>{module}</span>
+    </div>
+  );
 }
 
 export default function PresentationView() {
@@ -85,34 +122,44 @@ export default function PresentationView() {
   const prefs = state.displayPrefs;
   // 5% baseline keeps text off the edges even at margins=0;
   // the margins slider adds on top of that (same half-each-side formula as the reading view)
-  const hPad = `${5 + prefs.margins / 2}%`;
+  const presentationTheme = state.presentationTheme;
+  const hPad = `${presentationTheme?.safe_margin ?? (5 + prefs.margins / 2)}%`;
+  const themeStyle: React.CSSProperties = {
+    background: presentationTheme?.background_gradient || presentationTheme?.background_color || "#000000",
+    "--presentation-text": presentationTheme?.text_color ?? "#ffffff",
+    "--presentation-reference": presentationTheme?.reference_color ?? "#b8c4d8",
+    "--presentation-shadow": presentationTheme?.text_shadow ? "0 2px 12px rgba(0,0,0,.75)" : "none",
+    "--presentation-transition-duration": `${presentationTheme?.transition_duration ?? 0}ms`,
+  } as React.CSSProperties;
 
   return (
-    <div className="h-screen bg-black text-white flex flex-col overflow-hidden select-none">
-      <div className="flex-1 overflow-hidden">
-        {ctx === 4 ? (
-          <ScrollLayout
-            state={state}
-            chapter={chapter}
-            parallelChapter={parallelChapter}
-            fontSize={fontSize}
-            prefs={prefs}
-            hPad={hPad}
-          />
-        ) : (
-          <ContextLayout
-            ctx={ctx}
-            state={state}
-            chapter={chapter}
-            parallelChapter={parallelChapter}
-            fontSize={fontSize}
-            prefs={prefs}
-            hPad={hPad}
-          />
-        )}
+    <PresentationThemeContext.Provider value={presentationTheme}>
+      <div className="presentation-output h-screen flex flex-col overflow-hidden select-none" style={themeStyle}>
+        <div key={`${state.book}-${state.chapter}-${state.verse}-${state.primaryModule}`} className={`flex-1 overflow-hidden presentation-transition presentation-transition-${presentationTheme?.transition_type ?? "none"}`}>
+          {ctx === 4 ? (
+            <ScrollLayout
+              state={state}
+              chapter={chapter}
+              parallelChapter={parallelChapter}
+              fontSize={fontSize}
+              prefs={prefs}
+              hPad={hPad}
+            />
+          ) : (
+            <ContextLayout
+              ctx={ctx}
+              state={state}
+              chapter={chapter}
+              parallelChapter={parallelChapter}
+              fontSize={fontSize}
+              prefs={prefs}
+              hPad={hPad}
+            />
+          )}
+        </div>
+        <StrongsSheet immediate />
       </div>
-      <StrongsSheet immediate />
-    </div>
+    </PresentationThemeContext.Provider>
   );
 }
 
@@ -127,6 +174,7 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
   prefs: DisplayPrefs;
   hPad: string;
 }) {
+  const presentationTheme = useContext(PresentationThemeContext);
   const idx = chapter.verses.findIndex((v) => v.verse === state.verse);
   const prev = ctx === 3 && idx > 0 ? chapter.verses[idx - 1] : null;
   const active = chapter.verses[idx] ?? null;
@@ -142,11 +190,14 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
 
   const ref = `${state.book} ${state.chapter}:${state.verse}`;
   // Context verses (prev/next) render at 68% of the active size
-  const contextStyle = makeTextStyle(prefs, Math.round(fontSize * 0.68));
+  const contextStyle = makeTextStyle(prefs, Math.round(fontSize * 0.68), presentationTheme);
   const refSize = Math.max(12, Math.round(fontSize * 0.28));
 
   // Single verse — vertically centred, shrunk to fit if it's long
   if (ctx === 1) {
+    if (!state.parallelMode && presentationTheme) {
+      return <FreeformVerseLayout text={verseText(active)} reference={ref} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} refSize={refSize} theme={presentationTheme} />;
+    }
     return (
       <div className="h-full flex items-center justify-center" style={{ paddingLeft: hPad, paddingRight: hPad }}>
         {state.parallelMode && parallelChapter ? (
@@ -214,6 +265,7 @@ function ContextVerseBlock({ text, label, module, prefs, maxFontSize, contextSty
   active: boolean;
   dim?: boolean;
 }) {
+  const presentationTheme = useContext(PresentationThemeContext);
   if (!active) {
     return (
       <div className={`flex flex-col gap-3 ${dim ? "opacity-60" : ""}`}>
@@ -224,11 +276,9 @@ function ContextVerseBlock({ text, label, module, prefs, maxFontSize, contextSty
 
   return (
     <div className={`flex flex-col gap-3 h-full ${dim ? "opacity-60" : ""}`}>
+      {referenceIsTop(presentationTheme) && <ReferenceLabel label={label} module={module} fontSize={refSize} />}
       <ShrinkingVerseText text={text} maxFontSize={maxFontSize} prefs={prefs} />
-      <div className="flex items-center gap-3 shrink-0">
-        <span className="font-metadata-mono text-white/60" style={{ fontSize: refSize }}>{label}</span>
-        <span className="font-metadata-mono text-white/30 border border-white/20 rounded px-2 py-0.5" style={{ fontSize: Math.max(10, refSize - 3) }}>{module}</span>
-      </div>
+      {!referenceIsTop(presentationTheme) && <ReferenceLabel label={label} module={module} fontSize={refSize} />}
     </div>
   );
 }
@@ -241,26 +291,79 @@ function ContextVerseBlock({ text, label, module, prefs, maxFontSize, contextSty
 // verse still reads as an intentional, narrower centered block.
 const SINGLE_VERSE_WIDTH_RANGE = { min: 55, max: 100 };
 
-function ShrinkingVerseText({ text, maxFontSize, prefs, centered, widen }: {
+function ShrinkingVerseText({ text, maxFontSize, prefs, centered, widen, maxHeightVh }: {
   text: string;
   maxFontSize: number;
   prefs: DisplayPrefs;
   centered?: boolean;
   widen?: boolean;
+  /**
+   * ScrollLayout's active verse (ctx=4) needs a different sizing strategy
+   * than ctx 1-3: those give this a definite h-full parent to always fill,
+   * but here the block sits inline in a scrolling list of other (dimmed)
+   * verses — forcing it to always occupy a fixed height would push those
+   * away even when the verse already fits fine. `max-height` + overflow
+   * only clamps (and only then triggers the shrink loop) when the verse is
+   * actually taller than the budget, e.g. Esther 9:8's ten-name list.
+   */
+  maxHeightVh?: number;
 }) {
+  const presentationTheme = useContext(PresentationThemeContext);
+  const minSize = presentationTheme
+    ? (presentationTheme.auto_layout ? Math.max(14, maxFontSize * presentationTheme.min_font_scale) : maxFontSize)
+    : 24;
   const { containerRef, textRef, fontSize, widthPct } = useShrinkToFit({
     text,
     maxSize: maxFontSize,
+    minSize,
     widthRange: widen ? SINGLE_VERSE_WIDTH_RANGE : undefined,
   });
-  const style = makeTextStyle(prefs, fontSize);
+  const style = makeTextStyle(prefs, fontSize, presentationTheme);
+  const containerStyle: React.CSSProperties = {
+    ...(widen ? { width: `${widthPct}%` } : undefined),
+    ...(maxHeightVh ? { maxHeight: `${maxHeightVh}vh` } : undefined),
+  };
   return (
     <div
       ref={containerRef}
-      className="flex-1 min-h-0 flex flex-col justify-center overflow-hidden"
-      style={widen ? { width: `${widthPct}%` } : undefined}
+      className={maxHeightVh
+        ? "flex flex-col justify-center overflow-hidden"
+        : "flex-1 min-h-0 flex flex-col justify-center overflow-hidden"}
+      style={containerStyle}
     >
       <p ref={textRef} className={`text-white ${centered ? "text-center" : ""}`} style={style}>{text}</p>
+    </div>
+  );
+}
+
+// Freeform boxes are intentionally used for the single-verse layout, where an
+// operator expects a slide-like canvas. Context and chapter modes stay in their
+// structured reading layouts so adjacent verses retain their visual hierarchy.
+function FreeformVerseLayout({ text, reference, module, prefs, maxFontSize, refSize, theme }: {
+  text: string;
+  reference: string;
+  module: string;
+  prefs: DisplayPrefs;
+  maxFontSize: number;
+  refSize: number;
+  theme: PresentationTheme;
+}) {
+  const verseBox: React.CSSProperties = {
+    left: `${theme.verse_box_x}%`, top: `${theme.verse_box_y}%`,
+    width: `${theme.verse_box_width}%`, height: `${theme.verse_box_height}%`,
+  };
+  const referenceBox: React.CSSProperties = {
+    left: `${theme.reference_box_x}%`, top: `${theme.reference_box_y}%`,
+    width: `${theme.reference_box_width}%`, height: `${theme.reference_box_height}%`,
+  };
+  return (
+    <div className="relative h-full overflow-hidden">
+      <div className="absolute flex items-center overflow-hidden" style={verseBox}>
+        <ShrinkingVerseText text={text} maxFontSize={maxFontSize} prefs={prefs} centered={theme.text_align === "center"} widen={false} />
+      </div>
+      <div className={`absolute flex items-center ${referenceAlignment(theme)}`} style={referenceBox}>
+        <ReferenceLabel label={reference} module={module} fontSize={refSize} />
+      </div>
     </div>
   );
 }
@@ -275,6 +378,7 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad }
   prefs: DisplayPrefs;
   hPad: string;
 }) {
+  const presentationTheme = useContext(PresentationThemeContext);
   const activeRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -282,14 +386,14 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad }
   }, [state.book, state.chapter, state.verse, chapter]);
 
   const ref = `${state.book} ${state.chapter}`;
-  const textStyle = makeTextStyle(prefs, fontSize);
+  const textStyle = makeTextStyle(prefs, fontSize, presentationTheme);
   const verseNumSize = Math.max(10, Math.round(fontSize * 0.28));
 
   return (
     <div className="h-full overflow-y-auto py-12" style={{ paddingLeft: hPad, paddingRight: hPad }}>
       <p
         className="font-metadata-mono text-white/40 mb-8 tracking-widest uppercase"
-        style={{ fontSize: verseNumSize }}
+        style={referenceStyle(presentationTheme, verseNumSize)}
       >
         {ref} · {state.primaryModule}
         {state.parallelMode && state.parallelModule && (
@@ -313,11 +417,11 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad }
             >
               {state.parallelMode && parallelChapter ? (
                 <div className="grid grid-cols-2 gap-12">
-                  <ScrollVerseBlock verse={v.verse} text={text} active={isActive} textStyle={textStyle} verseNumSize={verseNumSize} />
-                  <ScrollVerseBlock verse={v.verse} text={parallelText} active={isActive} textStyle={textStyle} verseNumSize={verseNumSize} dim />
+                  <ScrollVerseBlock verse={v.verse} text={text} active={isActive} textStyle={textStyle} verseNumSize={verseNumSize} fontSize={fontSize} prefs={prefs} />
+                  <ScrollVerseBlock verse={v.verse} text={parallelText} active={isActive} textStyle={textStyle} verseNumSize={verseNumSize} fontSize={fontSize} prefs={prefs} dim />
                 </div>
               ) : (
-                <ScrollVerseBlock verse={v.verse} text={text} active={isActive} textStyle={textStyle} verseNumSize={verseNumSize} />
+                <ScrollVerseBlock verse={v.verse} text={text} active={isActive} textStyle={textStyle} verseNumSize={verseNumSize} fontSize={fontSize} prefs={prefs} />
               )}
             </div>
           );
@@ -327,23 +431,41 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad }
   );
 }
 
-function ScrollVerseBlock({ verse, text, active, textStyle, verseNumSize, dim }: {
+// Full-chapter scroll mode still scrolls verse-to-verse as normal, but the
+// active verse itself shouldn't require *additional* scrolling within the
+// presentation screen to read in full — a long verse (e.g. Esther 9:8's
+// ten-name list) can be taller than the viewport even after being centered.
+const ACTIVE_VERSE_MAX_HEIGHT_VH = 75;
+
+function ScrollVerseBlock({ verse, text, active, textStyle, verseNumSize, dim, fontSize, prefs }: {
   verse: number;
   text: string;
   active: boolean;
   textStyle: TextStyle;
   verseNumSize: number;
   dim?: boolean;
+  fontSize: number;
+  prefs: DisplayPrefs;
 }) {
+  const presentationTheme = useContext(PresentationThemeContext);
   return (
-    <div className={`flex gap-4 ${dim ? "opacity-60" : ""}`}>
+    // items-start matters here, not just cosmetics: without it, the active
+    // verse's shrink-to-fit container (a flex row sibling with only
+    // max-height, no explicit height) gets pulled into this row's default
+    // stretch behavior, and its clientHeight reads as 0 mid-measurement —
+    // found via direct browser testing of this exact layout.
+    <div className={`flex items-start gap-4 ${dim ? "opacity-60" : ""}`}>
       <span
         className={`font-metadata-mono shrink-0 mt-1 ${active ? "text-white/60" : "text-white/20"}`}
-        style={{ fontSize: verseNumSize }}
+        style={referenceStyle(presentationTheme, verseNumSize)}
       >
         {verse}
       </span>
-      <p className="text-white" style={textStyle}>{text}</p>
+      {active ? (
+        <ShrinkingVerseText text={text} maxFontSize={fontSize} prefs={prefs} maxHeightVh={ACTIVE_VERSE_MAX_HEIGHT_VH} />
+      ) : (
+        <p className="text-white" style={textStyle}>{text}</p>
+      )}
     </div>
   );
 }
@@ -359,13 +481,12 @@ function VerseColumn({ text, reference, module, prefs, maxFontSize, refSize, dim
   centered?: boolean;
   widen?: boolean;
 }) {
+  const presentationTheme = useContext(PresentationThemeContext);
   return (
     <div className={`flex flex-col gap-6 h-full ${centered ? "items-center" : ""} ${dim ? "opacity-60" : ""}`}>
+      {referenceIsTop(presentationTheme) && <ReferenceLabel label={reference} module={module} fontSize={refSize} />}
       <ShrinkingVerseText text={text} maxFontSize={maxFontSize} prefs={prefs} centered={centered} widen={widen} />
-      <div className={`flex items-center gap-3 shrink-0 ${centered ? "justify-center" : ""}`}>
-        <span className="font-metadata-mono text-white/60" style={{ fontSize: refSize }}>{reference}</span>
-        <span className="font-metadata-mono text-white/30 border border-white/20 rounded px-2 py-0.5" style={{ fontSize: Math.max(10, refSize - 3) }}>{module}</span>
-      </div>
+      {!referenceIsTop(presentationTheme) && <ReferenceLabel label={reference} module={module} fontSize={refSize} />}
     </div>
   );
 }

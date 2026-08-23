@@ -160,6 +160,29 @@ export interface ServiceOrderItem {
   verse: number;
   text: string;
   module: string;
+  presentation_override?: PresentationItemOverride | null;
+}
+
+/** Sparse item-level changes layered over a selected presentation theme. */
+export interface PresentationItemOverride {
+  theme_id?: string;
+  font_scale?: number;
+  text_font_weight?: number;
+  reference_font_scale?: number;
+  reference_font_weight?: number;
+  reference_position?: "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right";
+  verse_box_x?: number;
+  verse_box_y?: number;
+  verse_box_width?: number;
+  verse_box_height?: number;
+  reference_box_x?: number;
+  reference_box_y?: number;
+  reference_box_width?: number;
+  reference_box_height?: number;
+  auto_layout?: boolean;
+  min_font_scale?: number;
+  transition_type?: "none" | "fade" | "slide";
+  transition_duration?: number;
 }
 
 /** Legacy browser localStorage payloads for the one-time import into SQLite. */
@@ -190,6 +213,41 @@ export interface CrossReference {
   end_verse?: number;
 }
 
+export interface PresentationTheme {
+  id: string;
+  name: string;
+  background_color: string;
+  background_gradient: string | null;
+  text_color: string;
+  reference_color: string;
+  font_family: string;
+  text_align: "left" | "center" | "right";
+  font_scale: number;
+  text_font_weight: number;
+  reference_font_scale: number;
+  reference_font_weight: number;
+  safe_margin: number;
+  text_shadow: boolean;
+  reference_position: "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right";
+  verse_box_x: number;
+  verse_box_y: number;
+  verse_box_width: number;
+  verse_box_height: number;
+  reference_box_x: number;
+  reference_box_y: number;
+  reference_box_width: number;
+  reference_box_height: number;
+  auto_layout: boolean;
+  min_font_scale: number;
+  transition_type: "none" | "fade" | "slide";
+  transition_duration: number;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PresentationThemeInput = Omit<PresentationTheme, "id" | "is_default" | "created_at" | "updated_at">;
+
 // ── Command wrappers ─────────────────────────────────────────────────────────
 
 // Tauri 2.0 renames snake_case Rust command params to camelCase in invoke().
@@ -207,6 +265,11 @@ export const api = {
       strongsNumber: strongs_number,
       bibleModuleId: bible_module_id,
     }),
+
+  // Pre-fetches a STEPBible-Data companion lexicon ("TBESG" | "TBESH" |
+  // "TFLSJ") so it's cached before the user's first lookup.
+  ensureStepBibleLexicon: (source_id: string) =>
+    invoke<void>("ensure_stepbible_lexicon", { sourceId: source_id }),
 
   search: (query: string, options: SearchOptions) =>
     invoke<SearchResult[]>("search", { query, options }),
@@ -272,6 +335,21 @@ export const api = {
   // from the authoritative result instead of assuming their patch applied as-is.
   setPreferences: (prefs: Partial<Preferences>) =>
     invoke<Preferences>("set_preferences", { prefs }),
+
+  listPresentationThemes: () =>
+    invoke<PresentationTheme[]>("list_presentation_themes"),
+
+  createPresentationTheme: (theme: PresentationThemeInput) =>
+    invoke<PresentationTheme>("create_presentation_theme", { theme }),
+
+  updatePresentationTheme: (id: string, theme: PresentationThemeInput) =>
+    invoke<PresentationTheme>("update_presentation_theme", { id, theme }),
+
+  deletePresentationTheme: (id: string) =>
+    invoke<void>("delete_presentation_theme", { id }),
+
+  setDefaultPresentationTheme: (id: string) =>
+    invoke<PresentationTheme>("set_default_presentation_theme", { id }),
 
   listMonitors: () =>
     invoke<MonitorInfo[]>("list_monitors"),

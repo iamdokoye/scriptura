@@ -230,6 +230,74 @@ pub struct Preferences {
     pub presentation_context: u32,
 }
 
+/// A reusable presentation design for Scripture output. The data model is
+/// deliberately content-oriented so the same library can later power songs,
+/// announcements, and confidence displays.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PresentationTheme {
+    pub id: String,
+    pub name: String,
+    pub background_color: String,
+    pub background_gradient: Option<String>,
+    pub text_color: String,
+    pub reference_color: String,
+    pub font_family: String,
+    pub text_align: String,
+    pub font_scale: f64,
+    pub text_font_weight: u32,
+    pub reference_font_scale: f64,
+    pub reference_font_weight: u32,
+    pub safe_margin: u32,
+    pub text_shadow: bool,
+    pub reference_position: String,
+    pub verse_box_x: f64,
+    pub verse_box_y: f64,
+    pub verse_box_width: f64,
+    pub verse_box_height: f64,
+    pub reference_box_x: f64,
+    pub reference_box_y: f64,
+    pub reference_box_width: f64,
+    pub reference_box_height: f64,
+    pub auto_layout: bool,
+    pub min_font_scale: f64,
+    pub transition_type: String,
+    pub transition_duration: u32,
+    pub is_default: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// The editable subset accepted when making or updating a presentation theme.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PresentationThemeInput {
+    pub name: String,
+    pub background_color: String,
+    pub background_gradient: Option<String>,
+    pub text_color: String,
+    pub reference_color: String,
+    pub font_family: String,
+    pub text_align: String,
+    pub font_scale: f64,
+    pub text_font_weight: u32,
+    pub reference_font_scale: f64,
+    pub reference_font_weight: u32,
+    pub safe_margin: u32,
+    pub text_shadow: bool,
+    pub reference_position: String,
+    pub verse_box_x: f64,
+    pub verse_box_y: f64,
+    pub verse_box_width: f64,
+    pub verse_box_height: f64,
+    pub reference_box_x: f64,
+    pub reference_box_y: f64,
+    pub reference_box_width: f64,
+    pub reference_box_height: f64,
+    pub auto_layout: bool,
+    pub min_font_scale: f64,
+    pub transition_type: String,
+    pub transition_duration: u32,
+}
+
 impl Default for Preferences {
     fn default() -> Self {
         Self {
@@ -250,7 +318,12 @@ impl Default for Preferences {
             margins: 0,
             line_spacing: 0.6,
             letter_spacing: 0.0,
-            strongs_sheet_height: 360,
+            // 0 is a sentinel the frontend resolves to half the viewport
+            // height (see resolveHeight in StrongsSheet.tsx) instead of a
+            // fixed pixel value that would be cramped or oversized depending
+            // on screen size. It never reapplies once the sheet is dragged
+            // even once, since the real pixel height gets persisted then.
+            strongs_sheet_height: 0,
             presentation_context: 1,
         }
     }
@@ -274,6 +347,34 @@ pub struct ServiceOrderItem {
     pub verse: u32,
     pub text: String,
     pub module: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub presentation_override: Option<PresentationItemOverride>,
+}
+
+/// An optional, sparse presentation change attached to one service item. A
+/// missing property inherits from the selected global theme; this lets an
+/// operator adjust a difficult verse without creating another full theme.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct PresentationItemOverride {
+    pub theme_id: Option<String>,
+    pub font_scale: Option<f64>,
+    pub text_font_weight: Option<u32>,
+    pub reference_font_scale: Option<f64>,
+    pub reference_font_weight: Option<u32>,
+    pub reference_position: Option<String>,
+    pub verse_box_x: Option<f64>,
+    pub verse_box_y: Option<f64>,
+    pub verse_box_width: Option<f64>,
+    pub verse_box_height: Option<f64>,
+    pub reference_box_x: Option<f64>,
+    pub reference_box_y: Option<f64>,
+    pub reference_box_width: Option<f64>,
+    pub reference_box_height: Option<f64>,
+    pub auto_layout: Option<bool>,
+    pub min_font_scale: Option<f64>,
+    pub transition_type: Option<String>,
+    pub transition_duration: Option<u32>,
 }
 
 /// Legacy browser localStorage payloads, submitted once by the frontend to

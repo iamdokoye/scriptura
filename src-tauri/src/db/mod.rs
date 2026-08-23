@@ -58,6 +58,11 @@ impl Database {
             (3, SCHEMA_V3_STRONGS_RESET),
             (4, SCHEMA_V4_CONSOLIDATE_STORAGE),
             (5, SCHEMA_V5_STRONGS_MULTIPLE_KEYS_RESET),
+            (6, SCHEMA_V6_PRESENTATION_THEMES),
+            (7, SCHEMA_V7_PRESENTATION_THEME_TYPOGRAPHY),
+            (8, SCHEMA_V8_PRESENTATION_THEME_REFERENCE_POSITION),
+            (9, SCHEMA_V9_PRESENTATION_THEME_LAYOUT),
+            (10, SCHEMA_V10_SERVICE_ITEM_PRESENTATION_OVERRIDES),
         ]
     }
 
@@ -553,6 +558,147 @@ impl Database {
         Ok(())
     }
 
+    // ── Presentation themes ────────────────────────────────────────────────
+
+    pub fn list_presentation_themes(&self) -> Result<Vec<PresentationTheme>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, name, background_color, background_gradient, text_color, reference_color,
+                    font_family, text_align, font_scale, text_font_weight, reference_font_scale,
+                    reference_font_weight, safe_margin, text_shadow, reference_position,
+                    verse_box_x, verse_box_y, verse_box_width, verse_box_height,
+                    reference_box_x, reference_box_y, reference_box_width, reference_box_height,
+                    auto_layout, min_font_scale, transition_type, transition_duration,
+                    is_default, created_at, updated_at
+             FROM presentation_themes
+             ORDER BY is_default DESC, name COLLATE NOCASE",
+        )?;
+        let rows = stmt.query_map([], presentation_theme_from_row)?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    pub fn create_presentation_theme(
+        &self,
+        input: &PresentationThemeInput,
+    ) -> Result<PresentationTheme> {
+        let conn = self.conn();
+        let id = format!("theme-{}", now_millis());
+        conn.execute(
+            "INSERT INTO presentation_themes (
+                id, name, background_color, background_gradient, text_color, reference_color,
+                font_family, text_align, font_scale, text_font_weight, reference_font_scale,
+                reference_font_weight, safe_margin, text_shadow, reference_position,
+                verse_box_x, verse_box_y, verse_box_width, verse_box_height,
+                reference_box_x, reference_box_y, reference_box_width, reference_box_height,
+                auto_layout, min_font_scale, transition_type, transition_duration
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
+            params![
+                id, input.name, input.background_color, input.background_gradient,
+                input.text_color, input.reference_color, input.font_family, input.text_align,
+                input.font_scale.clamp(0.5, 2.0), input.text_font_weight.clamp(100, 900),
+                input.reference_font_scale.clamp(0.5, 2.0), input.reference_font_weight.clamp(100, 900),
+                input.safe_margin.min(25), input.text_shadow, input.reference_position,
+                input.verse_box_x.clamp(0.0, 90.0), input.verse_box_y.clamp(0.0, 90.0),
+                input.verse_box_width.clamp(10.0, 100.0), input.verse_box_height.clamp(8.0, 100.0),
+                input.reference_box_x.clamp(0.0, 90.0), input.reference_box_y.clamp(0.0, 90.0),
+                input.reference_box_width.clamp(10.0, 100.0), input.reference_box_height.clamp(5.0, 100.0),
+                input.auto_layout, input.min_font_scale.clamp(0.5, 1.0),
+                input.transition_type, input.transition_duration.clamp(0, 2_000),
+            ],
+        )?;
+        self.presentation_theme_by_id(&conn, &id)
+    }
+
+    pub fn update_presentation_theme(
+        &self,
+        id: &str,
+        input: &PresentationThemeInput,
+    ) -> Result<PresentationTheme> {
+        let conn = self.conn();
+        let changed = conn.execute(
+            "UPDATE presentation_themes SET
+                name=?2, background_color=?3, background_gradient=?4, text_color=?5,
+                reference_color=?6, font_family=?7, text_align=?8, font_scale=?9,
+                text_font_weight=?10, reference_font_scale=?11, reference_font_weight=?12,
+                safe_margin=?13, text_shadow=?14, reference_position=?15,
+                verse_box_x=?16, verse_box_y=?17, verse_box_width=?18, verse_box_height=?19,
+                reference_box_x=?20, reference_box_y=?21, reference_box_width=?22, reference_box_height=?23,
+                auto_layout=?24, min_font_scale=?25, transition_type=?26, transition_duration=?27,
+                updated_at=datetime('now')
+             WHERE id=?1",
+            params![
+                id, input.name, input.background_color, input.background_gradient,
+                input.text_color, input.reference_color, input.font_family, input.text_align,
+                input.font_scale.clamp(0.5, 2.0), input.text_font_weight.clamp(100, 900),
+                input.reference_font_scale.clamp(0.5, 2.0), input.reference_font_weight.clamp(100, 900),
+                input.safe_margin.min(25), input.text_shadow, input.reference_position,
+                input.verse_box_x.clamp(0.0, 90.0), input.verse_box_y.clamp(0.0, 90.0),
+                input.verse_box_width.clamp(10.0, 100.0), input.verse_box_height.clamp(8.0, 100.0),
+                input.reference_box_x.clamp(0.0, 90.0), input.reference_box_y.clamp(0.0, 90.0),
+                input.reference_box_width.clamp(10.0, 100.0), input.reference_box_height.clamp(5.0, 100.0),
+                input.auto_layout, input.min_font_scale.clamp(0.5, 1.0),
+                input.transition_type, input.transition_duration.clamp(0, 2_000),
+            ],
+        )?;
+        if changed == 0 {
+            return Err(AppError::Other(format!(
+                "presentation theme not found: {id}"
+            )));
+        }
+        self.presentation_theme_by_id(&conn, id)
+    }
+
+    pub fn delete_presentation_theme(&self, id: &str) -> Result<()> {
+        let conn = self.conn();
+        let default_id: Option<String> = conn
+            .query_row(
+                "SELECT id FROM presentation_themes WHERE is_default=1",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if default_id.as_deref() == Some(id) {
+            return Err(AppError::Other(
+                "the default presentation theme cannot be deleted".into(),
+            ));
+        }
+        conn.execute("DELETE FROM presentation_themes WHERE id=?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn set_default_presentation_theme(&self, id: &str) -> Result<PresentationTheme> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute("UPDATE presentation_themes SET is_default=0", [])?;
+        if tx.execute(
+            "UPDATE presentation_themes SET is_default=1, updated_at=datetime('now') WHERE id=?1",
+            params![id],
+        )? == 0
+        {
+            return Err(AppError::Other(format!(
+                "presentation theme not found: {id}"
+            )));
+        }
+        tx.commit()?;
+        self.presentation_theme_by_id(&conn, id)
+    }
+
+    fn presentation_theme_by_id(&self, conn: &Connection, id: &str) -> Result<PresentationTheme> {
+        conn.query_row(
+            "SELECT id, name, background_color, background_gradient, text_color, reference_color,
+                    font_family, text_align, font_scale, text_font_weight, reference_font_scale,
+                    reference_font_weight, safe_margin, text_shadow, reference_position,
+                    verse_box_x, verse_box_y, verse_box_width, verse_box_height,
+                    reference_box_x, reference_box_y, reference_box_width, reference_box_height,
+                    auto_layout, min_font_scale, transition_type, transition_duration,
+                    is_default, created_at, updated_at
+             FROM presentation_themes WHERE id=?1",
+            params![id],
+            presentation_theme_from_row,
+        )
+        .map_err(Into::into)
+    }
+
     // ── Search history ───────────────────────────────────────────────────────
 
     pub fn list_search_history(&self) -> Result<Vec<SearchHistoryEntry>> {
@@ -627,10 +773,21 @@ impl Database {
     pub fn list_service_order(&self) -> Result<Vec<ServiceOrderItem>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT id, book, chapter, verse, text, module
+            "SELECT id, book, chapter, verse, text, module, presentation_override
              FROM service_order_items ORDER BY position ASC",
         )?;
         let rows = stmt.query_map([], |row| {
+            let override_json: Option<String> = row.get(6)?;
+            let presentation_override = override_json
+                .map(|json| serde_json::from_str(&json))
+                .transpose()
+                .map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        6,
+                        rusqlite::types::Type::Text,
+                        Box::new(error),
+                    )
+                })?;
             Ok(ServiceOrderItem {
                 id: row.get(0)?,
                 book: row.get(1)?,
@@ -638,6 +795,7 @@ impl Database {
                 verse: row.get(3)?,
                 text: row.get(4)?,
                 module: row.get(5)?,
+                presentation_override,
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
@@ -653,8 +811,8 @@ impl Database {
         tx.execute("DELETE FROM service_order_items", [])?;
         {
             let mut stmt = tx.prepare(
-                "INSERT INTO service_order_items (id, book, chapter, verse, text, module, position)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "INSERT INTO service_order_items (id, book, chapter, verse, text, module, presentation_override, position)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             )?;
             for (position, item) in items.iter().enumerate() {
                 stmt.execute(params![
@@ -664,6 +822,11 @@ impl Database {
                     item.verse,
                     item.text,
                     item.module,
+                    item.presentation_override
+                        .as_ref()
+                        .map(serde_json::to_string)
+                        .transpose()
+                        .map_err(|error| AppError::Other(error.to_string()))?,
                     position as i64,
                 ])?;
             }
@@ -873,6 +1036,23 @@ CREATE TABLE IF NOT EXISTS strongs_counts (
     count     INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (module_id, strongs, book)
 );
+
+CREATE TABLE IF NOT EXISTS presentation_themes (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    background_color TEXT NOT NULL DEFAULT '#000000',
+    background_gradient TEXT,
+    text_color TEXT NOT NULL DEFAULT '#ffffff',
+    reference_color TEXT NOT NULL DEFAULT '#b8c4d8',
+    font_family TEXT NOT NULL DEFAULT 'system',
+    text_align TEXT NOT NULL DEFAULT 'center',
+    font_scale REAL NOT NULL DEFAULT 1,
+    safe_margin INTEGER NOT NULL DEFAULT 5,
+    text_shadow INTEGER NOT NULL DEFAULT 1,
+    is_default INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 "#;
 
 /// v3: strongs_counts were built with old OSIS parser (raw Greek word keys).
@@ -890,6 +1070,104 @@ const SCHEMA_V5_STRONGS_MULTIPLE_KEYS_RESET: &str = r#"
 DELETE FROM strongs_counts;
 UPDATE installed_modules SET index_built = 0;
 "#;
+
+/// v6: reusable presentation themes replace one-off presentation styling.
+const SCHEMA_V6_PRESENTATION_THEMES: &str = r#"
+CREATE TABLE IF NOT EXISTS presentation_themes (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    background_color TEXT NOT NULL DEFAULT '#000000',
+    background_gradient TEXT,
+    text_color TEXT NOT NULL DEFAULT '#ffffff',
+    reference_color TEXT NOT NULL DEFAULT '#b8c4d8',
+    font_family TEXT NOT NULL DEFAULT 'system',
+    text_align TEXT NOT NULL DEFAULT 'center',
+    font_scale REAL NOT NULL DEFAULT 1,
+    safe_margin INTEGER NOT NULL DEFAULT 5,
+    text_shadow INTEGER NOT NULL DEFAULT 1,
+    is_default INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+INSERT OR IGNORE INTO presentation_themes (
+    id, name, background_color, background_gradient, text_color, reference_color,
+    font_family, text_align, font_scale, safe_margin, text_shadow, is_default
+) VALUES (
+    'builtin-midnight', 'Midnight Scripture', '#000000',
+    'linear-gradient(145deg, #07111e 0%, #000000 55%, #102a25 100%)',
+    '#ffffff', '#b8c4d8', 'system', 'center', 1, 5, 1, 1
+);
+"#;
+
+/// v7: verse and reference labels have independently editable typography.
+const SCHEMA_V7_PRESENTATION_THEME_TYPOGRAPHY: &str = r#"
+ALTER TABLE presentation_themes ADD COLUMN text_font_weight INTEGER NOT NULL DEFAULT 600;
+ALTER TABLE presentation_themes ADD COLUMN reference_font_scale REAL NOT NULL DEFAULT 1;
+ALTER TABLE presentation_themes ADD COLUMN reference_font_weight INTEGER NOT NULL DEFAULT 500;
+"#;
+
+/// v8: reference labels can be positioned around the verse block.
+const SCHEMA_V8_PRESENTATION_THEME_REFERENCE_POSITION: &str = r#"
+ALTER TABLE presentation_themes ADD COLUMN reference_position TEXT NOT NULL DEFAULT 'bottom-center';
+"#;
+
+/// v9: flexible output boxes, automatic fitting, and change transitions.
+const SCHEMA_V9_PRESENTATION_THEME_LAYOUT: &str = r#"
+ALTER TABLE presentation_themes ADD COLUMN verse_box_x REAL NOT NULL DEFAULT 10;
+ALTER TABLE presentation_themes ADD COLUMN verse_box_y REAL NOT NULL DEFAULT 24;
+ALTER TABLE presentation_themes ADD COLUMN verse_box_width REAL NOT NULL DEFAULT 80;
+ALTER TABLE presentation_themes ADD COLUMN verse_box_height REAL NOT NULL DEFAULT 48;
+ALTER TABLE presentation_themes ADD COLUMN reference_box_x REAL NOT NULL DEFAULT 10;
+ALTER TABLE presentation_themes ADD COLUMN reference_box_y REAL NOT NULL DEFAULT 76;
+ALTER TABLE presentation_themes ADD COLUMN reference_box_width REAL NOT NULL DEFAULT 80;
+ALTER TABLE presentation_themes ADD COLUMN reference_box_height REAL NOT NULL DEFAULT 10;
+ALTER TABLE presentation_themes ADD COLUMN auto_layout INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE presentation_themes ADD COLUMN min_font_scale REAL NOT NULL DEFAULT 0.65;
+ALTER TABLE presentation_themes ADD COLUMN transition_type TEXT NOT NULL DEFAULT 'fade';
+ALTER TABLE presentation_themes ADD COLUMN transition_duration INTEGER NOT NULL DEFAULT 300;
+"#;
+
+/// v10: individual service items can inherit a theme and override only the
+/// properties they need (stored as sparse JSON for forward compatibility).
+const SCHEMA_V10_SERVICE_ITEM_PRESENTATION_OVERRIDES: &str = r#"
+ALTER TABLE service_order_items ADD COLUMN presentation_override TEXT;
+"#;
+
+fn presentation_theme_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PresentationTheme> {
+    Ok(PresentationTheme {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        background_color: row.get(2)?,
+        background_gradient: row.get(3)?,
+        text_color: row.get(4)?,
+        reference_color: row.get(5)?,
+        font_family: row.get(6)?,
+        text_align: row.get(7)?,
+        font_scale: row.get(8)?,
+        text_font_weight: row.get(9)?,
+        reference_font_scale: row.get(10)?,
+        reference_font_weight: row.get(11)?,
+        safe_margin: row.get(12)?,
+        text_shadow: row.get(13)?,
+        reference_position: row.get(14)?,
+        verse_box_x: row.get(15)?,
+        verse_box_y: row.get(16)?,
+        verse_box_width: row.get(17)?,
+        verse_box_height: row.get(18)?,
+        reference_box_x: row.get(19)?,
+        reference_box_y: row.get(20)?,
+        reference_box_width: row.get(21)?,
+        reference_box_height: row.get(22)?,
+        auto_layout: row.get(23)?,
+        min_font_scale: row.get(24)?,
+        transition_type: row.get(25)?,
+        transition_duration: row.get(26)?,
+        is_default: row.get(27)?,
+        created_at: row.get(28)?,
+        updated_at: row.get(29)?,
+    })
+}
 
 /// FTS migration v2: switch from 'porter ascii' to 'unicode61' so that prefix
 /// queries (e.g. "lov*") work predictably — unicode61 just case-folds tokens,
@@ -1016,6 +1294,62 @@ mod tests {
         cleanup(&path);
     }
 
+    #[test]
+    fn presentation_themes_have_a_default_and_support_crud() {
+        let (db, path) = temp_db("presentation-themes");
+        let initial = db.list_presentation_themes().unwrap();
+        assert_eq!(initial.iter().filter(|theme| theme.is_default).count(), 1);
+
+        let input = PresentationThemeInput {
+            name: "Lower third".into(),
+            background_color: "#102030".into(),
+            background_gradient: None,
+            text_color: "#ffffff".into(),
+            reference_color: "#aabbcc".into(),
+            font_family: "serif".into(),
+            text_align: "left".into(),
+            font_scale: 1.15,
+            text_font_weight: 700,
+            reference_font_scale: 1.1,
+            reference_font_weight: 600,
+            safe_margin: 8,
+            text_shadow: true,
+            reference_position: "bottom-left".into(),
+            verse_box_x: 12.0,
+            verse_box_y: 20.0,
+            verse_box_width: 76.0,
+            verse_box_height: 50.0,
+            reference_box_x: 12.0,
+            reference_box_y: 74.0,
+            reference_box_width: 76.0,
+            reference_box_height: 10.0,
+            auto_layout: true,
+            min_font_scale: 0.7,
+            transition_type: "slide".into(),
+            transition_duration: 450,
+        };
+        let created = db.create_presentation_theme(&input).unwrap();
+        assert_eq!(created.name, "Lower third");
+        assert_eq!(created.transition_type, "slide");
+        assert_eq!(created.verse_box_width, 76.0);
+
+        let defaulted = db.set_default_presentation_theme(&created.id).unwrap();
+        assert!(defaulted.is_default);
+        assert!(db.delete_presentation_theme(&created.id).is_err());
+
+        let updated = db
+            .update_presentation_theme(
+                &created.id,
+                &PresentationThemeInput {
+                    name: "Sermon lower third".into(),
+                    ..input
+                },
+            )
+            .unwrap();
+        assert_eq!(updated.name, "Sermon lower third");
+        cleanup(&path);
+    }
+
     /// Simulates a real device upgrading from a pre-v4 install: builds a database
     /// by hand at exactly the v3 schema (the old preferences columns only, no
     /// search_history/service_order_items/app_meta, user_version=3), writes a
@@ -1117,6 +1451,11 @@ mod tests {
                 verse: 16,
                 text: "For God so loved...".into(),
                 module: "KJV".into(),
+                presentation_override: Some(PresentationItemOverride {
+                    font_scale: Some(1.2),
+                    transition_type: Some("slide".into()),
+                    ..Default::default()
+                }),
             },
             ServiceOrderItem {
                 id: "b".into(),
@@ -1125,6 +1464,7 @@ mod tests {
                 verse: 1,
                 text: "In the beginning...".into(),
                 module: "KJV".into(),
+                presentation_override: None,
             },
         ];
         db.set_service_order(&items).unwrap();
@@ -1133,6 +1473,13 @@ mod tests {
         assert_eq!(loaded.len(), 2);
         assert_eq!(loaded[0].id, "a");
         assert_eq!(loaded[1].id, "b");
+        assert_eq!(
+            loaded[0]
+                .presentation_override
+                .as_ref()
+                .and_then(|item| item.font_scale),
+            Some(1.2)
+        );
 
         // Replacing with a reordered list should persist the new order, not append.
         let reordered = vec![items[1].clone(), items[0].clone()];
@@ -1167,6 +1514,7 @@ mod tests {
                 verse: 1,
                 text: "The LORD is my shepherd".into(),
                 module: "KJV".into(),
+                presentation_override: None,
             }],
             display_prefs: Some(LegacyDisplayPrefs {
                 font_family: "serif".into(),

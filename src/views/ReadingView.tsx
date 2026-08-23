@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../store/app";
-import { api, type InstalledModule, type MonitorInfo } from "../lib/tauri";
+import { api, type InstalledModule, type MonitorInfo, type PresentationTheme } from "../lib/tauri";
 import BookNavigator from "../components/BookNavigator";
 import SideNav from "../components/SideNav";
 import StrongsSheet from "../components/StrongsSheet";
@@ -30,6 +30,7 @@ export default function ReadingView() {
     setView, readingFontSize, setReadingFontSize, setLastHistoryRef,
     displayPrefs, setDisplayPrefs, addToServiceOrder,
     presentationActive, setPresentationActive, selectedStrongs,
+    activePresentationTheme, presentationThemes, serviceOrder,
     serviceOrderOpen, setServiceOrderOpen,
   } = useAppStore();
 
@@ -99,9 +100,26 @@ export default function ReadingView() {
 
   useReadingPositionPersistence(primaryModule, currentRef);
 
+  // A queued service item may point at another saved theme and then layer only
+  // the properties that need a one-off adjustment. Normal Bible navigation
+  // remains on the active global theme.
+  const effectivePresentationTheme = useMemo(() => {
+    const item = serviceOrder.find((candidate) => candidate.book === currentRef.book
+      && candidate.chapter === currentRef.chapter && candidate.verse === currentRef.verse
+      && candidate.module === primaryModule);
+    const override = item?.presentation_override;
+    if (!override) return activePresentationTheme;
+    const base = override.theme_id
+      ? presentationThemes.find((theme) => theme.id === override.theme_id) ?? activePresentationTheme
+      : activePresentationTheme;
+    if (!base) return null;
+    const { theme_id: _themeId, ...properties } = override;
+    return { ...base, ...properties } as PresentationTheme;
+  }, [activePresentationTheme, currentRef.book, currentRef.chapter, currentRef.verse, presentationThemes, primaryModule, serviceOrder]);
+
   usePresentationSync({
     presentationActive, primaryModule, currentRef, parallelModule,
-    parallelMode, selectedStrongs, displayPrefs, readingFontSize,
+    parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme: effectivePresentationTheme,
   });
   usePresentationCloseSync(setPresentationActive);
 

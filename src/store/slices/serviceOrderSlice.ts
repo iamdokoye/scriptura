@@ -1,6 +1,7 @@
 import type { StateCreator } from "zustand";
 import { api } from "../../lib/tauri";
 import type { AppState, ServiceItem } from "../app";
+import type { PresentationItemOverride } from "../../lib/tauri";
 
 export interface ServiceOrderSlice {
   serviceOrder: ServiceItem[];
@@ -10,6 +11,7 @@ export interface ServiceOrderSlice {
   removeFromServiceOrder: (id: string) => void;
   reorderServiceOrder: (fromIdx: number, toIdx: number) => void;
   clearServiceOrder: () => void;
+  updateServiceItemOverride: (id: string, presentation_override: PresentationItemOverride | null) => void;
   /** Populates from the backend at startup. */
   hydrateServiceOrder: (items: ServiceItem[]) => void;
 }
@@ -54,6 +56,12 @@ export const createServiceOrderSlice: StateCreator<AppState, [], [], ServiceOrde
     persist([]);
     set({ serviceOrder: [] });
   },
+  updateServiceItemOverride: (id, presentation_override) =>
+    set((s) => {
+      const next = s.serviceOrder.map((item) => item.id === id ? { ...item, presentation_override } : item);
+      persist(next);
+      return { serviceOrder: next };
+    }),
 
   hydrateServiceOrder: (serviceOrder) => set({ serviceOrder }),
 });
