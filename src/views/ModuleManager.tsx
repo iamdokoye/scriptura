@@ -174,6 +174,9 @@ export default function ModuleManager() {
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-body-ui text-body-ui font-semibold text-on-surface">{m.name}</h3>
                         <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-surface-container text-on-surface-variant rounded-DEFAULT">{m.category}</span>
+                        {m.source && (
+                          <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-surface-container-low text-on-surface-variant/70 rounded-DEFAULT border border-outline-variant">{m.source}</span>
+                        )}
                         {m.requires_key && (
                           <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-error-container text-on-error-container rounded-DEFAULT">Requires key</span>
                         )}

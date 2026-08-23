@@ -151,6 +151,8 @@ pub struct ModuleInfo {
     pub requires_key: bool,
     pub has_strongs: bool,
     pub size_bytes: Option<u64>,
+    /// Which module repository this listing came from (e.g. "CrossWire", "eBible.org").
+    pub source: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

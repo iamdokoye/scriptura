@@ -69,6 +69,10 @@ export interface ModuleInfo {
   requires_key: boolean;
   has_strongs: boolean;
   size_bytes?: number;
+  // Only present on entries from list_available_modules (which repo — e.g.
+  // "CrossWire", "eBible.org" — the listing came from); the backend's
+  // InstalledModule struct doesn't carry this, so it's absent for installed items.
+  source?: string;
 }
 
 export interface InstalledModule extends ModuleInfo {

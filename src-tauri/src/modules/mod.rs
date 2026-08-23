@@ -6,9 +6,37 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-const CROSSWIRE_REPO_URL: &str = "https://www.crosswire.org/ftpmirror/pub/sword/packages/rawzip/";
-const CATALOG_URL: &str =
-    "https://www.crosswire.org/ftpmirror/pub/sword/packages/rawzip/mods.d.tar.gz";
+/// A SWORD-format module repository: same mods.d.tar.gz catalog + {module_id}.zip
+/// download convention CrossWire itself uses, just a different host/path. Adding a
+/// repo here is enough to make its modules show up and install correctly — nothing
+/// about BibleReader/ModuleConf/versification cares where a module came from, since
+/// it's the same binary format regardless of host.
+struct Repo {
+    name: &'static str,
+    catalog_url: &'static str,
+    zip_base_url: &'static str,
+}
+
+/// Checked in order; the first repo a module_id is seen in "owns" it if the same id
+/// somehow appears in more than one (see fetch_available's dedup). CrossWire stays
+/// first so existing behavior for its modules (and the FREE_MODULES fallback, which
+/// is CrossWire-only) is unchanged.
+const REPOS: &[Repo] = &[
+    Repo {
+        name: "CrossWire",
+        catalog_url: "https://www.crosswire.org/ftpmirror/pub/sword/packages/rawzip/mods.d.tar.gz",
+        zip_base_url: "https://www.crosswire.org/ftpmirror/pub/sword/packages/rawzip/",
+    },
+    Repo {
+        // Official CrossWire-affiliated repo — 1,200+ modules across 600+ languages,
+        // all cleared for free redistribution. See:
+        // https://wiki.crosswire.org/Official_and_Affiliated_Module_Repositories
+        name: "eBible.org",
+        catalog_url: "https://ebible.org/sword/mods.d.tar.gz",
+        zip_base_url: "https://ebible.org/sword/zip/",
+    },
+];
+
 const CATALOG_TTL: std::time::Duration = std::time::Duration::from_secs(3600);
 
 // Hardcoded fallback used only when the live catalog fetch fails.
@@ -95,6 +123,11 @@ pub struct ModuleRegistry {
     modules_dir: PathBuf,
     loaded: Mutex<HashMap<String, Arc<ModuleConf>>>,
     catalog_cache: Mutex<Option<CatalogCache>>,
+    /// module_id -> index into REPOS, populated whenever fetch_available() runs.
+    /// install() consults this to know which repo's zip_base_url to download from;
+    /// a module_id not present here (e.g. installed before ever browsing the
+    /// catalog) defaults to REPOS[0] — CrossWire, matching prior single-repo behavior.
+    module_repo: Mutex<HashMap<String, usize>>,
 }
 
 impl ModuleRegistry {
@@ -103,6 +136,7 @@ impl ModuleRegistry {
             modules_dir,
             loaded: Mutex::new(HashMap::new()),
             catalog_cache: Mutex::new(None),
+            module_repo: Mutex::new(HashMap::new()),
         }
     }
 
@@ -154,17 +188,21 @@ impl ModuleRegistry {
         }
     }
 
-    /// Fetch the live CrossWire catalog from mods.d.tar.gz.
+    /// Fetch one repo's live catalog from its mods.d.tar.gz.
     /// Returns None on any error so callers can fall back gracefully.
-    fn fetch_live_catalog() -> Option<Vec<ModuleInfo>> {
+    fn fetch_live_catalog(repo: &Repo) -> Option<Vec<ModuleInfo>> {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(20))
             .build()
             .ok()?;
 
-        let resp = client.get(CATALOG_URL).send().ok()?;
+        let resp = client.get(repo.catalog_url).send().ok()?;
         if !resp.status().is_success() {
-            log::warn!("[modules] catalog fetch HTTP {}", resp.status());
+            log::warn!(
+                "[modules] {} catalog fetch HTTP {}",
+                repo.name,
+                resp.status()
+            );
             return None;
         }
 
@@ -175,7 +213,7 @@ impl ModuleRegistry {
         let entries = match archive.entries() {
             Ok(e) => e,
             Err(e) => {
-                log::warn!("[modules] catalog tar open: {e}");
+                log::warn!("[modules] {} catalog tar open: {e}", repo.name);
                 return None;
             }
         };
@@ -201,14 +239,15 @@ impl ModuleRegistry {
                 continue;
             }
 
-            if let Some(info) = parse_sword_conf(&content) {
+            if let Some(info) = parse_sword_conf(&content, repo.name) {
                 modules.push(info);
             }
         }
 
         log::info!(
-            "[modules] live catalog: {} modules from CrossWire",
-            modules.len()
+            "[modules] live catalog: {} modules from {}",
+            modules.len(),
+            repo.name
         );
         if modules.is_empty() {
             None
@@ -218,7 +257,9 @@ impl ModuleRegistry {
     }
 
     /// Return the full list of available free modules, marking which are installed.
-    /// Tries the live CrossWire catalog first; falls back to the hardcoded list.
+    /// Tries each repo's live catalog in order (see REPOS), merging and de-duplicating
+    /// by module_id; if even CrossWire's live fetch fails, falls back to the hardcoded
+    /// list so the app still shows something usable offline or if CrossWire is down.
     pub fn fetch_available(&self) -> Vec<ModuleInfo> {
         // Check cache (release the lock before any network I/O)
         let cached: Option<Vec<ModuleInfo>> = {
@@ -236,30 +277,50 @@ impl ModuleRegistry {
 
         let raw_modules = if let Some(modules) = cached {
             modules
-        } else if let Some(modules) = Self::fetch_live_catalog() {
-            let mut cache = self.catalog_cache.lock().unwrap();
-            *cache = Some(CatalogCache {
-                modules: modules.clone(),
-                fetched_at: std::time::Instant::now(),
-            });
-            modules
         } else {
-            log::info!("[modules] using hardcoded fallback module list");
-            FREE_MODULES
-                .iter()
-                .map(|(id, name, desc, cat, lang)| ModuleInfo {
-                    id: id.to_string(),
-                    name: name.to_string(),
-                    description: desc.to_string(),
-                    language: lang.to_string(),
-                    version: "1.0".to_string(),
-                    category: parse_category(cat),
-                    installed: false,
-                    requires_key: false,
-                    has_strongs: matches!(*cat, "Lexicon"),
-                    size_bytes: None,
-                })
-                .collect()
+            let mut merged: Vec<ModuleInfo> = Vec::new();
+            let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+            let mut module_repo = HashMap::new();
+
+            for (repo_idx, repo) in REPOS.iter().enumerate() {
+                let Some(modules) = Self::fetch_live_catalog(repo) else {
+                    continue;
+                };
+                for m in modules {
+                    if seen_ids.insert(m.id.clone()) {
+                        module_repo.insert(m.id.clone(), repo_idx);
+                        merged.push(m);
+                    }
+                }
+            }
+
+            if merged.is_empty() {
+                log::info!("[modules] all repo fetches failed; using hardcoded fallback list");
+                merged = FREE_MODULES
+                    .iter()
+                    .map(|(id, name, desc, cat, lang)| ModuleInfo {
+                        id: id.to_string(),
+                        name: name.to_string(),
+                        description: desc.to_string(),
+                        language: lang.to_string(),
+                        version: "1.0".to_string(),
+                        category: parse_category(cat),
+                        installed: false,
+                        requires_key: false,
+                        has_strongs: matches!(*cat, "Lexicon"),
+                        size_bytes: None,
+                        source: REPOS[0].name.to_string(),
+                    })
+                    .collect();
+            } else {
+                *self.module_repo.lock().unwrap() = module_repo;
+                let mut cache = self.catalog_cache.lock().unwrap();
+                *cache = Some(CatalogCache {
+                    modules: merged.clone(),
+                    fetched_at: std::time::Instant::now(),
+                });
+            }
+            merged
         };
 
         // Apply current installed status
@@ -273,7 +334,8 @@ impl ModuleRegistry {
             .collect()
     }
 
-    /// Download and install a module from CrossWire.
+    /// Download and install a module from whichever repo fetch_available() last saw
+    /// it in (module_repo), defaulting to REPOS[0] if it isn't known.
     ///
     /// The archive is downloaded and extracted into a temporary sibling directory,
     /// fully validated there (conf found and parsed, cipher key present if required),
@@ -295,9 +357,17 @@ impl ModuleRegistry {
             return Err(AppError::Sword(format!("invalid module id: {module_id}")));
         }
 
-        progress_cb(5, "Connecting to CrossWire repository…");
+        let repo = self
+            .module_repo
+            .lock()
+            .unwrap()
+            .get(module_id)
+            .and_then(|&idx| REPOS.get(idx))
+            .unwrap_or(&REPOS[0]);
 
-        let url = format!("{CROSSWIRE_REPO_URL}{module_id}.zip");
+        progress_cb(5, &format!("Connecting to {}…", repo.name));
+
+        let url = format!("{}{module_id}.zip", repo.zip_base_url);
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(300))
             .build()
@@ -499,7 +569,7 @@ fn extract_zip_entries(data: Vec<u8>, dest_dir: &Path) -> Result<()> {
 
 /// Parse a SWORD module .conf file into a ModuleInfo.
 /// Returns None if the conf is missing required fields or is a cipher-key module.
-fn parse_sword_conf(content: &str) -> Option<ModuleInfo> {
+fn parse_sword_conf(content: &str, source: &str) -> Option<ModuleInfo> {
     let mut module_id = String::new();
     let mut description = String::new();
     let mut about = String::new();
@@ -596,6 +666,7 @@ fn parse_sword_conf(content: &str) -> Option<ModuleInfo> {
         requires_key,
         has_strongs: false,
         size_bytes: None,
+        source: source.to_string(),
     })
 }
 
@@ -694,6 +765,7 @@ mod tests {
              Version=2.0\n\
              ModDrv=zText\n\
              Category=Biblical Texts\n",
+            "eBible.org",
         )
         .expect("valid conf should parse");
 
@@ -703,29 +775,33 @@ mod tests {
         assert_eq!(info.version, "2.0");
         assert_eq!(info.category, ModuleCategory::Bible);
         assert!(!info.requires_key);
+        assert_eq!(info.source, "eBible.org");
     }
 
     #[test]
     fn rejects_conf_missing_description() {
-        assert!(parse_sword_conf("[KJV]\nLang=en\n").is_none());
+        assert!(parse_sword_conf("[KJV]\nLang=en\n", "CrossWire").is_none());
     }
 
     #[test]
     fn rejects_conf_missing_section_header() {
-        assert!(parse_sword_conf("Description=No section header\n").is_none());
+        assert!(parse_sword_conf("Description=No section header\n", "CrossWire").is_none());
     }
 
     #[test]
     fn detects_cipher_key_requirement() {
-        let info =
-            parse_sword_conf("[LOCKED]\nDescription=Locked module\nCipherKey=\nModDrv=zText\n")
-                .unwrap();
+        let info = parse_sword_conf(
+            "[LOCKED]\nDescription=Locked module\nCipherKey=\nModDrv=zText\n",
+            "CrossWire",
+        )
+        .unwrap();
         // An empty CipherKey line still means the key line exists in cipher_key's
         // raw string form here — sword marks "locked, key not yet supplied" this way.
         assert!(!info.requires_key);
 
         let info = parse_sword_conf(
             "[LOCKED]\nDescription=Locked module\nCipherKey=abc123\nModDrv=zText\n",
+            "CrossWire",
         )
         .unwrap();
         assert!(info.requires_key);
@@ -733,12 +809,18 @@ mod tests {
 
     #[test]
     fn falls_back_to_moddrv_when_category_absent() {
-        let commentary =
-            parse_sword_conf("[MHC]\nDescription=Matthew Henry Complete\nModDrv=RawCom\n").unwrap();
+        let commentary = parse_sword_conf(
+            "[MHC]\nDescription=Matthew Henry Complete\nModDrv=RawCom\n",
+            "CrossWire",
+        )
+        .unwrap();
         assert_eq!(commentary.category, ModuleCategory::Commentary);
 
-        let lexicon =
-            parse_sword_conf("[STRONGS]\nDescription=Strong's Dictionary\nModDrv=RawLD\n").unwrap();
+        let lexicon = parse_sword_conf(
+            "[STRONGS]\nDescription=Strong's Dictionary\nModDrv=RawLD\n",
+            "CrossWire",
+        )
+        .unwrap();
         assert_eq!(lexicon.category, ModuleCategory::Lexicon);
     }
 
