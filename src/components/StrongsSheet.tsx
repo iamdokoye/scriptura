@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useAppStore } from "../store/app";
 import { api, type StrongsEntry } from "../lib/tauri";
+import { useSheetVisibility } from "../hooks/useSheetVisibility";
 
 function useDraggableHeight(initial: number, onCommit: (h: number) => void) {
   const [height, setHeight] = useState(initial);
@@ -126,8 +127,6 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
-  const [visible, setVisible] = useState(false);
-  const rafRef = useRef<number>(0);
 
   const drag = useDraggableHeight(
     displayPrefs.strongsSheetHeight,
@@ -137,17 +136,9 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
   const isOpen = selectedStrongs !== null;
   const prefix: "H" | "G" = selectedStrongs?.startsWith("H") ? "H" : "G";
 
-  // Slide-up animation: set visible one frame after mount. The presentation
-  // window deliberately skips this animation; its state must be visible even
-  // while the operator window has focus.
-  useEffect(() => {
-    if (isOpen && !immediate) {
-      rafRef.current = requestAnimationFrame(() => setVisible(true));
-    } else {
-      setVisible(false);
-    }
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [isOpen, immediate]);
+  // The presentation window deliberately skips this animation (`immediate`); its
+  // state must be visible even while the operator window has focus.
+  const visible = useSheetVisibility(isOpen, { skip: immediate });
 
   const lookup = useCallback(
     (num: string) => {
@@ -198,7 +189,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
       {/* Sheet */}
       <div
         className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full rounded-t-2xl shadow-2xl bg-surface border border-outline-variant flex flex-col transition-all duration-300 ease-out ${
-          visible || immediate ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
+          visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
         style={{ maxWidth: isFullscreen ? "90%" : "56rem", height: drag.height }}
         onClick={(e) => e.stopPropagation()}
