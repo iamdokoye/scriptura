@@ -24,7 +24,12 @@ struct Repo {
 const REPOS: &[Repo] = &[
     Repo {
         name: "CrossWire",
-        catalog_url: "https://www.crosswire.org/ftpmirror/pub/sword/packages/rawzip/mods.d.tar.gz",
+        // The catalog used to live at packages/rawzip/mods.d.tar.gz — that path 404s
+        // now (verified live; CrossWire moved it, silently, at some point). Found the
+        // current location by checking their raw/ index directly: raw/mods.d.tar.gz,
+        // last modified today. zip_base_url is unaffected — raw/packages/rawzip/ still
+        // serves the same {module_id}.zip files it always did.
+        catalog_url: "https://www.crosswire.org/ftpmirror/pub/sword/raw/mods.d.tar.gz",
         zip_base_url: "https://www.crosswire.org/ftpmirror/pub/sword/packages/rawzip/",
     },
     Repo {
@@ -634,14 +639,20 @@ fn parse_sword_conf(content: &str, source: &str) -> Option<ModuleInfo> {
         }
     };
 
-    // Build a readable description from the About field (unescape \n, take first ~200 chars)
+    // Build a readable description from the About field (unescape \n, take first ~200 chars).
+    // Byte-slicing (trimmed[..200]) panics whenever byte 200 lands inside a multi-byte
+    // UTF-8 character — real, not hypothetical: eBible.org's non-English catalog hits
+    // this often (e.g. accented Latin, Cyrillic). Truncating by char count is always safe.
     let desc = if !about.is_empty() {
         let plain = about.replace("\\n", " ").replace("\\t", " ");
-        let trimmed = plain.trim().to_string();
-        if trimmed.len() > 200 {
-            format!("{}…", trimmed[..200].trim_end())
+        let trimmed = plain.trim();
+        if trimmed.chars().count() > 200 {
+            format!(
+                "{}…",
+                trimmed.chars().take(200).collect::<String>().trim_end()
+            )
         } else {
-            trimmed
+            trimmed.to_string()
         }
     } else {
         description.clone()
