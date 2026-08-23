@@ -152,6 +152,14 @@ pub fn run() {
             commands::list_monitors,
             commands::open_presentation_window,
             commands::close_presentation_window,
+            commands::list_search_history,
+            commands::add_search_history_entry,
+            commands::set_last_search_history_ref,
+            commands::clear_search_history,
+            commands::list_service_order,
+            commands::set_service_order,
+            commands::legacy_import_done,
+            commands::import_legacy_local_storage,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

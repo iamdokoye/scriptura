@@ -1,9 +1,16 @@
 use crate::types::*;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
 pub struct Database(Mutex<Connection>);
+
+fn now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
 
 impl Database {
     pub fn open(path: &Path) -> Result<Self> {
@@ -40,67 +47,200 @@ impl Database {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    /// Numbered migrations, applied in order, each in its own transaction so a
+    /// failure partway through one migration can't leave the schema half-upgraded
+    /// with user_version already bumped (or not bumped but tables half-created).
+    /// Each entry's SQL must NOT set PRAGMA user_version itself — the runner does
+    /// that after a successful commit, once, consistently.
+    fn migrations() -> &'static [(i32, &'static str)] {
+        &[
+            (2, SCHEMA_FTS_V2),
+            (3, SCHEMA_V3_STRONGS_RESET),
+            (4, SCHEMA_V4_CONSOLIDATE_STORAGE),
+        ]
+    }
+
     fn migrate(&self) -> Result<()> {
-        let conn = self.conn();
+        let mut conn = self.conn();
         // Create all permanent tables first (idempotent)
         conn.execute_batch(SCHEMA_TABLES)?;
-        // Upgrade FTS table to unicode61 tokenizer if this is an old DB
-        // (porter ascii has unreliable prefix-query behaviour)
+
         let ver: i32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap_or(0);
-        if ver < 2 {
-            conn.execute_batch(SCHEMA_FTS_V2)?;
-        }
-        if ver < 3 {
-            // v3: strongs_counts were built with old OSIS parser that stored raw Greek
-            // words instead of G-prefixed Strong's numbers. Clear and re-index.
-            conn.execute_batch(SCHEMA_V3_STRONGS_RESET)?;
+
+        for (target_version, sql) in Self::migrations() {
+            if ver < *target_version {
+                let tx = conn.transaction()?;
+                tx.execute_batch(sql)?;
+                tx.execute_batch(&format!("PRAGMA user_version = {target_version};"))?;
+                tx.commit()?;
+            }
         }
         Ok(())
     }
 
-    pub fn get_preferences(&self) -> Result<Preferences> {
-        let conn = self.conn();
+    const PREFS_COLUMNS: &'static str = "theme, font_size_reading, show_strongs, show_morph, \
+        verse_display, default_commentary, show_commentary, show_notes, show_cross_refs, \
+        show_red_letter, font_family, text_align, margins, line_spacing, letter_spacing, \
+        strongs_sheet_height, presentation_context";
+
+    fn read_preferences(conn: &Connection) -> rusqlite::Result<Option<Preferences>> {
         let result = conn.query_row(
-            "SELECT theme, font_size_reading, show_strongs, show_morph, verse_display, default_commentary FROM preferences LIMIT 1",
+            &format!("SELECT {} FROM preferences LIMIT 1", Self::PREFS_COLUMNS),
             [],
             |row| {
                 Ok(Preferences {
                     theme: row.get(0)?,
-                    font_size_reading: row.get::<_, u32>(1)?,
-                    show_strongs: row.get::<_, bool>(2)?,
-                    show_morph: row.get::<_, bool>(3)?,
+                    font_size_reading: row.get(1)?,
+                    show_strongs: row.get(2)?,
+                    show_morph: row.get(3)?,
                     verse_display: row.get(4)?,
                     default_commentary: row.get(5)?,
+                    show_commentary: row.get(6)?,
+                    show_notes: row.get(7)?,
+                    show_cross_refs: row.get(8)?,
+                    show_red_letter: row.get(9)?,
+                    font_family: row.get(10)?,
+                    text_align: row.get(11)?,
+                    margins: row.get(12)?,
+                    line_spacing: row.get(13)?,
+                    letter_spacing: row.get(14)?,
+                    strongs_sheet_height: row.get(15)?,
+                    presentation_context: row.get(16)?,
                 })
             },
         );
         match result {
-            Ok(p) => Ok(p),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(Preferences::default()),
-            Err(e) => Err(e.into()),
+            Ok(p) => Ok(Some(p)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
-    pub fn set_preferences(&self, prefs: &Preferences) -> Result<()> {
-        let conn = self.conn();
+    fn write_preferences(conn: &Connection, prefs: &Preferences) -> rusqlite::Result<()> {
         conn.execute(
-            "INSERT INTO preferences (id, theme, font_size_reading, show_strongs, show_morph, verse_display, default_commentary)
-             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)
+            "INSERT INTO preferences (id, theme, font_size_reading, show_strongs, show_morph,
+                verse_display, default_commentary, show_commentary, show_notes, show_cross_refs,
+                show_red_letter, font_family, text_align, margins, line_spacing, letter_spacing,
+                strongs_sheet_height, presentation_context)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
              ON CONFLICT(id) DO UPDATE SET
                theme=excluded.theme,
                font_size_reading=excluded.font_size_reading,
                show_strongs=excluded.show_strongs,
                show_morph=excluded.show_morph,
                verse_display=excluded.verse_display,
-               default_commentary=excluded.default_commentary",
+               default_commentary=excluded.default_commentary,
+               show_commentary=excluded.show_commentary,
+               show_notes=excluded.show_notes,
+               show_cross_refs=excluded.show_cross_refs,
+               show_red_letter=excluded.show_red_letter,
+               font_family=excluded.font_family,
+               text_align=excluded.text_align,
+               margins=excluded.margins,
+               line_spacing=excluded.line_spacing,
+               letter_spacing=excluded.letter_spacing,
+               strongs_sheet_height=excluded.strongs_sheet_height,
+               presentation_context=excluded.presentation_context",
             params![
-                prefs.theme, prefs.font_size_reading, prefs.show_strongs,
-                prefs.show_morph, prefs.verse_display, prefs.default_commentary
+                prefs.theme,
+                prefs.font_size_reading,
+                prefs.show_strongs,
+                prefs.show_morph,
+                prefs.verse_display,
+                prefs.default_commentary,
+                prefs.show_commentary,
+                prefs.show_notes,
+                prefs.show_cross_refs,
+                prefs.show_red_letter,
+                prefs.font_family,
+                prefs.text_align,
+                prefs.margins,
+                prefs.line_spacing,
+                prefs.letter_spacing,
+                prefs.strongs_sheet_height,
+                prefs.presentation_context,
             ],
         )?;
         Ok(())
+    }
+
+    pub fn get_preferences(&self) -> Result<Preferences> {
+        let conn = self.conn();
+        Ok(Self::read_preferences(&conn)?.unwrap_or_default())
+    }
+
+    /// Merges a partial JSON patch into the current preferences and writes the
+    /// result back, all under one lock acquisition. This used to be two separate
+    /// calls (get_preferences, then a full-replace set_preferences) made from the
+    /// command layer, which meant two independent lock/unlock cycles — if two
+    /// set_preferences invocations happened to interleave (Tauri can run separate
+    /// sync command calls concurrently on its thread pool), the second call's
+    /// read could miss the first call's write, and the first call's update would
+    /// be silently lost. Holding the lock across the whole read-modify-write
+    /// closes that window: the two calls now fully serialize instead of
+    /// interleaving.
+    pub fn update_preferences(&self, patch: &serde_json::Value) -> Result<Preferences> {
+        let conn = self.conn();
+        let mut current = Self::read_preferences(&conn)?.unwrap_or_default();
+
+        if let Some(obj) = patch.as_object() {
+            if let Some(v) = obj.get("theme").and_then(|v| v.as_str()) {
+                current.theme = v.to_string();
+            }
+            if let Some(v) = obj.get("font_size_reading").and_then(|v| v.as_u64()) {
+                current.font_size_reading = v as u32;
+            }
+            if let Some(v) = obj.get("show_strongs").and_then(|v| v.as_bool()) {
+                current.show_strongs = v;
+            }
+            if let Some(v) = obj.get("show_morph").and_then(|v| v.as_bool()) {
+                current.show_morph = v;
+            }
+            if let Some(v) = obj.get("verse_display").and_then(|v| v.as_str()) {
+                current.verse_display = v.to_string();
+            }
+            if let Some(v) = obj.get("default_commentary").and_then(|v| v.as_str()) {
+                current.default_commentary = Some(v.to_string());
+            }
+            if let Some(v) = obj.get("show_commentary").and_then(|v| v.as_bool()) {
+                current.show_commentary = v;
+            }
+            if let Some(v) = obj.get("show_notes").and_then(|v| v.as_bool()) {
+                current.show_notes = v;
+            }
+            if let Some(v) = obj.get("show_cross_refs").and_then(|v| v.as_bool()) {
+                current.show_cross_refs = v;
+            }
+            if let Some(v) = obj.get("show_red_letter").and_then(|v| v.as_bool()) {
+                current.show_red_letter = v;
+            }
+            if let Some(v) = obj.get("font_family").and_then(|v| v.as_str()) {
+                current.font_family = v.to_string();
+            }
+            if let Some(v) = obj.get("text_align").and_then(|v| v.as_str()) {
+                current.text_align = v.to_string();
+            }
+            if let Some(v) = obj.get("margins").and_then(|v| v.as_u64()) {
+                current.margins = v as u32;
+            }
+            if let Some(v) = obj.get("line_spacing").and_then(|v| v.as_f64()) {
+                current.line_spacing = v;
+            }
+            if let Some(v) = obj.get("letter_spacing").and_then(|v| v.as_f64()) {
+                current.letter_spacing = v;
+            }
+            if let Some(v) = obj.get("strongs_sheet_height").and_then(|v| v.as_u64()) {
+                current.strongs_sheet_height = v as u32;
+            }
+            if let Some(v) = obj.get("presentation_context").and_then(|v| v.as_u64()) {
+                current.presentation_context = v as u32;
+            }
+        }
+
+        Self::write_preferences(&conn, &current)?;
+        Ok(current)
     }
 
     pub fn get_reading_position(&self) -> Result<Option<ReadingPosition>> {
@@ -411,6 +551,226 @@ impl Database {
         )?;
         Ok(())
     }
+
+    // ── Search history ───────────────────────────────────────────────────────
+
+    pub fn list_search_history(&self) -> Result<Vec<SearchHistoryEntry>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, query, timestamp, ref_book, ref_chapter, ref_verse
+             FROM search_history ORDER BY timestamp DESC, id DESC LIMIT 100",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(SearchHistoryEntry {
+                id: row.get(0)?,
+                query: row.get(1)?,
+                timestamp: row.get(2)?,
+                ref_book: row.get(3)?,
+                ref_chapter: row.get(4)?,
+                ref_verse: row.get(5)?,
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Adds an entry, de-duplicating by query text (matching the old localStorage
+    /// behavior: re-searching something already in history moves it to the top
+    /// instead of creating a second row) and capping total history at 100 rows.
+    pub fn add_search_history_entry(&self, query: &str) -> Result<()> {
+        let trimmed = query.trim();
+        if trimmed.is_empty() {
+            return Ok(());
+        }
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "DELETE FROM search_history WHERE query = ?1",
+            params![trimmed],
+        )?;
+        tx.execute(
+            "INSERT INTO search_history (query, timestamp) VALUES (?1, ?2)",
+            params![trimmed, now_millis()],
+        )?;
+        // Trim anything beyond the most recent 100 — same cap the old
+        // localStorage implementation enforced.
+        tx.execute(
+            "DELETE FROM search_history WHERE id NOT IN (
+                SELECT id FROM search_history ORDER BY timestamp DESC, id DESC LIMIT 100
+             )",
+            [],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Attaches the verse the user navigated to onto the most recent search
+    /// history entry (mirrors setLastHistoryRef's old localStorage behavior).
+    pub fn set_last_search_history_ref(&self, book: &str, chapter: u32, verse: u32) -> Result<()> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE search_history SET ref_book = ?1, ref_chapter = ?2, ref_verse = ?3
+             WHERE id = (SELECT id FROM search_history ORDER BY timestamp DESC, id DESC LIMIT 1)",
+            params![book, chapter, verse],
+        )?;
+        Ok(())
+    }
+
+    pub fn clear_search_history(&self) -> Result<()> {
+        let conn = self.conn();
+        conn.execute("DELETE FROM search_history", [])?;
+        Ok(())
+    }
+
+    // ── Service order ────────────────────────────────────────────────────────
+
+    pub fn list_service_order(&self) -> Result<Vec<ServiceOrderItem>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, book, chapter, verse, text, module
+             FROM service_order_items ORDER BY position ASC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(ServiceOrderItem {
+                id: row.get(0)?,
+                book: row.get(1)?,
+                chapter: row.get(2)?,
+                verse: row.get(3)?,
+                text: row.get(4)?,
+                module: row.get(5)?,
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Replaces the entire ordered list in one transaction. The frontend already
+    /// treats the service order as one unit it reads/reorders/writes back as a
+    /// whole (add/remove/reorder are all local array operations before persisting),
+    /// so this matches that shape rather than exposing narrower per-row commands.
+    pub fn set_service_order(&self, items: &[ServiceOrderItem]) -> Result<()> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM service_order_items", [])?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO service_order_items (id, book, chapter, verse, text, module, position)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            )?;
+            for (position, item) in items.iter().enumerate() {
+                stmt.execute(params![
+                    item.id,
+                    item.book,
+                    item.chapter,
+                    item.verse,
+                    item.text,
+                    item.module,
+                    position as i64,
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    // ── app_meta / one-time legacy localStorage import ─────────────────────────
+
+    fn meta_get(conn: &Connection, key: &str) -> rusqlite::Result<Option<String>> {
+        conn.query_row(
+            "SELECT value FROM app_meta WHERE key = ?1",
+            params![key],
+            |row| row.get(0),
+        )
+        .optional()
+    }
+
+    const LEGACY_IMPORT_MARKER: &'static str = "legacy_localstorage_imported";
+
+    pub fn legacy_import_done(&self) -> Result<bool> {
+        let conn = self.conn();
+        Ok(Self::meta_get(&conn, Self::LEGACY_IMPORT_MARKER)?.is_some())
+    }
+
+    /// One-time import of the four payloads that used to live in browser
+    /// localStorage (search history, service order, display prefs, study-panel
+    /// visibility). Idempotent: if the marker is already set, this is a no-op
+    /// that returns Ok immediately without touching any data, so the frontend
+    /// can call it unconditionally on startup without checking first itself —
+    /// and, more importantly, so a retry after a partial failure (app killed
+    /// mid-import) can't double-import or clobber data written since. Everything
+    /// — the search history rows, the service order rows, the merged
+    /// preferences, and the marker itself — commits in one transaction: either
+    /// the whole import lands, or none of it does.
+    pub fn import_legacy_local_storage(&self, payload: &LegacyLocalStorageImport) -> Result<()> {
+        let mut conn = self.conn();
+
+        if Self::meta_get(&conn, Self::LEGACY_IMPORT_MARKER)?.is_some() {
+            return Ok(());
+        }
+
+        let tx = conn.transaction()?;
+
+        for entry in &payload.search_history {
+            let (ref_book, ref_chapter, ref_verse) = match &entry.selected_ref {
+                Some(r) => (Some(r.book.clone()), Some(r.chapter), Some(r.verse)),
+                None => (None, None, None),
+            };
+            tx.execute(
+                "INSERT INTO search_history (query, timestamp, ref_book, ref_chapter, ref_verse)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    entry.query,
+                    entry.timestamp,
+                    ref_book,
+                    ref_chapter,
+                    ref_verse
+                ],
+            )?;
+        }
+
+        for (position, item) in payload.service_order.iter().enumerate() {
+            tx.execute(
+                "INSERT OR IGNORE INTO service_order_items
+                    (id, book, chapter, verse, text, module, position)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    item.id,
+                    item.book,
+                    item.chapter,
+                    item.verse,
+                    item.text,
+                    item.module,
+                    position as i64,
+                ],
+            )?;
+        }
+
+        if payload.display_prefs.is_some() || payload.study_ui.is_some() {
+            let mut current = Self::read_preferences(&tx)?.unwrap_or_default();
+            if let Some(dp) = &payload.display_prefs {
+                current.font_family = dp.font_family.clone();
+                current.text_align = dp.text_align.clone();
+                current.margins = dp.margins;
+                current.line_spacing = dp.line_spacing;
+                current.letter_spacing = dp.letter_spacing;
+                current.strongs_sheet_height = dp.strongs_sheet_height;
+                current.presentation_context = dp.presentation_context;
+            }
+            if let Some(su) = &payload.study_ui {
+                current.show_commentary = su.show_commentary;
+                current.show_notes = su.show_notes;
+                current.show_cross_refs = su.show_cross_refs;
+                current.show_red_letter = su.show_red_letter;
+            }
+            Self::write_preferences(&tx, &current)?;
+        }
+
+        tx.execute(
+            "INSERT INTO app_meta (key, value) VALUES (?1, '1')",
+            params![Self::LEGACY_IMPORT_MARKER],
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    }
 }
 
 /// Transform a raw user query into an FTS5 MATCH expression.
@@ -520,7 +880,6 @@ CREATE TABLE IF NOT EXISTS strongs_counts (
 const SCHEMA_V3_STRONGS_RESET: &str = r#"
 DELETE FROM strongs_counts;
 UPDATE installed_modules SET index_built = 0;
-PRAGMA user_version = 3;
 "#;
 
 /// FTS migration v2: switch from 'porter ascii' to 'unicode61' so that prefix
@@ -539,13 +898,62 @@ CREATE VIRTUAL TABLE verse_fts USING fts5(
     tokenize = 'unicode61'
 );
 UPDATE installed_modules SET index_built = 0;
-PRAGMA user_version = 2;
+"#;
+
+/// v4: consolidates browser localStorage into SQLite so the app has one
+/// persistence contract instead of two. Adds the study-panel-visibility and
+/// display/typography columns preferences was missing, plus tables for search
+/// history and the service order — both used to live only in localStorage,
+/// with no migrations, validation, or transactional writes, and silently
+/// swallowed errors on quota/write failure. app_meta is a general-purpose
+/// key/value table; its first use is the one-time-import marker (see
+/// Database::import_legacy_local_storage) — that marker is data, not a schema
+/// version, so it doesn't belong in PRAGMA user_version.
+const SCHEMA_V4_CONSOLIDATE_STORAGE: &str = r#"
+ALTER TABLE preferences ADD COLUMN show_commentary INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE preferences ADD COLUMN show_notes INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE preferences ADD COLUMN show_cross_refs INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE preferences ADD COLUMN show_red_letter INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE preferences ADD COLUMN font_family TEXT NOT NULL DEFAULT 'system';
+ALTER TABLE preferences ADD COLUMN text_align TEXT NOT NULL DEFAULT 'left';
+ALTER TABLE preferences ADD COLUMN margins INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE preferences ADD COLUMN line_spacing REAL NOT NULL DEFAULT 0.6;
+ALTER TABLE preferences ADD COLUMN letter_spacing REAL NOT NULL DEFAULT 0;
+ALTER TABLE preferences ADD COLUMN strongs_sheet_height INTEGER NOT NULL DEFAULT 360;
+ALTER TABLE preferences ADD COLUMN presentation_context INTEGER NOT NULL DEFAULT 1;
+
+CREATE TABLE IF NOT EXISTS search_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    query TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    ref_book TEXT,
+    ref_chapter INTEGER,
+    ref_verse INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS service_order_items (
+    id TEXT PRIMARY KEY,
+    book TEXT NOT NULL,
+    chapter INTEGER NOT NULL,
+    verse INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    module TEXT NOT NULL,
+    position INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 "#;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Preferences, ReadingPosition};
+    use crate::types::{
+        LegacyDisplayPrefs, LegacyLocalStorageImport, LegacySearchHistoryEntry, LegacyStudyUi,
+        LegacyVerseRef, Preferences, ReadingPosition, ServiceOrderItem,
+    };
 
     /// Each test gets its own on-disk file — WAL mode needs a real file, not
     /// `:memory:`, and a unique name per test avoids cross-test interference
@@ -574,16 +982,218 @@ mod tests {
         let defaults = db.get_preferences().unwrap();
         assert_eq!(defaults.theme, Preferences::default().theme);
 
-        let mut prefs = defaults;
-        prefs.theme = "dark".to_string();
-        prefs.font_size_reading = 22;
-        prefs.show_strongs = false;
-        db.set_preferences(&prefs).unwrap();
+        db.update_preferences(&serde_json::json!({
+            "theme": "dark",
+            "font_size_reading": 22,
+            "show_strongs": false,
+        }))
+        .unwrap();
 
         let loaded = db.get_preferences().unwrap();
         assert_eq!(loaded.theme, "dark");
         assert_eq!(loaded.font_size_reading, 22);
         assert!(!loaded.show_strongs);
+
+        // A second, disjoint patch shouldn't clobber fields the first patch set —
+        // this is exactly the read-modify-write correctness update_preferences
+        // replaced the old two-call get/set_preferences pattern to guarantee.
+        db.update_preferences(&serde_json::json!({ "show_morph": true }))
+            .unwrap();
+        let loaded2 = db.get_preferences().unwrap();
+        assert_eq!(loaded2.theme, "dark");
+        assert_eq!(loaded2.font_size_reading, 22);
+        assert!(loaded2.show_morph);
+
+        cleanup(&path);
+    }
+
+    /// Simulates a real device upgrading from a pre-v4 install: builds a database
+    /// by hand at exactly the v3 schema (the old preferences columns only, no
+    /// search_history/service_order_items/app_meta, user_version=3), writes a
+    /// preferences row through that old schema, then opens it through the real
+    /// Database::open — the same path a genuine upgrade takes — and confirms the
+    /// v4 migration both adds the new columns/tables AND preserves the existing
+    /// row's data rather than wiping it via a naive drop-and-recreate.
+    #[test]
+    fn v4_migration_preserves_existing_data_on_upgrade() {
+        let path = std::env::temp_dir().join(format!(
+            "scriptura-test-db-v3-upgrade-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(SCHEMA_TABLES).unwrap();
+            conn.execute_batch(SCHEMA_FTS_V2).unwrap();
+            conn.execute_batch(SCHEMA_V3_STRONGS_RESET).unwrap();
+            conn.execute(
+                "INSERT INTO preferences (id, theme, font_size_reading, show_strongs, show_morph, verse_display)
+                 VALUES (1, 'dark', 24, 1, 0, 'paragraph')",
+                [],
+            )
+            .unwrap();
+            conn.execute_batch("PRAGMA user_version = 3;").unwrap();
+        }
+
+        // Opening through the real constructor runs the real migrate().
+        let db = Database::open(&path).expect("should migrate v3 -> v4 cleanly");
+
+        let prefs = db.get_preferences().unwrap();
+        // Pre-existing data survived the migration...
+        assert_eq!(prefs.theme, "dark");
+        assert_eq!(prefs.font_size_reading, 24);
+        assert_eq!(prefs.verse_display, "paragraph");
+        // ...and the new v4 columns are present with their defaults, not NULL/error.
+        assert!(prefs.show_commentary);
+        assert_eq!(prefs.font_family, "system");
+        assert_eq!(prefs.strongs_sheet_height, 360);
+
+        // New tables exist and are queryable (would error if the CREATE TABLE
+        // portion of the migration hadn't run).
+        assert_eq!(db.list_search_history().unwrap().len(), 0);
+        assert_eq!(db.list_service_order().unwrap().len(), 0);
+
+        let conn = db.conn();
+        let ver: i32 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(ver, 4);
+        drop(conn);
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn search_history_dedupes_and_caps_at_100() {
+        let (db, path) = temp_db("search-history");
+
+        db.add_search_history_entry("love").unwrap();
+        db.add_search_history_entry("grace").unwrap();
+        // Re-adding an existing query moves it to the top rather than duplicating.
+        db.add_search_history_entry("love").unwrap();
+
+        let history = db.list_search_history().unwrap();
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].query, "love");
+
+        db.set_last_search_history_ref("John", 3, 16).unwrap();
+        let history = db.list_search_history().unwrap();
+        assert_eq!(history[0].ref_book.as_deref(), Some("John"));
+
+        for i in 0..110 {
+            db.add_search_history_entry(&format!("query-{i}")).unwrap();
+        }
+        assert_eq!(db.list_search_history().unwrap().len(), 100);
+
+        db.clear_search_history().unwrap();
+        assert_eq!(db.list_search_history().unwrap().len(), 0);
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn service_order_round_trip_preserves_order() {
+        let (db, path) = temp_db("service-order");
+
+        let items = vec![
+            ServiceOrderItem {
+                id: "a".into(),
+                book: "John".into(),
+                chapter: 3,
+                verse: 16,
+                text: "For God so loved...".into(),
+                module: "KJV".into(),
+            },
+            ServiceOrderItem {
+                id: "b".into(),
+                book: "Genesis".into(),
+                chapter: 1,
+                verse: 1,
+                text: "In the beginning...".into(),
+                module: "KJV".into(),
+            },
+        ];
+        db.set_service_order(&items).unwrap();
+
+        let loaded = db.list_service_order().unwrap();
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded[0].id, "a");
+        assert_eq!(loaded[1].id, "b");
+
+        // Replacing with a reordered list should persist the new order, not append.
+        let reordered = vec![items[1].clone(), items[0].clone()];
+        db.set_service_order(&reordered).unwrap();
+        let loaded = db.list_service_order().unwrap();
+        assert_eq!(loaded[0].id, "b");
+        assert_eq!(loaded[1].id, "a");
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn legacy_import_is_idempotent_and_transactional() {
+        let (db, path) = temp_db("legacy-import");
+
+        assert!(!db.legacy_import_done().unwrap());
+
+        let payload = LegacyLocalStorageImport {
+            search_history: vec![LegacySearchHistoryEntry {
+                query: "faith".into(),
+                timestamp: 1000,
+                selected_ref: Some(LegacyVerseRef {
+                    book: "Hebrews".into(),
+                    chapter: 11,
+                    verse: 1,
+                }),
+            }],
+            service_order: vec![ServiceOrderItem {
+                id: "legacy-1".into(),
+                book: "Psalms".into(),
+                chapter: 23,
+                verse: 1,
+                text: "The LORD is my shepherd".into(),
+                module: "KJV".into(),
+            }],
+            display_prefs: Some(LegacyDisplayPrefs {
+                font_family: "serif".into(),
+                text_align: "left".into(),
+                margins: 10,
+                line_spacing: 0.8,
+                letter_spacing: 0.1,
+                strongs_sheet_height: 400,
+                presentation_context: 2,
+            }),
+            study_ui: Some(LegacyStudyUi {
+                show_commentary: false,
+                show_notes: true,
+                show_cross_refs: false,
+                show_red_letter: true,
+            }),
+        };
+
+        db.import_legacy_local_storage(&payload).unwrap();
+        assert!(db.legacy_import_done().unwrap());
+        assert_eq!(db.list_search_history().unwrap().len(), 1);
+        assert_eq!(db.list_service_order().unwrap().len(), 1);
+        let prefs = db.get_preferences().unwrap();
+        assert_eq!(prefs.font_family, "serif");
+        assert!(!prefs.show_commentary);
+
+        // Calling again with different data must be a no-op — the marker already
+        // exists, so nothing should change (this is what makes it safe for the
+        // frontend to call unconditionally on every startup).
+        let second_payload = LegacyLocalStorageImport {
+            search_history: vec![LegacySearchHistoryEntry {
+                query: "should not be imported".into(),
+                timestamp: 2000,
+                selected_ref: None,
+            }],
+            ..Default::default()
+        };
+        db.import_legacy_local_storage(&second_payload).unwrap();
+        assert_eq!(db.list_search_history().unwrap().len(), 1);
+        assert_eq!(db.list_search_history().unwrap()[0].query, "faith");
 
         cleanup(&path);
     }

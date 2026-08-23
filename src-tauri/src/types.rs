@@ -202,6 +202,22 @@ pub struct Preferences {
     pub show_morph: bool,
     pub verse_display: String,
     pub default_commentary: Option<String>,
+
+    // Study panel section visibility — moved here from browser localStorage so
+    // preferences have one persistence contract instead of two (SQLite + LS).
+    pub show_commentary: bool,
+    pub show_notes: bool,
+    pub show_cross_refs: bool,
+    pub show_red_letter: bool,
+
+    // Display/typography preferences — same consolidation.
+    pub font_family: String,
+    pub text_align: String,
+    pub margins: u32,
+    pub line_spacing: f64,
+    pub letter_spacing: f64,
+    pub strongs_sheet_height: u32,
+    pub presentation_context: u32,
 }
 
 impl Default for Preferences {
@@ -213,8 +229,88 @@ impl Default for Preferences {
             show_morph: false,
             verse_display: "verse-per-line".into(),
             default_commentary: None,
+
+            show_commentary: true,
+            show_notes: true,
+            show_cross_refs: true,
+            show_red_letter: true,
+
+            font_family: "system".into(),
+            text_align: "left".into(),
+            margins: 0,
+            line_spacing: 0.6,
+            letter_spacing: 0.0,
+            strongs_sheet_height: 360,
+            presentation_context: 1,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchHistoryEntry {
+    pub id: i64,
+    pub query: String,
+    pub timestamp: i64,
+    pub ref_book: Option<String>,
+    pub ref_chapter: Option<u32>,
+    pub ref_verse: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceOrderItem {
+    pub id: String,
+    pub book: String,
+    pub chapter: u32,
+    pub verse: u32,
+    pub text: String,
+    pub module: String,
+}
+
+/// Legacy browser localStorage payloads, submitted once by the frontend to
+/// import_legacy_local_storage so a device upgrading from a pre-consolidation
+/// version doesn't lose its search history, service order, or display/study
+/// preferences. See db::Database::import_legacy_local_storage for the
+/// idempotency guarantee (an app_meta marker, not a schema version — this is a
+/// one-time data migration, not a schema change).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LegacyLocalStorageImport {
+    pub search_history: Vec<LegacySearchHistoryEntry>,
+    pub service_order: Vec<ServiceOrderItem>,
+    pub display_prefs: Option<LegacyDisplayPrefs>,
+    pub study_ui: Option<LegacyStudyUi>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegacySearchHistoryEntry {
+    pub query: String,
+    pub timestamp: i64,
+    pub selected_ref: Option<LegacyVerseRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegacyVerseRef {
+    pub book: String,
+    pub chapter: u32,
+    pub verse: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegacyDisplayPrefs {
+    pub font_family: String,
+    pub text_align: String,
+    pub margins: u32,
+    pub line_spacing: f64,
+    pub letter_spacing: f64,
+    pub strongs_sheet_height: u32,
+    pub presentation_context: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegacyStudyUi {
+    pub show_commentary: bool,
+    pub show_notes: bool,
+    pub show_cross_refs: bool,
+    pub show_red_letter: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

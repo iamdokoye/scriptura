@@ -11,12 +11,15 @@
 
 mod bible;
 mod bookmarks;
+mod legacy_import;
 mod lexicon;
 mod module_install;
 mod notes;
 mod preferences;
 mod presentation;
 mod search;
+mod search_history;
+mod service_order;
 
 // Glob re-exports, not named ones: #[tauri::command] generates hidden sibling
 // items alongside each function (__cmd__foo, __tauri_command_name_foo) that
@@ -26,12 +29,15 @@ mod search;
 // compile with an opaque "could not find __cmd__foo in commands" error.
 pub use bible::*;
 pub use bookmarks::*;
+pub use legacy_import::*;
 pub use lexicon::*;
 pub use module_install::*;
 pub use notes::*;
 pub use preferences::*;
 pub use presentation::*;
 pub use search::*;
+pub use search_history::*;
+pub use service_order::*;
 
 // Used by lib.rs's startup thread to rebuild any module whose FTS index is stale.
 pub(crate) use search::build_fts_index;
