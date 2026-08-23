@@ -1067,7 +1067,11 @@ mod tests {
         let ver: i32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(ver, 4);
+        // Migrating from v3 should land on whatever the latest migration is,
+        // not a version hardcoded at the time this test was written — that's
+        // what actually broke here when v5 was added later.
+        let latest = Database::migrations().last().unwrap().0;
+        assert_eq!(ver, latest);
         drop(conn);
 
         cleanup(&path);

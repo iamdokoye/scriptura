@@ -385,8 +385,12 @@ fn parse_strongs_number(number: &str) -> Result<u32> {
 fn parse_strongs_entry(number: &str, raw: &str) -> Result<StrongsEntry> {
     let raw = raw.trim();
 
-    // Detect format: TEI XML has <entryFree> or <orth> tags
-    if raw.contains('<') {
+    // Detect format: TEI XML has matching <tag>...</tag> pairs. A bare '<'
+    // isn't a safe signal on its own — found via a full-lexicon audit: H6848's
+    // plain-text transliteration ("tsiph<oniy") contains a literal '<' with no
+    // closing tag anywhere in the entry, which used to misroute it into the
+    // XML parser and silently produce an empty definition.
+    if raw.contains("</") {
         parse_strongs_tei(number, raw)
     } else {
         parse_strongs_plain(number, raw)
@@ -403,10 +407,15 @@ fn parse_strongs_tei(number: &str, raw: &str) -> Result<StrongsEntry> {
         .unwrap_or_else(|| number.to_string());
 
     // Extract <orth rend="bold" type="trans"> for romanized transliteration
-    let transliteration = extract_tag_by_attr(raw, "orth", "type", "trans").unwrap_or_default();
+    let transliteration = strip_cjk(&extract_tag_by_attr(raw, "orth", "type", "trans").unwrap_or_default());
 
-    // Extract <pron> for pronunciation hint (in braces like {ag-ap-ah'-o})
-    let pronunciation = extract_tag_text(raw, "pron").unwrap_or_default();
+    // Extract <pron> for pronunciation hint (in braces like {ag-ap-ah'-o}).
+    // A subset of entries in this specific StrongsGreek module (found via a
+    // full-lexicon scan — ~1% of entries, e.g. G3756) have Chinese usage
+    // notes ("在母音前用" = "used before a vowel") mixed directly into this
+    // field in the source data itself — not an encoding bug on our end, but
+    // out of place for an English-language study tool, so strip it.
+    let pronunciation = strip_cjk(&extract_tag_text(raw, "pron").unwrap_or_default());
 
     // Extract <def> block for the actual definition
     let definition = extract_tag_text(raw, "def")
@@ -495,27 +504,121 @@ fn parse_strongs_plain(number: &str, raw: &str) -> Result<StrongsEntry> {
 }
 
 /// Strong's own 1890 definitions use a consistent form of words for particles
-/// that have no independent English rendering (e.g. H0853, the Hebrew
-/// direct-object marker: "...unrepresented in English)."). Detecting that
-/// wording lets the UI tell a real content word from grammatical scaffolding
-/// that just happened to get attached to the nearest visible word during
-/// tagging, without maintaining a hand-picked list of Strong's numbers.
+/// that have no fixed, independent English rendering. Hebrew examples like
+/// H0853 (the direct-object marker) say "...unrepresented in English)."; the
+/// Greek article G3588 says "...(sometimes to be supplied, at others
+/// omitted, in English idiom)" — same underlying fact (translators add or
+/// drop this word based on English idiom, it doesn't map to one fixed English
+/// word), different dictionary's wording for it. Detecting both forms lets
+/// the UI tell a real content word from grammatical scaffolding that just
+/// happened to get attached to the nearest visible word during tagging,
+/// without maintaining a hand-picked list of Strong's numbers.
 fn is_untranslated_marker_text(definition: &str) -> bool {
     let lower = definition.to_lowercase();
     lower.contains("unrepresented in english")
         || lower.contains("not translated in")
         || lower.contains("is untranslated")
+        || lower.contains("to be supplied")
+        || (lower.contains("omitted") && lower.contains("english idiom"))
+        // "usually not expressed" (e.g. G3385's interrogative particle) means
+        // omission is the DEFAULT — deliberately narrower than "often/frequently
+        // not expressed" (e.g. H376 "man", a real, heavily-translated word that
+        // only occasionally drops out of idiom), which must NOT match here.
+        || lower.contains("usually not expressed")
 }
 
+/// Strong's definitions conventionally read as
+/// "[etymology clause]; [core meaning]:--[KJV renderings]." — e.g. G2226:
+/// "neuter of a derivative of 2198; a live thing, i.e. an animal:--beast."
+/// The etymology clause comes *first*, so splitting at the first `;`/`.`/`:`
+/// (as this used to) surfaces "neuter of a derivative of 2198" as the
+/// headline definition and buries the actual meaning ("a live thing, i.e. an
+/// animal") in the full entry below. The core meaning is reliably the LAST
+/// `;`-delimited clause before the `:--` KJV-word-list marker, so extract
+/// that for the headline instead, while keeping the complete original text
+/// (etymology included) as the full lexicon entry — nothing is discarded,
+/// just reordered for what's shown prominently.
+/// Etymology clauses conventionally open with one of these — used both to
+/// fall back to the KJV word list below when the whole "definition body" is
+/// nothing but etymology (see `split_at_sentence`), and by the full-lexicon
+/// audit test to find entries where that's still true after the fallback.
+/// Removes CJK characters (and the whitespace/punctuation left behind) from
+/// `s`. See the comment at its call site in `parse_strongs_tei` for why.
+fn strip_cjk(s: &str) -> String {
+    let cleaned: String = s
+        .chars()
+        .filter(|&c| {
+            let cp = c as u32;
+            !((0x4E00..=0x9FFF).contains(&cp) // CJK Unified Ideographs
+                || (0x3000..=0x303F).contains(&cp) // CJK punctuation (incl. ideographic space/comma)
+                || (0xFF00..=0xFFEF).contains(&cp)) // Fullwidth forms
+        })
+        .collect();
+    cleaned.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn looks_like_etymology(s: &str) -> bool {
+    let lower = s.to_lowercase();
+    const OPENERS: &[&str] = &[
+        "from ", "a primitive", "of uncertain", "probably from", "apparently a",
+        "apparently from", "see ", "prolongation", "contracted from",
+        "feminine of", "masculine of", "neuter of",
+    ];
+    OPENERS.iter().any(|o| lower.starts_with(o))
+}
+
+// A trailing clause opening with one of these reads as a usage footnote
+// tacked on after the real meaning (e.g. G1519: "...to or into (indicating
+// the point reached or entered)...; also in adverbial phrases:--..." — the
+// core meaning is the middle clause, not this trailing one) rather than the
+// meaning itself — found via a full-Bible audit that spot-checked every
+// Strong's number actually cited in the KJV text, not just the two-clause
+// common case.
+const TRAILING_FOOTNOTE_OPENERS: &[&str] = &[
+    "also ", "often ", "sometimes ", "chiefly ", "generally ", "usually ", "frequently ",
+];
+
 fn split_at_sentence(s: &str) -> (String, String) {
-    // Split after the first sentence-ending punctuation followed by whitespace or end
-    let bytes = s.as_bytes();
-    for (i, &b) in bytes.iter().enumerate() {
-        if (b == b'.' || b == b';' || b == b':') && (i + 1 >= bytes.len() || bytes[i + 1] == b' ') {
-            return (s[..=i].trim().to_string(), s[i + 1..].trim().to_string());
-        }
-    }
-    (s.to_string(), String::new())
+    let body = match s.find(":--") {
+        Some(idx) => &s[..idx],
+        None => s,
+    };
+    let clauses: Vec<&str> = body
+        .split(';')
+        .map(|c| c.trim().trim_end_matches(['.', ':', ',']).trim())
+        .filter(|c| !c.is_empty())
+        .collect();
+
+    // Walk back from the last clause, skipping any that are just trailing
+    // usage footnotes, to find the actual core-meaning clause.
+    let core = clauses
+        .iter()
+        .rev()
+        .find(|c| {
+            let lower = c.to_lowercase();
+            !TRAILING_FOOTNOTE_OPENERS.iter().any(|o| lower.starts_with(o))
+        })
+        .copied()
+        .unwrap_or("");
+
+    // Some entries have no semicolon-delimited "meaning" clause at all — just
+    // an etymology clause, then the KJV word list (e.g. H81: "feminine of
+    // 80:--powder."). When that's all `core` found, the actual gloss is only
+    // in the KJV list after `:--`, so pull the first word from there instead
+    // of surfacing pure etymology as the headline definition.
+    let short_def = if core.is_empty() {
+        s.chars().take(200).collect()
+    } else if looks_like_etymology(core) {
+        s.find(":--")
+            .and_then(|idx| s[idx + 3..].split([',', ';']).next())
+            .map(|w| w.trim().trim_end_matches('.').to_string())
+            .filter(|w| !w.is_empty())
+            .unwrap_or_else(|| core.to_string())
+    } else {
+        core.to_string()
+    };
+
+    (short_def, s.trim().to_string())
 }
 
 /// Extract text content of the first matching tag (ignoring attributes).
@@ -619,5 +722,121 @@ mod marker_tests {
     fn does_not_flag_a_normal_content_word() {
         let def = "a primitive root; to shine; (transitively) to illuminate.";
         assert!(!is_untranslated_marker_text(def));
+    }
+
+    #[test]
+    fn flags_g3588_style_greek_article() {
+        // Real StrongsGreek text for G3588, the Greek definite article — the
+        // Hebrew and Greek dictionaries use different wording for the same
+        // underlying fact (this word doesn't map to one fixed English word).
+        let def = "he hay, and the neuter to to in all their inflections; the \
+                    definite article; the (sometimes to be supplied, at others \
+                    omitted, in English idiom):--the, this, that, one, he, she, \
+                    it, etc.";
+        assert!(is_untranslated_marker_text(def));
+    }
+
+    #[test]
+    fn flags_g3385_style_interrogative_particle() {
+        // Real StrongsGreek text for G3385 — an interrogative particle
+        // expressed only through question word order, never its own English
+        // word. Found via a full-lexicon audit alongside G3588.
+        let def = "from 3361 and the neuter of 5100; whether at all:--not (the \
+                    particle usually not expressed, except by the form of the \
+                    question).";
+        assert!(is_untranslated_marker_text(def));
+    }
+
+    #[test]
+    fn does_not_flag_a_word_that_only_sometimes_drops_from_idiom() {
+        // Real StrongsHebrew text for H376 ("man") — a real, heavily
+        // translated content word that only *sometimes* acts as an
+        // untranslated adjunct. "frequently not expressed" must not trip the
+        // same detector as "usually not expressed" (G3385) or "unrepresented
+        // in English" (H0853) — this word has dozens of real KJV renderings.
+        let def = "a man as an individual or a male person; often used as an \
+                    adjunct to a more definite term (and in such cases \
+                    frequently not expressed in translation):--man, husband, person.";
+        assert!(!is_untranslated_marker_text(def));
+    }
+}
+
+#[cfg(test)]
+mod short_def_tests {
+    use super::split_at_sentence;
+
+    #[test]
+    fn extracts_the_core_meaning_not_the_etymology_clause() {
+        // Real StrongsGreek text for G2226 ("beast" in Rev 4:7). The
+        // etymology clause ("neuter of a derivative of 2198") used to win as
+        // the headline definition because it comes first and ends at the
+        // first semicolon — the actual gloss ("a live thing, i.e. an
+        // animal") was buried in the full entry instead.
+        let def = "neuter of a derivative of 2198; a live thing, i.e. an animal:--beast.";
+        let (short_def, long_def) = split_at_sentence(def);
+        assert_eq!(short_def, "a live thing, i.e. an animal");
+        assert_eq!(long_def, def);
+    }
+
+    #[test]
+    fn falls_back_to_the_whole_text_with_no_semicolon() {
+        let def = "to shine:--shine.";
+        let (short_def, _) = split_at_sentence(def);
+        assert_eq!(short_def, "to shine");
+    }
+
+    #[test]
+    fn falls_back_to_kjv_word_list_when_body_is_pure_etymology() {
+        // Real StrongsHebrew text for H81 — no semicolon at all, so the whole
+        // "definition body" before `:--` is just the etymology clause. The
+        // real gloss ("powder") only exists in the KJV word list after it.
+        let def = "feminine of 80:--powder.";
+        let (short_def, _) = split_at_sentence(def);
+        assert_eq!(short_def, "powder");
+    }
+}
+
+#[cfg(test)]
+mod format_detection_tests {
+    use super::parse_strongs_entry;
+
+    #[test]
+    fn a_bare_angle_bracket_does_not_misroute_plain_text_into_the_xml_parser() {
+        // Real StrongsHebrew RawLD text for H6848 — found via a full-lexicon
+        // audit. Its transliteration ("tsiph<oniy") contains a literal '<'
+        // with no closing tag anywhere in the entry. Detecting XML by a bare
+        // '<' used to route this into parse_strongs_tei, which found no
+        // <orth>/<def> tags and silently produced an entirely empty entry.
+        let raw = " 6848  tsepha`  tseh'-fah; or tsiph<oniy {tsif-o-nee'\r\n\r\n from an unused root meaning to extrude; a viper (as thrusting\r\n out the tongue, i.e. hissing):--adder, cockatrice.\r";
+        let entry = parse_strongs_entry("H6848", raw).unwrap();
+        assert!(!entry.short_def.is_empty());
+        assert!(!entry.long_def.is_empty());
+        assert!(entry.long_def.contains("viper"));
+    }
+}
+
+#[cfg(test)]
+mod cjk_stripping_tests {
+    use super::parse_strongs_entry;
+
+    #[test]
+    fn strips_chinese_usage_notes_mixed_into_the_pronunciation_field() {
+        // Real StrongsGreek TEI text for G3756. Found via a full-lexicon scan:
+        // ~1% of entries in this specific module have Chinese annotations
+        // ("在母音前用" = "used before a vowel") mixed directly into <pron> in
+        // the source data itself — not an encoding bug, but out of place for
+        // an English-language study tool and, worse, this is exactly the text
+        // shown prominently in the sheet's header.
+        let raw = r#"<entryFree n="3756">
+<orth>ὐ</orth><lb/>
+<orth type="writing">ouj</orth> <orth rend="bold" type="trans">ou</orth> <pron rend="italic">{oo} ，　在母音前用 ouk {ook} ; 在有气号之前用ouch {ookh}</pron>
+<def>
+ a primary word; the absolute negative adverb; no or not:--not.
+</def>
+</entryFree>"#;
+        let entry = parse_strongs_entry("G3756", raw).unwrap();
+        assert!(!entry.transliteration.chars().any(|c| (c as u32) >= 0x3000));
+        assert!(entry.transliteration.contains("ou"));
+        assert!(entry.transliteration.contains("ook"));
     }
 }

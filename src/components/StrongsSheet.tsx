@@ -123,6 +123,12 @@ const FONT_FAMILY_CSS: Record<string, string> = {
 export default function StrongsSheet({ immediate = false }: { immediate?: boolean }) {
   const { selectedStrongs, setSelectedStrongs, strongsGroup, setStrongsGroup, primaryModule, readingFontSize, isFullscreen, displayPrefs, setDisplayPrefs } = useAppStore();
   const fontFamily = FONT_FAMILY_CSS[displayPrefs.fontFamily] ?? FONT_FAMILY_CSS.system;
+  // In the reading view, readingFontSize is the user's own Bible text-size
+  // preference, so the sheet should track it exactly. Inside the presentation
+  // window (`immediate`) that same field instead holds the operator's display
+  // size (up to 98px, meant to be read from across a room) — the sheet there
+  // is still dictionary prose read up close, so cap it instead of following.
+  const bodyFontSize = immediate ? Math.min(readingFontSize, 18) : readingFontSize;
   const [entries, setEntries] = useState<StrongsEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -317,7 +323,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
 
           {error && (
             <div className="p-6">
-              {error.includes("Module not found") || error.includes("not found") ? (
+              {error.includes("Module not found") ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
                   <span className="material-symbols-outlined text-[40px] text-on-surface-variant">
                     menu_book
@@ -327,6 +333,20 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                       ? "Strong's Greek Dictionary"
                       : "Strong's Hebrew Dictionary"}{" "}
                     not installed.
+                  </p>
+                </div>
+              ) : error.includes("not found") ? (
+                // The dictionary module IS installed — this specific number
+                // just isn't in it (a real, if rare, gap in that module's own
+                // data — a full-Bible audit found ~30 such Greek numbers).
+                // "Not installed" would be actively misleading here.
+                <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
+                  <span className="material-symbols-outlined text-[40px] text-on-surface-variant">
+                    search_off
+                  </span>
+                  <p className="font-body-ui text-[14px] text-on-surface-variant">
+                    No dictionary entry for Strong's {selectedStrongs} — this appears to be a gap
+                    in this Strong's {selectedStrongs?.startsWith("G") ? "Greek" : "Hebrew"} module's own data.
                   </p>
                 </div>
               ) : (
@@ -343,7 +363,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                   <p className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-2">
                     Definition
                   </p>
-                  <p className="font-body-ui leading-relaxed text-on-surface" style={{ fontSize: `${readingFontSize - 1}px`, fontFamily }}>
+                  <p className="font-body-ui leading-relaxed text-on-surface" style={{ fontSize: `${bodyFontSize - 1}px`, fontFamily }}>
                     <TextWithLinks
                       text={entry.short_def}
                       prefix={prefix}
@@ -357,7 +377,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                     <p className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-2">
                       Lexicon Entry
                     </p>
-                    <p className="font-body-ui leading-relaxed text-on-surface-variant whitespace-pre-wrap" style={{ fontSize: `${readingFontSize - 2}px`, fontFamily }}>
+                    <p className="font-body-ui leading-relaxed text-on-surface-variant whitespace-pre-wrap" style={{ fontSize: `${bodyFontSize - 2}px`, fontFamily }}>
                       <TextWithLinks
                         text={entry.long_def}
                         prefix={prefix}
@@ -385,7 +405,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                         </span>
                       )}
                     </div>
-                    <p className="font-body-ui leading-relaxed text-on-surface" style={{ fontSize: `${readingFontSize - 1}px`, fontFamily }}>
+                    <p className="font-body-ui leading-relaxed text-on-surface" style={{ fontSize: `${bodyFontSize - 1}px`, fontFamily }}>
                       <TextWithLinks text={extra.short_def} prefix={prefix} onLookup={lookup} />
                     </p>
                   </section>
