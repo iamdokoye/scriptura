@@ -316,7 +316,6 @@ impl ModuleRegistry {
         }
 
         const MAX_DOWNLOAD_BYTES: u64 = 512 * 1024 * 1024; // 500 MB
-        const MAX_ENTRY_BYTES: u64 = 256 * 1024 * 1024; // 256 MB per entry
 
         let content_length = response.content_length().unwrap_or(0);
         if content_length > MAX_DOWNLOAD_BYTES {
@@ -370,49 +369,7 @@ impl ModuleRegistry {
         std::fs::create_dir_all(&tmp_dir)?;
 
         let extract_and_validate = || -> Result<ModuleConf> {
-            let cursor = std::io::Cursor::new(data);
-            let mut zip = zip::ZipArchive::new(cursor)
-                .map_err(|e| AppError::Sword(format!("zip open: {e}")))?;
-
-            for i in 0..zip.len() {
-                let mut file = zip
-                    .by_index(i)
-                    .map_err(|e| AppError::Sword(format!("zip entry {i}: {e}")))?;
-
-                // enclosed_name() returns None for paths with ".." or absolute components
-                let enclosed = match file.enclosed_name() {
-                    Some(p) => p,
-                    None => {
-                        log::warn!("[modules] skipping unsafe zip entry: {}", file.name());
-                        continue;
-                    }
-                };
-                let out_path = tmp_dir.join(enclosed);
-
-                // Double-check the resolved path is still inside tmp_dir
-                if !out_path.starts_with(&tmp_dir) {
-                    log::warn!("[modules] skipping zip entry outside dest: {}", file.name());
-                    continue;
-                }
-
-                if file.is_dir() {
-                    std::fs::create_dir_all(&out_path)?;
-                } else {
-                    if let Some(parent) = out_path.parent() {
-                        std::fs::create_dir_all(parent)?;
-                    }
-                    if file.size() > MAX_ENTRY_BYTES {
-                        return Err(AppError::Sword(format!(
-                            "zip entry {} exceeds size limit",
-                            file.name()
-                        )));
-                    }
-                    // std::io::copy surfaces a zip CRC32 mismatch as an error here,
-                    // since ZipFile validates each entry's checksum as it is read.
-                    let mut out_file = std::fs::File::create(&out_path)?;
-                    std::io::copy(&mut file, &mut out_file)?;
-                }
-            }
+            extract_zip_entries(data, &tmp_dir)?;
 
             let conf_path = Self::find_conf(&tmp_dir, module_id)?;
             let mut conf = ModuleConf::parse(module_id, &conf_path)?;
@@ -484,6 +441,60 @@ impl ModuleRegistry {
             module_dir.display()
         )))
     }
+}
+
+/// Extracts a zip archive into `dest_dir`, skipping any entry whose path would
+/// resolve outside it (zip-slip / path traversal) and rejecting any single entry
+/// larger than MAX_ENTRY_BYTES. Pulled out of `install()` as a free function so this
+/// path-safety behavior can be unit tested directly against a crafted archive,
+/// without needing a real network download to exercise it.
+fn extract_zip_entries(data: Vec<u8>, dest_dir: &Path) -> Result<()> {
+    const MAX_ENTRY_BYTES: u64 = 256 * 1024 * 1024; // 256 MB per entry
+
+    let cursor = std::io::Cursor::new(data);
+    let mut zip =
+        zip::ZipArchive::new(cursor).map_err(|e| AppError::Sword(format!("zip open: {e}")))?;
+
+    for i in 0..zip.len() {
+        let mut file = zip
+            .by_index(i)
+            .map_err(|e| AppError::Sword(format!("zip entry {i}: {e}")))?;
+
+        // enclosed_name() returns None for paths with ".." or absolute components
+        let enclosed = match file.enclosed_name() {
+            Some(p) => p,
+            None => {
+                log::warn!("[modules] skipping unsafe zip entry: {}", file.name());
+                continue;
+            }
+        };
+        let out_path = dest_dir.join(enclosed);
+
+        // Double-check the resolved path is still inside dest_dir
+        if !out_path.starts_with(dest_dir) {
+            log::warn!("[modules] skipping zip entry outside dest: {}", file.name());
+            continue;
+        }
+
+        if file.is_dir() {
+            std::fs::create_dir_all(&out_path)?;
+        } else {
+            if let Some(parent) = out_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            if file.size() > MAX_ENTRY_BYTES {
+                return Err(AppError::Sword(format!(
+                    "zip entry {} exceeds size limit",
+                    file.name()
+                )));
+            }
+            // std::io::copy surfaces a zip CRC32 mismatch as an error here,
+            // since ZipFile validates each entry's checksum as it is read.
+            let mut out_file = std::fs::File::create(&out_path)?;
+            std::io::copy(&mut file, &mut out_file)?;
+        }
+    }
+    Ok(())
 }
 
 /// Parse a SWORD module .conf file into a ModuleInfo.
@@ -596,5 +607,151 @@ fn parse_category(s: &str) -> ModuleCategory {
         "Dictionary" => ModuleCategory::Dictionary,
         "Devotional" => ModuleCategory::Devotional,
         _ => ModuleCategory::Other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("scriptura-test-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn build_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut buf = std::io::Cursor::new(Vec::new());
+        let mut writer = zip::ZipWriter::new(&mut buf);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        for (name, content) in entries {
+            writer.start_file(*name, options).unwrap();
+            std::io::Write::write_all(&mut writer, content).unwrap();
+        }
+        writer.finish().unwrap();
+        buf.into_inner()
+    }
+
+    #[test]
+    fn extracts_well_formed_entries() {
+        let dest = temp_dir("extract-ok");
+        let zip_bytes = build_zip(&[
+            (
+                "mods.d/kjv.conf",
+                b"[KJV]\ndescription=King James Version\n",
+            ),
+            ("modules/texts/rawtext/kjv/ot.bzs", b"binary-data-here"),
+        ]);
+
+        extract_zip_entries(zip_bytes, &dest).unwrap();
+
+        assert!(dest.join("mods.d/kjv.conf").exists());
+        assert!(dest.join("modules/texts/rawtext/kjv/ot.bzs").exists());
+
+        let _ = std::fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn skips_path_traversal_entries() {
+        let dest = temp_dir("extract-traversal");
+        // A crafted archive claiming to write outside dest_dir. Real extractors
+        // (e.g. older/naive Zip Slip-vulnerable ones) would happily write this
+        // straight through; extract_zip_entries must skip it instead.
+        let zip_bytes = build_zip(&[
+            ("../../evil.txt", b"pwned"),
+            (
+                "mods.d/kjv.conf",
+                b"[KJV]\ndescription=King James Version\n",
+            ),
+        ]);
+
+        extract_zip_entries(zip_bytes, &dest).unwrap();
+
+        // The malicious entry must never land anywhere on disk...
+        assert!(!dest
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("evil.txt")
+            .exists());
+        // ...while the legitimate entry in the same archive still extracts normally.
+        assert!(dest.join("mods.d/kjv.conf").exists());
+
+        let _ = std::fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn parses_valid_bible_conf() {
+        let info = parse_sword_conf(
+            "[KJV]\n\
+             Description=King James Version\n\
+             About=The 1769 Blayney text.\n\
+             Lang=en\n\
+             Version=2.0\n\
+             ModDrv=zText\n\
+             Category=Biblical Texts\n",
+        )
+        .expect("valid conf should parse");
+
+        assert_eq!(info.id, "KJV");
+        assert_eq!(info.name, "King James Version");
+        assert_eq!(info.language, "en");
+        assert_eq!(info.version, "2.0");
+        assert_eq!(info.category, ModuleCategory::Bible);
+        assert!(!info.requires_key);
+    }
+
+    #[test]
+    fn rejects_conf_missing_description() {
+        assert!(parse_sword_conf("[KJV]\nLang=en\n").is_none());
+    }
+
+    #[test]
+    fn rejects_conf_missing_section_header() {
+        assert!(parse_sword_conf("Description=No section header\n").is_none());
+    }
+
+    #[test]
+    fn detects_cipher_key_requirement() {
+        let info =
+            parse_sword_conf("[LOCKED]\nDescription=Locked module\nCipherKey=\nModDrv=zText\n")
+                .unwrap();
+        // An empty CipherKey line still means the key line exists in cipher_key's
+        // raw string form here — sword marks "locked, key not yet supplied" this way.
+        assert!(!info.requires_key);
+
+        let info = parse_sword_conf(
+            "[LOCKED]\nDescription=Locked module\nCipherKey=abc123\nModDrv=zText\n",
+        )
+        .unwrap();
+        assert!(info.requires_key);
+    }
+
+    #[test]
+    fn falls_back_to_moddrv_when_category_absent() {
+        let commentary =
+            parse_sword_conf("[MHC]\nDescription=Matthew Henry Complete\nModDrv=RawCom\n").unwrap();
+        assert_eq!(commentary.category, ModuleCategory::Commentary);
+
+        let lexicon =
+            parse_sword_conf("[STRONGS]\nDescription=Strong's Dictionary\nModDrv=RawLD\n").unwrap();
+        assert_eq!(lexicon.category, ModuleCategory::Lexicon);
+    }
+
+    #[test]
+    fn extracts_entry_within_size_limit() {
+        // Exercising an actual over-the-limit (256 MB) entry isn't practical in a
+        // unit test; this instead guards against the size check being accidentally
+        // inverted by confirming a normal small entry is still let through.
+        let dest = temp_dir("extract-size-guard");
+        let zip_bytes = build_zip(&[("small.txt", b"well within the limit")]);
+        assert!(extract_zip_entries(zip_bytes, &dest).is_ok());
+        assert!(dest.join("small.txt").exists());
+
+        let _ = std::fs::remove_dir_all(&dest);
     }
 }

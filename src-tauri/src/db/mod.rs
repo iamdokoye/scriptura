@@ -524,3 +524,231 @@ CREATE VIRTUAL TABLE verse_fts USING fts5(
 UPDATE installed_modules SET index_built = 0;
 PRAGMA user_version = 2;
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Preferences, ReadingPosition};
+
+    /// Each test gets its own on-disk file — WAL mode needs a real file, not
+    /// `:memory:`, and a unique name per test avoids cross-test interference
+    /// when tests run in parallel (the default for `cargo test`).
+    fn temp_db(name: &str) -> (Database, std::path::PathBuf) {
+        let path = std::env::temp_dir().join(format!(
+            "scriptura-test-db-{name}-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let db = Database::open(&path).expect("open temp db");
+        (db, path)
+    }
+
+    fn cleanup(path: &std::path::Path) {
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(path.with_extension("db-shm"));
+    }
+
+    #[test]
+    fn preferences_round_trip_and_defaults() {
+        let (db, path) = temp_db("prefs");
+
+        // No row yet — falls back to Preferences::default() rather than erroring.
+        let defaults = db.get_preferences().unwrap();
+        assert_eq!(defaults.theme, Preferences::default().theme);
+
+        let mut prefs = defaults;
+        prefs.theme = "dark".to_string();
+        prefs.font_size_reading = 22;
+        prefs.show_strongs = false;
+        db.set_preferences(&prefs).unwrap();
+
+        let loaded = db.get_preferences().unwrap();
+        assert_eq!(loaded.theme, "dark");
+        assert_eq!(loaded.font_size_reading, 22);
+        assert!(!loaded.show_strongs);
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn reading_position_round_trip() {
+        let (db, path) = temp_db("readpos");
+
+        assert!(db.get_reading_position().unwrap().is_none());
+
+        let pos = ReadingPosition {
+            book: "Genesis".to_string(),
+            chapter: 3,
+            verse: 15,
+            module_id: "KJV".to_string(),
+        };
+        db.set_reading_position(&pos).unwrap();
+
+        let loaded = db.get_reading_position().unwrap().unwrap();
+        assert_eq!(loaded.book, "Genesis");
+        assert_eq!(loaded.chapter, 3);
+        assert_eq!(loaded.verse, 15);
+
+        // Setting again overwrites in place rather than accumulating rows.
+        db.set_reading_position(&ReadingPosition {
+            book: "Exodus".to_string(),
+            chapter: 1,
+            verse: 1,
+            module_id: "KJV".to_string(),
+        })
+        .unwrap();
+        assert_eq!(db.get_reading_position().unwrap().unwrap().book, "Exodus");
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn bookmark_crud() {
+        let (db, path) = temp_db("bookmarks");
+
+        let bm = db.add_bookmark("John", 3, 16, "KJV").unwrap();
+        assert_eq!(bm.book, "John");
+
+        let all = db.list_bookmarks().unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].id, bm.id);
+
+        db.remove_bookmark(bm.id).unwrap();
+        assert!(db.list_bookmarks().unwrap().is_empty());
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn note_crud() {
+        let (db, path) = temp_db("notes");
+
+        let note = db
+            .add_note("Psalms", 23, Some(1), "KJV", "The LORD is my shepherd")
+            .unwrap();
+        assert_eq!(note.content, "The LORD is my shepherd");
+
+        let updated = db.update_note(note.id, "edited content").unwrap();
+        assert_eq!(updated.content, "edited content");
+
+        assert_eq!(db.list_notes().unwrap().len(), 1);
+        db.delete_note(note.id).unwrap();
+        assert!(db.list_notes().unwrap().is_empty());
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn installed_module_records_round_trip() {
+        let (db, path) = temp_db("modules");
+
+        db.record_installed_module("KJV", "King James Version", "/path/KJV", "2.0", "Bible")
+            .unwrap();
+        let records = db.list_installed_module_records().unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].0, "KJV");
+        assert!(!records[0].5, "index_built should start false");
+
+        db.mark_index_built("KJV").unwrap();
+        let records = db.list_installed_module_records().unwrap();
+        assert!(records[0].5, "index_built should be true after marking");
+
+        // Re-recording the same id updates in place (ON CONFLICT), not duplicates.
+        db.record_installed_module("KJV", "King James Version", "/path/KJV", "2.1", "Bible")
+            .unwrap();
+        assert_eq!(db.list_installed_module_records().unwrap().len(), 1);
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn fts_search_finds_indexed_verses() {
+        let (db, path) = temp_db("search");
+
+        db.replace_module_index(
+            "KJV",
+            &[
+                ("John", 3, 16, "For God so loved the world".to_string()),
+                ("Genesis", 1, 1, "In the beginning God created".to_string()),
+            ],
+        )
+        .unwrap();
+
+        let results = db
+            .search_fts(
+                "loved",
+                &SearchOptions {
+                    modules: vec!["KJV".to_string()],
+                    testament: None,
+                    book_filter: None,
+                    strongs_filter: None,
+                    page: None,
+                    page_size: None,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].book, "John");
+
+        // Re-indexing the same module replaces rather than appends.
+        db.replace_module_index(
+            "KJV",
+            &[("John", 3, 16, "For God so loved the world".to_string())],
+        )
+        .unwrap();
+        let all_kjv = db
+            .search_fts(
+                "God",
+                &SearchOptions {
+                    modules: vec!["KJV".to_string()],
+                    testament: None,
+                    book_filter: None,
+                    strongs_filter: None,
+                    page: None,
+                    page_size: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            all_kjv.len(),
+            1,
+            "old Genesis row should be gone, not duplicated"
+        );
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn strongs_counts_round_trip() {
+        let (db, path) = temp_db("strongs");
+
+        db.replace_strongs_counts(
+            "KJV",
+            &[
+                ("G26".to_string(), "John".to_string(), 5),
+                ("G26".to_string(), "Romans".to_string(), 3),
+            ],
+        )
+        .unwrap();
+
+        let (total, by_book) = db.get_strongs_counts("KJV", "G26").unwrap();
+        assert_eq!(total, 8);
+        assert_eq!(by_book.len(), 2);
+        assert_eq!(by_book[0].book, "John"); // ordered by count DESC
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn fts_query_sanitizes_syntax_characters_and_adds_prefix_wildcards() {
+        assert_eq!(build_fts_query("love"), "love*");
+        assert_eq!(build_fts_query("God's love"), "God's* love*");
+        // FTS5 special characters (quotes, colons, parens) are stripped, not
+        // passed through — an unsanitized MATCH query with these can error.
+        assert_eq!(build_fts_query("\"love\" OR:test"), "love* ORtest*");
+        assert_eq!(build_fts_query(""), "");
+        assert_eq!(build_fts_query("   "), "");
+    }
+}

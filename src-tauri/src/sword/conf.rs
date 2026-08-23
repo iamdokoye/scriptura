@@ -124,13 +124,13 @@ impl ModuleConf {
         };
 
         let versification = match get("versification").to_lowercase().as_str() {
+            "" | "kjv" => Versification::Kjv,
             "nrsv" | "nrsva" => Versification::Nrsv,
             "german" => Versification::German,
             "luther" => Versification::Luther,
             "vulgate" => Versification::Vulgate,
             "catholic" => Versification::Catholic,
-            other if !other.is_empty() => Versification::Other(other.to_string()),
-            _ => Versification::Kjv,
+            other => Versification::Other(other.to_string()),
         };
 
         let feature: Vec<String> = get("feature")
@@ -178,5 +178,94 @@ impl ModuleConf {
     pub fn requires_cipher(&self) -> bool {
         // If the conf has a CipherKey field at all (even empty), the module is locked
         self.raw.contains_key("cipherkey")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_conf(name: &str, content: &str) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "scriptura-test-conf-{name}-{}.conf",
+            std::process::id()
+        ));
+        fs::write(&path, content).unwrap();
+        path
+    }
+
+    #[test]
+    fn parses_ztext_bible_module() {
+        let path = write_conf(
+            "ztext",
+            "[KJV]\n\
+             Description=King James Version\n\
+             ModDrv=zText\n\
+             SourceType=OSIS\n\
+             Encoding=UTF-8\n\
+             Versification=KJV\n\
+             Lang=en\n\
+             Version=2.0\n",
+        );
+        let conf = ModuleConf::parse("KJV", &path).unwrap();
+
+        assert_eq!(conf.module_id, "KJV");
+        assert_eq!(conf.module_type, ModuleType::Bible);
+        assert_eq!(conf.compression, Compression::Zip);
+        assert_eq!(conf.markup, MarkupType::Osis);
+        assert_eq!(conf.encoding, Encoding::Utf8);
+        assert_eq!(conf.versification, Versification::Kjv);
+        assert!(!conf.requires_cipher());
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn parses_rawld_lexicon_with_smaller_idx_entries() {
+        let path = write_conf(
+            "rawld",
+            "[StrongsGreek]\nDescription=Strong's Greek\nModDrv=RawLD\n",
+        );
+        let conf = ModuleConf::parse("StrongsGreek", &path).unwrap();
+
+        assert_eq!(conf.module_type, ModuleType::Lexicon);
+        // RawLD uses 6-byte idx entries (u32 offset + u16 size); RawLD4/zLD use 8.
+        assert_eq!(conf.idx_entry_size, 6);
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn detects_locked_module_even_with_empty_cipher_key() {
+        // SWORD convention: a CipherKey line's mere presence (even blank, meaning
+        // "locked, key not yet supplied by the user") marks the module as requiring
+        // a cipher key — distinct from a module with no CipherKey line at all.
+        let path = write_conf(
+            "cipher",
+            "[LOCKED]\nDescription=Locked module\nModDrv=zText\nCipherKey=\n",
+        );
+        let conf = ModuleConf::parse("LOCKED", &path).unwrap();
+        assert!(conf.requires_cipher());
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn detects_strongs_numbers_feature_with_zero_pad() {
+        let path = write_conf(
+            "strongs-feature",
+            "[KJV]\nDescription=King James Version\nModDrv=zText\nFeature=StrongsNumbers\n",
+        );
+        let conf = ModuleConf::parse("KJV", &path).unwrap();
+        assert!(conf.feature.contains(&"strongsnumbers".to_string()));
+        assert!(conf.strongs_zero_pad);
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn errors_on_missing_file() {
+        let missing = std::env::temp_dir().join("scriptura-test-conf-does-not-exist.conf");
+        assert!(ModuleConf::parse("X", &missing).is_err());
     }
 }
