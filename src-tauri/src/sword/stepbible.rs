@@ -17,6 +17,8 @@
 
 use crate::sword::lexicon::{is_untranslated_marker_text, parse_strongs_number};
 use crate::types::{AppError, Result, StrongsEntry};
+use once_cell::sync::Lazy;
+use regex::Regex;
 use std::path::{Path, PathBuf};
 
 /// Strips TEI/HTML-ish markup the way `lexicon::strip_xml_tags` does, except
@@ -146,6 +148,83 @@ fn cleanup_punctuation(s: &str) -> String {
     out.trim_start_matches([',', ';', ':', ' ']).to_string()
 }
 
+/// Matches every numbered/lettered sense-outline marker across all three
+/// STEPBible sources, in one pass so the markers stay in their original
+/// left-to-right order:
+///   - BDB (TBESH): bare "1)", "1a)", "1a1)" — no prefix at all.
+///   - Abbott-Smith/LSJ (TBESG/TFLSJ): "__1.", "__2" (bare), "__(a)",
+///     "__II"/"__III" (roman numerals for LSJ's major sense divisions).
+/// Capture groups: 1=roman, 2=arabic-with-period, 3=arabic-bare,
+/// 4=lettered-paren, 5=BDB-digits, 6=BDB-letters (optional),
+/// 7=BDB-second-digits (optional).
+static SENSE_MARKER_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"__([IVXLCDM]+)\b|__(\d+)\.|__(\d+)\b|__\(([a-z])\)|\b(\d{1,3})([a-z]{1,3})?(\d{1,3})?\)",
+    )
+    .unwrap()
+});
+
+/// Reformats a flattened sense outline ("1) name 1a) name 1b) reputation...")
+/// into an actual indented outline, one sense per line:
+///   1) name
+///     1a) name
+///     1b) reputation
+/// Run-together numbered/lettered senses are the single biggest readability
+/// problem in these richer lexicons — this is what makes BDB's own outline
+/// structure ("1) ... 1a) ... 1b) ...") legible instead of one run-on
+/// paragraph of clashing numbers.
+fn format_sense_outline(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut last_end = 0;
+
+    for caps in SENSE_MARKER_RE.captures_iter(s) {
+        let m = caps.get(0).unwrap();
+        out.push_str(s[last_end..m.start()].trim_end());
+
+        let (label, depth) = if let Some(roman) = caps.get(1) {
+            (roman.as_str().to_string(), 0)
+        } else if let Some(n) = caps.get(2) {
+            (n.as_str().to_string(), 0)
+        } else if let Some(n) = caps.get(3) {
+            (n.as_str().to_string(), 0)
+        } else if let Some(letter) = caps.get(4) {
+            (letter.as_str().to_string(), 1)
+        } else {
+            // BDB form: digits, optional letters, optional second digits.
+            let digits = caps.get(5).unwrap().as_str();
+            let letters = caps.get(6).map(|m| m.as_str());
+            let digits2 = caps.get(7).map(|m| m.as_str());
+            let depth = match (letters, digits2) {
+                (None, _) => 0,
+                (Some(_), None) => 1,
+                (Some(_), Some(_)) => 2,
+            };
+            (
+                format!("{digits}{}{}", letters.unwrap_or(""), digits2.unwrap_or("")),
+                depth,
+            )
+        };
+
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(&"  ".repeat(depth));
+        out.push_str(&label);
+        out.push(')');
+        last_end = m.end();
+    }
+    out.push_str(s[last_end..].trim_end());
+
+    out.lines()
+        .map(|l| {
+            let indent = l.len() - l.trim_start().len();
+            format!("{}{}", &l[..indent], l[indent..].split_whitespace().collect::<Vec<_>>().join(" "))
+        })
+        .filter(|l| !l.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Converts STEPBible's "Meaning" column — TEI/HTML-ish markup weaving
 /// together English prose, bracketed citations, verse references, and
 /// inline Greek/Hebrew script — into plain, readable English. See the
@@ -155,7 +234,8 @@ fn clean_stepbible_prose(raw_html: &str) -> String {
     let plain = strip_stepbible_markup(&without_refs);
     let without_brackets = remove_bracketed_spans(&plain);
     let without_foreign = remove_foreign_script_words(&without_brackets);
-    cleanup_punctuation(&without_foreign)
+    let cleaned = cleanup_punctuation(&without_foreign);
+    format_sense_outline(&cleaned)
 }
 
 pub struct StepBibleSource {
@@ -351,5 +431,33 @@ mod tests {
     fn rejects_a_malformed_row() {
         let result = parse_row("G26", "G0026\tonly\tthree\tcolumns");
         assert!(result.is_err());
+    }
+}
+
+#[cfg(test)]
+mod sense_outline_tests {
+    use super::*;
+
+    #[test]
+    fn formats_bdb_sense_outline_with_indentation() {
+        // Real TBESH row for H157 (ahab, "to love") — the same run-together
+        // outline from the screenshot: "1) name 1a) name 1b) reputation...".
+        let line = "H0157\tH0157G =\tH0157G\tאָהֵב\ta.hav\tH:V\tto love: lover\t: lover<br>1) to love<br>1a) (Qal)<br>1a1) human love for another, includes family, and sexual<br>1a2) human appetite for objects such as food, drink, sleep, wisdom<br>2) to like";
+        let entry = parse_row("H157", line).unwrap();
+        eprintln!("=== FORMATTED ===\n{}\n", entry.long_def);
+
+        let lines: Vec<&str> = entry.long_def.lines().collect();
+        // Each sense/sub-sense is its own line, not run together.
+        assert!(lines.iter().any(|l| l.trim_start() == "1) to love"));
+        assert!(lines.iter().any(|l| l.trim_start() == "1a) (Qal)"));
+        assert!(lines.iter().any(|l| l.trim_start().starts_with("1a1) human love for another")));
+        assert!(lines.iter().any(|l| l.trim_start() == "2) to like"));
+        // Sub-senses are indented further than their parent.
+        let l1 = lines.iter().position(|l| l.trim_start() == "1) to love").unwrap();
+        let l1a = lines.iter().position(|l| l.trim_start() == "1a) (Qal)").unwrap();
+        let l1a1 = lines.iter().position(|l| l.trim_start().starts_with("1a1)")).unwrap();
+        let indent_of = |l: &str| l.len() - l.trim_start().len();
+        assert!(indent_of(lines[l1a]) > indent_of(lines[l1]));
+        assert!(indent_of(lines[l1a1]) > indent_of(lines[l1a]));
     }
 }

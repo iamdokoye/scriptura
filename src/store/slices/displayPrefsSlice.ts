@@ -12,11 +12,13 @@ const DEFAULT_DISPLAY_PREFS: DisplayPrefs = {
   // instead of a fixed pixel value — see resolveHeight in StrongsSheet.tsx.
   strongsSheetHeight: 0,
   presentationContext: 1,
+  defaultLexiconSource: "ours",
 };
 
 const FONT_FAMILIES: readonly FontFamily[] = ["system", "serif", "times", "mono"];
 const TEXT_ALIGNS: readonly TextAlign[] = ["left", "justify"];
 const PRESENTATION_CONTEXTS = [1, 2, 3, 4] as const;
+const LEXICON_SOURCES = ["ours", "rich", "lsj"] as const;
 
 /**
  * The backend's Preferences row stores font_family/text_align/presentation_context
@@ -40,6 +42,9 @@ function fromPreferences(prefs: Preferences): DisplayPrefs {
     presentationContext: (PRESENTATION_CONTEXTS as readonly number[]).includes(prefs.presentation_context)
       ? (prefs.presentation_context as 1 | 2 | 3 | 4)
       : DEFAULT_DISPLAY_PREFS.presentationContext,
+    defaultLexiconSource: (LEXICON_SOURCES as readonly string[]).includes(prefs.default_lexicon_source)
+      ? (prefs.default_lexicon_source as "ours" | "rich" | "lsj")
+      : DEFAULT_DISPLAY_PREFS.defaultLexiconSource,
   };
 }
 
@@ -73,6 +78,7 @@ export const createDisplayPrefsSlice: StateCreator<AppState, [], [], DisplayPref
         letter_spacing: patch.letterSpacing,
         strongs_sheet_height: patch.strongsSheetHeight,
         presentation_context: patch.presentationContext,
+        default_lexicon_source: patch.defaultLexiconSource,
       })
       .catch((e) => console.error("[displayPrefs] failed to persist", e));
   },

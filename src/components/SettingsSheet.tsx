@@ -27,6 +27,7 @@ const DEFAULT_PREFS: Preferences = {
   // see resolveHeight in StrongsSheet.tsx.
   strongs_sheet_height: 0,
   presentation_context: 1,
+  default_lexicon_source: "ours",
 };
 
 const FONTS: { id: DisplayPrefs["fontFamily"]; label: string }[] = [
@@ -273,6 +274,23 @@ export default function SettingsSheet() {
             </SubRow>
             <SubRow label="Red letter text" description="Words of Jesus in red (KJV, ASV…)">
               <Toggle value={showRedLetter} onChange={setShowRedLetter} />
+            </SubRow>
+            <SubRow label="Default Strong's source" description="The concordance sheet's own pill switcher can still change this per lookup">
+              <div className="flex gap-1.5">
+                {([
+                  { id: "ours", label: "Scriptura" },
+                  { id: "rich", label: "BDB / Abbott-Smith" },
+                  { id: "lsj", label: "Full LSJ" },
+                ] as const).map((opt) => (
+                  <ChipButton
+                    key={opt.id}
+                    active={prefs.default_lexicon_source === opt.id}
+                    onClick={() => save({ default_lexicon_source: opt.id })}
+                  >
+                    {opt.label}
+                  </ChipButton>
+                ))}
+              </div>
             </SubRow>
           </AccordionSection>
 

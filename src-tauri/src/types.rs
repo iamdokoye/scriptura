@@ -228,6 +228,12 @@ pub struct Preferences {
     pub letter_spacing: f64,
     pub strongs_sheet_height: u32,
     pub presentation_context: u32,
+    /// Which lexicon source the Strong's sheet opens to by default: "ours"
+    /// (bundled bare Strong's), "rich" (BDB/Abbott-Smith), or "lsj" (full
+    /// LSJ, Greek only — the sheet falls back to "rich" for Hebrew words
+    /// since there's no Hebrew LSJ equivalent). The sheet's pill switcher
+    /// can still override this per-lookup.
+    pub default_lexicon_source: String,
 }
 
 /// A reusable presentation design for Scripture output. The data model is
@@ -325,6 +331,7 @@ impl Default for Preferences {
             // even once, since the real pixel height gets persisted then.
             strongs_sheet_height: 0,
             presentation_context: 1,
+            default_lexicon_source: "ours".into(),
         }
     }
 }

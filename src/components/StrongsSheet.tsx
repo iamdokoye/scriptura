@@ -54,7 +54,11 @@ function useDraggableHeight(initial: number, onCommit: (h: number) => void) {
 }
 
 // Regex for numeric cross-references in lexicon text
-const REF_RE = /\b([HG]?\d{1,5}[a-z]?)\b/g;
+// (?!\)) excludes sense-outline markers like "1)", "1a)", "1a1)" — the
+// STEPBible lexicons (BDB/Abbott-Smith/LSJ) format their numbered senses
+// exactly like a bare cross-reference number, which used to make every "1a"
+// in a definition render as a clickable "look up Strong's 1a" button.
+const REF_RE = /\b([HG]?\d{1,5}[a-z]?)\b(?!\))/g;
 const FROM_CONTEXT = /(?:from|same\s+as|see\s+\w+\s+for|akin\s+to|derivative\s+of)\s+/gi;
 
 function TextWithLinks({
@@ -183,20 +187,34 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
   const [history, setHistory] = useState<string[]>([]);
   const [showMarkers, setShowMarkers] = useState(false);
   const [showUsage, setShowUsage] = useState(false);
+
+  const isOpen = selectedStrongs !== null;
+  const prefix: "H" | "G" = selectedStrongs?.startsWith("H") ? "H" : "G";
+
   // Which lexicon to fetch from: our bundled bare Strong's data, or a richer
-  // supplementary lexicon for comparison (Abbott-Smith for Greek, BDB for
-  // Hebrew — see LEXICON_SOURCES below). Resets to "ours" on every new
-  // lookup so switching sources is a deliberate per-word choice.
-  const [source, setSource] = useState<LexiconSourceId>("ours");
-  useEffect(() => { setSource("ours"); }, [selectedStrongs, strongsGroup]);
+  // supplementary lexicon for comparison (Abbott-Smith/BDB, or full LSJ —
+  // see LEXICON_PILLS above). Seeded from the user's "Default Strong's
+  // source" setting each time a new word is looked up, so switching sources
+  // via the pill row is a deliberate per-word override, not sticky. LSJ has
+  // no Hebrew equivalent, so that preference falls back to the richer
+  // Hebrew source (BDB) instead of silently doing nothing.
+  const defaultSourceFor = useCallback(
+    (lang: "H" | "G"): LexiconSourceId => {
+      if (displayPrefs.defaultLexiconSource === "ours") return "ours";
+      if (displayPrefs.defaultLexiconSource === "lsj") {
+        return lang === "G" ? "TFLSJ" : "TBESH";
+      }
+      return lang === "G" ? "TBESG" : "TBESH";
+    },
+    [displayPrefs.defaultLexiconSource]
+  );
+  const [source, setSource] = useState<LexiconSourceId>(() => defaultSourceFor(prefix));
+  useEffect(() => { setSource(defaultSourceFor(prefix)); }, [selectedStrongs, strongsGroup, defaultSourceFor, prefix]);
 
   const drag = useDraggableHeight(
     displayPrefs.strongsSheetHeight,
     (h) => setDisplayPrefs({ strongsSheetHeight: h }),
   );
-
-  const isOpen = selectedStrongs !== null;
-  const prefix: "H" | "G" = selectedStrongs?.startsWith("H") ? "H" : "G";
 
   // A phrase with more than one Strong's number is resolved as: the real
   // content word (shown as the entry, same as a single-number lookup) plus

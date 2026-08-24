@@ -135,6 +135,7 @@ export interface Preferences {
   letter_spacing: number;
   strongs_sheet_height: number;
   presentation_context: 1 | 2 | 3 | 4;
+  default_lexicon_source: "ours" | "rich" | "lsj";
 }
 
 export interface ReadingPosition {
