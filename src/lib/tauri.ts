@@ -242,12 +242,19 @@ export interface PresentationTheme {
   min_font_scale: number;
   transition_type: "none" | "fade" | "slide";
   transition_duration: number;
+  // Which theme is currently applied — a session preference, freely
+  // reassignable to any theme (including personal ones) and unrelated to
+  // whether it can be deleted. See is_builtin for that.
   is_default: boolean;
+  // True only for the seeded "Midnight Scripture" theme — the one theme
+  // that's permanent and can't be deleted. User-created themes stay
+  // personal and deletable no matter what, regardless of is_default.
+  is_builtin: boolean;
   created_at: string;
   updated_at: string;
 }
 
-export type PresentationThemeInput = Omit<PresentationTheme, "id" | "is_default" | "created_at" | "updated_at">;
+export type PresentationThemeInput = Omit<PresentationTheme, "id" | "is_default" | "is_builtin" | "created_at" | "updated_at">;
 
 // ── Command wrappers ─────────────────────────────────────────────────────────
 

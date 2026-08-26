@@ -34,7 +34,7 @@ const STARTER_THEME: PresentationThemeInput = {
 };
 
 function toInput(theme: PresentationTheme): PresentationThemeInput {
-  const { id: _id, is_default: _isDefault, created_at: _createdAt, updated_at: _updatedAt, ...input } = theme;
+  const { id: _id, is_default: _isDefault, is_builtin: _isBuiltin, created_at: _createdAt, updated_at: _updatedAt, ...input } = theme;
   return input;
 }
 
@@ -49,6 +49,7 @@ export default function CustomizationStudio() {
   const [newTheme, setNewTheme] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const selectedTheme = useMemo(
     () => presentationThemes.find((theme) => theme.id === selectedId) ?? null,
@@ -89,6 +90,7 @@ export default function CustomizationStudio() {
     setNewTheme(false);
     setDraft(toInput(theme));
     setMessage(null);
+    setConfirmingDelete(false);
   }
 
   function beginNewTheme() {
@@ -100,6 +102,7 @@ export default function CustomizationStudio() {
     });
     setNewTheme(true);
     setMessage(null);
+    setConfirmingDelete(false);
   }
 
   async function refresh(activeId?: string) {
@@ -146,7 +149,18 @@ export default function CustomizationStudio() {
   }
 
   async function remove() {
-    if (!selectedTheme || selectedTheme.is_default || !window.confirm(`Delete “${selectedTheme.name}”?`)) return;
+    if (!selectedTheme || selectedTheme.is_builtin) return;
+    // window.confirm() is unreliable inside Tauri's embedded webview (most
+    // visibly on macOS/WKWebView, which doesn't consistently support the
+    // native confirm dialog) — it can silently no-op instead of prompting,
+    // which made clicking Delete look like it did nothing at all. An
+    // inline confirmation step doesn't depend on the webview's native
+    // dialog support.
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
+    setConfirmingDelete(false);
     setSaving(true);
     try {
       await api.deletePresentationTheme(selectedTheme.id);
@@ -277,7 +291,21 @@ export default function CustomizationStudio() {
                   <button onClick={save} disabled={saving} className="px-3.5 py-2 rounded-DEFAULT bg-primary text-on-primary font-body-ui text-[13px] disabled:opacity-60">{saving ? "Saving…" : "Save theme"}</button>
                   {!newTheme && <button onClick={() => setActivePresentationTheme(selectedTheme)} className="px-3.5 py-2 rounded-DEFAULT bg-secondary-container text-on-secondary-container font-body-ui text-[13px]">Use live</button>}
                   {!newTheme && !selectedTheme?.is_default && <button onClick={makeDefault} disabled={saving} className="px-3.5 py-2 rounded-DEFAULT border border-outline-variant text-on-surface font-body-ui text-[13px]">Make default</button>}
-                  {!newTheme && !selectedTheme?.is_default && <button onClick={remove} disabled={saving} className="px-2.5 py-2 rounded-DEFAULT text-error hover:bg-error-container/30" title="Delete theme"><span className="material-symbols-outlined text-[18px]">delete</span></button>}
+                  {/* Delete stays available even for the active/default theme —
+                      only the built-in Midnight theme is permanently protected.
+                      Deleting the active theme falls back to Midnight (see
+                      delete_presentation_theme). */}
+                  {!newTheme && !selectedTheme?.is_builtin && (
+                    confirmingDelete ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-body-ui text-[12px] text-on-surface-variant">Delete this theme?</span>
+                        <button onClick={remove} disabled={saving} className="px-2.5 py-1.5 rounded-DEFAULT bg-error text-on-error font-body-ui text-[12px] disabled:opacity-60">{saving ? "Deleting…" : "Yes, delete"}</button>
+                        <button onClick={() => setConfirmingDelete(false)} disabled={saving} className="px-2.5 py-1.5 rounded-DEFAULT border border-outline-variant text-on-surface font-body-ui text-[12px]">Cancel</button>
+                      </div>
+                    ) : (
+                      <button onClick={remove} disabled={saving} className="px-2.5 py-2 rounded-DEFAULT text-error hover:bg-error-container/30" title="Delete theme"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                    )
+                  )}
                 </div>
               </section>
 

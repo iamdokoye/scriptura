@@ -268,7 +268,14 @@ pub struct PresentationTheme {
     pub min_font_scale: f64,
     pub transition_type: String,
     pub transition_duration: u32,
+    /// Which theme is currently applied — a session preference, freely
+    /// reassignable to any theme (including personal ones) and unrelated
+    /// to whether it can be deleted. See `is_builtin` for that.
     pub is_default: bool,
+    /// True only for the seeded "Midnight Scripture" theme — the one theme
+    /// that's permanent and can't be deleted. Every user-created theme
+    /// stays personal and deletable regardless of `is_default`.
+    pub is_builtin: bool,
     pub created_at: String,
     pub updated_at: String,
 }

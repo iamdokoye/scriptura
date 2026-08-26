@@ -64,6 +64,7 @@ impl Database {
             (9, SCHEMA_V9_PRESENTATION_THEME_LAYOUT),
             (10, SCHEMA_V10_SERVICE_ITEM_PRESENTATION_OVERRIDES),
             (11, SCHEMA_V11_DEFAULT_LEXICON_SOURCE),
+            (12, SCHEMA_V12_PRESENTATION_THEME_BUILTIN_FLAG),
         ]
     }
 
@@ -576,7 +577,7 @@ impl Database {
                     verse_box_x, verse_box_y, verse_box_width, verse_box_height,
                     reference_box_x, reference_box_y, reference_box_width, reference_box_height,
                     auto_layout, min_font_scale, transition_type, transition_duration,
-                    is_default, created_at, updated_at
+                    is_default, is_builtin, created_at, updated_at
              FROM presentation_themes
              ORDER BY is_default DESC, name COLLATE NOCASE",
         )?;
@@ -655,21 +656,49 @@ impl Database {
         self.presentation_theme_by_id(&conn, id)
     }
 
+    /// Only the seeded Midnight theme (`is_builtin`) is protected from
+    /// deletion — every user-created theme stays personal and deletable no
+    /// matter what, including one that's currently the active/default
+    /// theme (previously `is_default` alone blocked deletion, so picking
+    /// "Make default" for your own theme made it act like a global,
+    /// permanent one instead of staying yours to remove).
     pub fn delete_presentation_theme(&self, id: &str) -> Result<()> {
-        let conn = self.conn();
-        let default_id: Option<String> = conn
+        let mut conn = self.conn();
+        let is_builtin: Option<bool> = conn
             .query_row(
-                "SELECT id FROM presentation_themes WHERE is_default=1",
-                [],
+                "SELECT is_builtin FROM presentation_themes WHERE id=?1",
+                params![id],
                 |row| row.get(0),
             )
             .optional()?;
-        if default_id.as_deref() == Some(id) {
-            return Err(AppError::Other(
-                "the default presentation theme cannot be deleted".into(),
-            ));
+        match is_builtin {
+            None => {
+                return Err(AppError::Other(format!(
+                    "presentation theme not found: {id}"
+                )));
+            }
+            Some(true) => {
+                return Err(AppError::Other(
+                    "the built-in Midnight theme cannot be deleted".into(),
+                ));
+            }
+            Some(false) => {}
         }
-        conn.execute("DELETE FROM presentation_themes WHERE id=?1", params![id])?;
+
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM presentation_themes WHERE id=?1", params![id])?;
+        // Deleting the currently-active theme would otherwise leave no row
+        // with is_default=1 — every other reader (list_presentation_themes'
+        // ordering, the frontend's activePresentationTheme hydration)
+        // assumes there's always exactly one, so fall back to the one
+        // theme guaranteed to still exist: the built-in.
+        tx.execute(
+            "UPDATE presentation_themes SET is_default=1
+             WHERE is_builtin=1
+               AND NOT EXISTS (SELECT 1 FROM presentation_themes WHERE is_default=1)",
+            [],
+        )?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -698,7 +727,7 @@ impl Database {
                     verse_box_x, verse_box_y, verse_box_width, verse_box_height,
                     reference_box_x, reference_box_y, reference_box_width, reference_box_height,
                     auto_layout, min_font_scale, transition_type, transition_duration,
-                    is_default, created_at, updated_at
+                    is_default, is_builtin, created_at, updated_at
              FROM presentation_themes WHERE id=?1",
             params![id],
             presentation_theme_from_row,
@@ -1149,6 +1178,17 @@ const SCHEMA_V11_DEFAULT_LEXICON_SOURCE: &str = r#"
 ALTER TABLE preferences ADD COLUMN default_lexicon_source TEXT NOT NULL DEFAULT 'ours';
 "#;
 
+/// v12: separates "is this theme currently applied?" from "is this theme
+/// the app's permanent built-in one?" — previously `is_default` alone
+/// gated delete-protection, so a personal theme temporarily became
+/// undeletable the moment a user picked "Make default" for it, which read
+/// as their own theme going "global" instead of staying personal. Only
+/// the seeded Midnight theme should ever be un-deletable.
+const SCHEMA_V12_PRESENTATION_THEME_BUILTIN_FLAG: &str = r#"
+ALTER TABLE presentation_themes ADD COLUMN is_builtin INTEGER NOT NULL DEFAULT 0;
+UPDATE presentation_themes SET is_builtin = 1 WHERE id = 'builtin-midnight';
+"#;
+
 fn presentation_theme_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PresentationTheme> {
     Ok(PresentationTheme {
         id: row.get(0)?,
@@ -1179,8 +1219,9 @@ fn presentation_theme_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Pres
         transition_type: row.get(25)?,
         transition_duration: row.get(26)?,
         is_default: row.get(27)?,
-        created_at: row.get(28)?,
-        updated_at: row.get(29)?,
+        is_builtin: row.get(28)?,
+        created_at: row.get(29)?,
+        updated_at: row.get(30)?,
     })
 }
 
@@ -1350,7 +1391,7 @@ mod tests {
 
         let defaulted = db.set_default_presentation_theme(&created.id).unwrap();
         assert!(defaulted.is_default);
-        assert!(db.delete_presentation_theme(&created.id).is_err());
+        assert!(!defaulted.is_builtin);
 
         let updated = db
             .update_presentation_theme(
@@ -1362,6 +1403,120 @@ mod tests {
             )
             .unwrap();
         assert_eq!(updated.name, "Sermon lower third");
+
+        // Being the currently-active theme does not protect it from
+        // deletion — only the built-in Midnight theme is permanent. A
+        // personal theme stays personal (deletable) even while active.
+        assert!(db.delete_presentation_theme(&created.id).is_ok());
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn deleting_the_active_personal_theme_falls_back_default_to_midnight() {
+        let (db, path) = temp_db("presentation-theme-active-delete");
+        let input = PresentationThemeInput {
+            name: "On-screen".into(),
+            background_color: "#102030".into(),
+            background_gradient: None,
+            text_color: "#ffffff".into(),
+            reference_color: "#aabbcc".into(),
+            font_family: "serif".into(),
+            text_align: "left".into(),
+            font_scale: 1.0,
+            text_font_weight: 700,
+            reference_font_scale: 1.0,
+            reference_font_weight: 600,
+            safe_margin: 8,
+            text_shadow: true,
+            reference_position: "bottom-left".into(),
+            verse_box_x: 12.0,
+            verse_box_y: 20.0,
+            verse_box_width: 76.0,
+            verse_box_height: 50.0,
+            reference_box_x: 12.0,
+            reference_box_y: 74.0,
+            reference_box_width: 76.0,
+            reference_box_height: 10.0,
+            auto_layout: true,
+            min_font_scale: 0.7,
+            transition_type: "slide".into(),
+            transition_duration: 450,
+        };
+        let created = db.create_presentation_theme(&input).unwrap();
+        db.set_default_presentation_theme(&created.id).unwrap();
+
+        db.delete_presentation_theme(&created.id).unwrap();
+
+        // Midnight (the only theme left, and the only is_builtin one) must
+        // have picked up is_default again — every reader (this list's own
+        // ordering, the frontend's activePresentationTheme hydration)
+        // assumes there's always exactly one default theme.
+        let remaining = db.list_presentation_themes().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert!(remaining[0].is_builtin);
+        assert!(remaining[0].is_default);
+
+        // The built-in theme itself is still permanent.
+        assert!(db.delete_presentation_theme(&remaining[0].id).is_err());
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn deleting_a_non_default_presentation_theme_actually_removes_it() {
+        // The CRUD test above only ever exercises delete against the DEFAULT
+        // theme (expected to fail) — it never confirms the success path
+        // actually removes a row. This is that missing coverage, reported by
+        // a user as "I can't delete created themes."
+        let (db, path) = temp_db("presentation-theme-delete");
+        let before = db.list_presentation_themes().unwrap();
+        assert_eq!(before.len(), 1); // just the seeded default
+
+        let input = PresentationThemeInput {
+            name: "Custom theme".into(),
+            background_color: "#102030".into(),
+            background_gradient: None,
+            text_color: "#ffffff".into(),
+            reference_color: "#aabbcc".into(),
+            font_family: "serif".into(),
+            text_align: "left".into(),
+            font_scale: 1.0,
+            text_font_weight: 700,
+            reference_font_scale: 1.0,
+            reference_font_weight: 600,
+            safe_margin: 8,
+            text_shadow: true,
+            reference_position: "bottom-left".into(),
+            verse_box_x: 12.0,
+            verse_box_y: 20.0,
+            verse_box_width: 76.0,
+            verse_box_height: 50.0,
+            reference_box_x: 12.0,
+            reference_box_y: 74.0,
+            reference_box_width: 76.0,
+            reference_box_height: 10.0,
+            auto_layout: true,
+            min_font_scale: 0.7,
+            transition_type: "slide".into(),
+            transition_duration: 450,
+        };
+        let created = db.create_presentation_theme(&input).unwrap();
+        assert!(!created.is_default);
+
+        db.delete_presentation_theme(&created.id).unwrap();
+
+        let after = db.list_presentation_themes().unwrap();
+        assert_eq!(after.len(), 1, "the created theme should be gone");
+        assert!(after.iter().all(|t| t.id != created.id));
+
+        // Deleting an id that no longer exists (already gone, or never
+        // existed) must be a real error, not a silent success — otherwise
+        // the frontend's catch-and-report-errors path never fires and a
+        // failed delete looks indistinguishable from a successful one.
+        assert!(db.delete_presentation_theme(&created.id).is_err());
+        assert!(db.delete_presentation_theme("theme-does-not-exist").is_err());
+
         cleanup(&path);
     }
 
