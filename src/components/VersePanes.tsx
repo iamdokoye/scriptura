@@ -22,7 +22,8 @@ export function PrimaryPane({
   onCompareClick: (verse: number) => void;
   onCommentaryClick: (verse: number) => void;
   onNotesClick: (verse: number) => void;
-  onAddToServiceClick: (verse: number) => void;
+  /** Omitted entirely in Study workspace — service queue is a Presentation-only feature. */
+  onAddToServiceClick?: (verse: number) => void;
   showBorder: boolean;
   showStrongs: boolean;
   showCrossRefs: boolean;
@@ -75,7 +76,7 @@ export function PrimaryPane({
             onCompareClick={() => onCompareClick(v.verse)}
             onCommentaryClick={() => onCommentaryClick(v.verse)}
             onNotesClick={() => onNotesClick(v.verse)}
-            onAddToServiceClick={() => onAddToServiceClick(v.verse)}
+            onAddToServiceClick={onAddToServiceClick && (() => onAddToServiceClick(v.verse))}
             showStrongs={showStrongs}
             showCrossRefs={showCrossRefs}
             showRedLetter={showRedLetter}
@@ -116,7 +117,6 @@ export function ParallelPane({ chapter, onStrongsClick, showStrongs, readingFont
             onCompareClick={() => {}}
             onCommentaryClick={() => {}}
             onNotesClick={() => {}}
-            onAddToServiceClick={() => {}}
             showStrongs={showStrongs}
             showCrossRefs={false}
             showRedLetter={false}
@@ -142,7 +142,7 @@ export const VerseRow = memo(function VerseRow({
   onCompareClick: () => void;
   onCommentaryClick: () => void;
   onNotesClick: () => void;
-  onAddToServiceClick: () => void;
+  onAddToServiceClick?: () => void;
   showStrongs: boolean;
   showCrossRefs: boolean;
   showRedLetter: boolean;
@@ -248,13 +248,15 @@ export const VerseRow = memo(function VerseRow({
         >
           <span className="material-symbols-outlined text-[16px]">compare</span>
         </button>
-        <button
-          className="p-1 text-secondary hover:text-primary hover:bg-secondary-container rounded"
-          title="Add to service queue"
-          onClick={(e) => { e.stopPropagation(); onAddToServiceClick(); }}
-        >
-          <span className="material-symbols-outlined text-[16px]">playlist_add</span>
-        </button>
+        {onAddToServiceClick && (
+          <button
+            className="p-1 text-secondary hover:text-primary hover:bg-secondary-container rounded"
+            title="Add to service queue"
+            onClick={(e) => { e.stopPropagation(); onAddToServiceClick(); }}
+          >
+            <span className="material-symbols-outlined text-[16px]">playlist_add</span>
+          </button>
+        )}
       </div>
     </div>
   );

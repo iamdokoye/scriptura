@@ -19,7 +19,19 @@ export default function App() {
     view, theme, setTheme, hasModules, setHasModules, setPrimaryModule, setCurrentRef, setView,
     setShowStrongs, setReadingFontSize, isFullscreen, serviceOrderOpen, setServiceOrderOpen,
     hydrateDisplayPrefs, hydrateStudyTools, hydrateSearchHistory, hydrateServiceOrder, hydratePresentationThemes,
+    hydrateWorkspace, workspace,
   } = useAppStore();
+  const presenting = workspace === "presentation";
+
+  // Presentation-only views can't be *reached* in Study mode any more (no nav
+  // entry, no Present button to get there), but if the workspace toggle
+  // flips while one is already open, get out of it immediately rather than
+  // leaving the user stranded on a screen Study mode says shouldn't exist.
+  useEffect(() => {
+    if (!presenting && (view === "live" || view === "customize")) {
+      setView("reading");
+    }
+  }, [presenting, view, setView]);
 
   // Apply theme class to root element
   useEffect(() => {
@@ -61,6 +73,7 @@ export default function App() {
         hydrateSearchHistory(searchHistory);
         hydrateServiceOrder(serviceOrder);
         hydratePresentationThemes(presentationThemes);
+        hydrateWorkspace(prefs.workspace);
 
         // Auto-install reference modules silently — always, even on first launch
         const installedIds = new Set(modules.map((m) => m.id));
@@ -88,6 +101,11 @@ export default function App() {
         setHasModules(true);
         const bible = modules.find((m) => m.category === "Bible") ?? modules[0];
         setPrimaryModule(bible.id);
+        // Presentation-mode operators land straight in the Live Show console
+        // instead of the reading view — study mode keeps today's default.
+        if (prefs.workspace === "presentation") {
+          setView("live");
+        }
 
         if (pos) {
           setCurrentRef({ book: pos.book, chapter: pos.chapter, verse: pos.verse });
@@ -136,12 +154,12 @@ export default function App() {
               <SearchHistory />
             </ErrorBoundary>
           )}
-          {view === "customize" && (
+          {presenting && view === "customize" && (
             <ErrorBoundary label="Customization Studio" onReset={() => setView("reading")} resetLabel="Go to Reading">
               <CustomizationStudio />
             </ErrorBoundary>
           )}
-          {view === "live" && (
+          {presenting && view === "live" && (
             <ErrorBoundary label="Live Show" onReset={() => setView("reading")} resetLabel="Go to Reading">
               <LiveShowRunner />
             </ErrorBoundary>
@@ -152,7 +170,7 @@ export default function App() {
             </ErrorBoundary>
           )}
         </div>
-        {!isFullscreen && (
+        {!isFullscreen && presenting && (
           <div
             className={`absolute inset-0 z-20 flex justify-end transition-all duration-200 ${serviceOrderOpen ? "pointer-events-auto" : "pointer-events-none"}`}
             onClick={() => setServiceOrderOpen(false)}

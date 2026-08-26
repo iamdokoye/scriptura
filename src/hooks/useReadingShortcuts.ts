@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { api, type SearchResult } from "../lib/tauri";
 import type { VerseRef, DisplayPrefs, View } from "../store/app";
+import type { Workspace } from "../store/slices/navigationSlice";
 
 const FONT_SIZE_PRESETS = [14, 16, 32, 48, 64, 72, 98] as const;
 
@@ -26,6 +27,8 @@ interface Args {
   setDisplayPrefs: (p: Partial<DisplayPrefs>) => void;
   /** Adds the currently active verse to the service queue (Ctrl+Alt+Q). */
   addCurrentVerseToQueue: () => void;
+  /** Service-queue shortcuts are Presentation-only — see Preferences.workspace. */
+  workspace: Workspace;
 }
 
 /**
@@ -40,7 +43,7 @@ export function useReadingShortcuts(args: Args) {
     readingFontSize, setReadingFontSize, currentRef, setCurrentRef,
     currentSearchResults, searchResultIndex, setSearchResultIndex, navTo, setLastHistoryRef,
     setView, serviceOrderOpen, setServiceOrderOpen, presentationActive, setDisplayPrefs,
-    addCurrentVerseToQueue,
+    addCurrentVerseToQueue, workspace,
   } = args;
 
   useEffect(() => {
@@ -163,15 +166,15 @@ export function useReadingShortcuts(args: Args) {
         return;
       }
 
-      // Ctrl+Alt+Q: add the current verse to the service queue
-      if (ctrl && alt && e.code === "KeyQ") {
+      // Ctrl+Alt+Q: add the current verse to the service queue (Presentation workspace only)
+      if (ctrl && alt && e.code === "KeyQ" && workspace === "presentation") {
         e.preventDefault();
         addCurrentVerseToQueue();
         return;
       }
 
-      // Ctrl+Q: toggle service order panel
-      if (ctrl && !alt && e.code === "KeyQ") {
+      // Ctrl+Q: toggle service order panel (Presentation workspace only)
+      if (ctrl && !alt && e.code === "KeyQ" && workspace === "presentation") {
         e.preventDefault();
         setServiceOrderOpen(!serviceOrderOpen);
         return;
@@ -199,6 +202,6 @@ export function useReadingShortcuts(args: Args) {
     serviceOrderOpen, setServiceOrderOpen,
     setIsFullscreen, setCurrentRef, navTo,
     setSearchResultIndex, setView, setReadingFontSize, setLastHistoryRef,
-    setDisplayPrefs, addCurrentVerseToQueue,
+    setDisplayPrefs, addCurrentVerseToQueue, workspace,
   ]);
 }

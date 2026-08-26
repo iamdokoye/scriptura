@@ -234,6 +234,13 @@ pub struct Preferences {
     /// since there's no Hebrew LSJ equivalent). The sheet's pill switcher
     /// can still override this per-lookup.
     pub default_lexicon_source: String,
+    /// Which persona the app is set up for — "study" is the personal
+    /// Bible study experience alone (reading, lexicons, commentary,
+    /// notes); "presentation" adds the live-show tools on top (service
+    /// queue, Live Show console, presentation themes). Study mode
+    /// genuinely doesn't expose presentation features, not just
+    /// deprioritizes them.
+    pub workspace: String,
 }
 
 /// A reusable presentation design for Scripture output. The data model is
@@ -339,6 +346,7 @@ impl Default for Preferences {
             strongs_sheet_height: 0,
             presentation_context: 1,
             default_lexicon_source: "ours".into(),
+            workspace: "study".into(),
         }
     }
 }

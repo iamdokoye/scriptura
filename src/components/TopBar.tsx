@@ -10,6 +10,7 @@ export default function TopBar() {
     setSearchQuery, setView, searchMode, setSearchMode,
     settingsOpen, setSettingsOpen,
     serviceOrderOpen, setServiceOrderOpen, serviceOrder,
+    workspace,
   } = useAppStore();
 
   const wordInputRef = useRef<HTMLInputElement>(null);
@@ -119,21 +120,23 @@ export default function TopBar() {
 
       {/* Right: toolbar actions */}
       <div className="flex items-center gap-1">
-        <button
-          aria-label="Service queue"
-          onClick={() => setServiceOrderOpen(!serviceOrderOpen)}
-          className={`relative p-1.5 rounded transition-colors ${
-            serviceOrderOpen ? "bg-secondary-container text-on-secondary-container" : "text-secondary hover:bg-surface-container-low"
-          }`}
-          title="Service queue (Ctrl+Q)"
-        >
-          <span className="material-symbols-outlined text-[20px]">queue_play_next</span>
-          {serviceOrder.length > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full bg-primary text-on-primary font-metadata-mono text-[9px] flex items-center justify-center px-0.5 leading-none">
-              {serviceOrder.length}
-            </span>
-          )}
-        </button>
+        {workspace === "presentation" && (
+          <button
+            aria-label="Service queue"
+            onClick={() => setServiceOrderOpen(!serviceOrderOpen)}
+            className={`relative p-1.5 rounded transition-colors ${
+              serviceOrderOpen ? "bg-secondary-container text-on-secondary-container" : "text-secondary hover:bg-surface-container-low"
+            }`}
+            title="Service queue (Ctrl+Q)"
+          >
+            <span className="material-symbols-outlined text-[20px]">queue_play_next</span>
+            {serviceOrder.length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full bg-primary text-on-primary font-metadata-mono text-[9px] flex items-center justify-center px-0.5 leading-none">
+                {serviceOrder.length}
+              </span>
+            )}
+          </button>
+        )}
         <button
           aria-label="Toggle parallel view"
           onClick={() => setParallelMode(!parallelMode)}

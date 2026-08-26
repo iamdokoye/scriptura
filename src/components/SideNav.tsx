@@ -6,16 +6,23 @@ interface NavItem {
   label: string;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { id: "reading",   icon: "menu_book",  label: "Library"   },
-  { id: "live",      icon: "live_tv",    label: "Live Show" },
-  { id: "bookmarks", icon: "bookmark",   label: "Bookmarks" },
-  { id: "search",    icon: "search",     label: "Search"    },
-  { id: "history",   icon: "history",    label: "History"   },
-  { id: "modules",   icon: "extension",  label: "Modules"   },
-  { id: "notes",     icon: "edit_note",  label: "Notes"     },
-  { id: "customize", icon: "palette",    label: "Customize" },
-];
+const NAV_ITEMS: Record<View, NavItem> = {
+  reading:    { id: "reading",   icon: "menu_book",  label: "Library"   },
+  live:       { id: "live",      icon: "live_tv",    label: "Live Show" },
+  bookmarks:  { id: "bookmarks", icon: "bookmark",   label: "Bookmarks" },
+  search:     { id: "search",    icon: "search",     label: "Search"    },
+  history:    { id: "history",   icon: "history",    label: "History"   },
+  modules:    { id: "modules",   icon: "extension",  label: "Modules"   },
+  notes:      { id: "notes",     icon: "edit_note",  label: "Notes"     },
+  customize:  { id: "customize", icon: "palette",    label: "Customize" },
+};
+
+// Study mode is the personal-study experience only — Live Show and
+// Customize (presentation themes) don't exist there at all, not just
+// reordered lower. Choosing Presentation adds them on top of everything
+// Study already has (see Preferences.workspace, src-tauri/src/types.rs).
+const STUDY_ORDER: View[] = ["reading", "bookmarks", "search", "history", "modules", "notes"];
+const PRESENTATION_ORDER: View[] = ["live", "reading", "customize", "search", "modules", "bookmarks", "notes", "history"];
 
 interface Props {
   // "icon-rail" = 64px collapsed with hover-expand (reading contexts)
@@ -24,13 +31,14 @@ interface Props {
 }
 
 export default function SideNav({ variant }: Props) {
-  const { view, setView } = useAppStore();
+  const { view, setView, workspace } = useAppStore();
+  const items = (workspace === "presentation" ? PRESENTATION_ORDER : STUDY_ORDER).map((id) => NAV_ITEMS[id]);
 
   if (variant === "icon-rail") {
     return (
       <nav className="fixed left-0 top-12 h-[calc(100vh-48px)] flex flex-col z-40 bg-surface-container-lowest border-r border-outline-variant dark:border-outline w-[64px] hover:w-[200px] group overflow-hidden transition-all duration-200 shrink-0">
         <div className="flex flex-col h-full items-start w-full py-4 space-y-1">
-          {NAV_ITEMS.map((item) => {
+          {items.map((item) => {
             const active = view === item.id;
             return (
               <button
@@ -64,12 +72,12 @@ export default function SideNav({ variant }: Props) {
           Scriptura
         </h2>
         <p className="font-metadata-mono text-metadata-mono text-on-surface-variant mt-0.5">
-          Bible Study
+          {workspace === "presentation" ? "Live Presentation" : "Bible Study"}
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto py-2">
-        {NAV_ITEMS.map((item) => {
+        {items.map((item) => {
           const active = view === item.id;
           return (
             <button

@@ -65,6 +65,7 @@ impl Database {
             (10, SCHEMA_V10_SERVICE_ITEM_PRESENTATION_OVERRIDES),
             (11, SCHEMA_V11_DEFAULT_LEXICON_SOURCE),
             (12, SCHEMA_V12_PRESENTATION_THEME_BUILTIN_FLAG),
+            (13, SCHEMA_V13_WORKSPACE),
         ]
     }
 
@@ -91,7 +92,7 @@ impl Database {
     const PREFS_COLUMNS: &'static str = "theme, font_size_reading, show_strongs, show_morph, \
         verse_display, default_commentary, show_commentary, show_notes, show_cross_refs, \
         show_red_letter, font_family, text_align, margins, line_spacing, letter_spacing, \
-        strongs_sheet_height, presentation_context, default_lexicon_source";
+        strongs_sheet_height, presentation_context, default_lexicon_source, workspace";
 
     fn read_preferences(conn: &Connection) -> rusqlite::Result<Option<Preferences>> {
         let result = conn.query_row(
@@ -117,6 +118,7 @@ impl Database {
                     strongs_sheet_height: row.get(15)?,
                     presentation_context: row.get(16)?,
                     default_lexicon_source: row.get(17)?,
+                    workspace: row.get(18)?,
                 })
             },
         );
@@ -132,8 +134,8 @@ impl Database {
             "INSERT INTO preferences (id, theme, font_size_reading, show_strongs, show_morph,
                 verse_display, default_commentary, show_commentary, show_notes, show_cross_refs,
                 show_red_letter, font_family, text_align, margins, line_spacing, letter_spacing,
-                strongs_sheet_height, presentation_context, default_lexicon_source)
-             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+                strongs_sheet_height, presentation_context, default_lexicon_source, workspace)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
              ON CONFLICT(id) DO UPDATE SET
                theme=excluded.theme,
                font_size_reading=excluded.font_size_reading,
@@ -152,7 +154,8 @@ impl Database {
                letter_spacing=excluded.letter_spacing,
                strongs_sheet_height=excluded.strongs_sheet_height,
                presentation_context=excluded.presentation_context,
-               default_lexicon_source=excluded.default_lexicon_source",
+               default_lexicon_source=excluded.default_lexicon_source,
+               workspace=excluded.workspace",
             params![
                 prefs.theme,
                 prefs.font_size_reading,
@@ -172,6 +175,7 @@ impl Database {
                 prefs.strongs_sheet_height,
                 prefs.presentation_context,
                 prefs.default_lexicon_source,
+                prefs.workspace,
             ],
         )?;
         Ok(())
@@ -250,6 +254,9 @@ impl Database {
             }
             if let Some(v) = obj.get("default_lexicon_source").and_then(|v| v.as_str()) {
                 current.default_lexicon_source = v.to_string();
+            }
+            if let Some(v) = obj.get("workspace").and_then(|v| v.as_str()) {
+                current.workspace = v.to_string();
             }
         }
 
@@ -1187,6 +1194,17 @@ ALTER TABLE preferences ADD COLUMN default_lexicon_source TEXT NOT NULL DEFAULT 
 const SCHEMA_V12_PRESENTATION_THEME_BUILTIN_FLAG: &str = r#"
 ALTER TABLE presentation_themes ADD COLUMN is_builtin INTEGER NOT NULL DEFAULT 0;
 UPDATE presentation_themes SET is_builtin = 1 WHERE id = 'builtin-midnight';
+"#;
+
+/// v13: which persona the app is set up for — "study" is the e-Sword-style
+/// Bible study experience alone (reading, lexicons, commentary, notes);
+/// "presentation" adds the EasyWorship-style live-show tools on top
+/// (service queue, Live Show console, presentation themes). Study mode
+/// genuinely doesn't expose presentation features, not just deprioritizes
+/// them — see the frontend's workspace-gated UI (SideNav, ReadingView,
+/// TopBar, useReadingShortcuts) for where that's enforced.
+const SCHEMA_V13_WORKSPACE: &str = r#"
+ALTER TABLE preferences ADD COLUMN workspace TEXT NOT NULL DEFAULT 'study';
 "#;
 
 fn presentation_theme_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PresentationTheme> {

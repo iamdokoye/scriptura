@@ -28,6 +28,7 @@ const DEFAULT_PREFS: Preferences = {
   strongs_sheet_height: 0,
   presentation_context: 1,
   default_lexicon_source: "ours",
+  workspace: "study",
 };
 
 const FONTS: { id: DisplayPrefs["fontFamily"]; label: string }[] = [
@@ -47,6 +48,7 @@ export default function SettingsSheet() {
     showCrossRefs, setShowCrossRefs,
     showRedLetter, setShowRedLetter,
     displayPrefs, setDisplayPrefs,
+    workspace, setWorkspace,
   } = useAppStore();
 
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
@@ -127,6 +129,27 @@ export default function SettingsSheet() {
 
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 divide-y divide-outline-variant">
+
+          {/* ── Workspace ────────────────────────────────────────────── */}
+          {/* Kept outside the accordions, always visible — this is the one
+              setting that changes what the whole app is set up to do, not a
+              detail to dig for. Presentation tools (service queue, Live
+              Show, presentation themes) genuinely don't exist in Study —
+              switching here is what turns them on, not just reorders them. */}
+          <div className="px-6 py-4">
+            <SubRow label="Workspace" description="Study keeps things focused on personal Bible study. Presentation adds the live-show tools — service queue, Live Show console, presentation themes — on top.">
+              <div className="flex gap-1.5">
+                <ChipButton active={workspace === "study"} onClick={() => setWorkspace("study")}>
+                  <span className="material-symbols-outlined text-[14px] align-middle mr-1">menu_book</span>
+                  Study
+                </ChipButton>
+                <ChipButton active={workspace === "presentation"} onClick={() => setWorkspace("presentation")}>
+                  <span className="material-symbols-outlined text-[14px] align-middle mr-1">live_tv</span>
+                  Presentation
+                </ChipButton>
+              </div>
+            </SubRow>
+          </div>
 
           {/* ── Appearance ───────────────────────────────────────────── */}
           <AccordionSection

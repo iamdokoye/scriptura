@@ -32,8 +32,9 @@ export default function ReadingView() {
     presentationActive, setPresentationActive, selectedStrongs,
     activePresentationTheme, presentationThemes, serviceOrder,
     serviceOrderOpen, setServiceOrderOpen,
-    liveBlack, liveEmergency,
+    liveBlack, liveEmergency, workspace,
   } = useAppStore();
+  const presenting = workspace === "presentation";
 
   type VerseRefLocal = { book: string; chapter: number; verse: number };
   const [crossRefVerse, setCrossRefVerse] = useState<VerseRefLocal | null>(null);
@@ -135,6 +136,7 @@ export default function ReadingView() {
     currentSearchResults, searchResultIndex, setSearchResultIndex, navTo, setLastHistoryRef,
     setView, serviceOrderOpen, setServiceOrderOpen, presentationActive, setDisplayPrefs,
     addCurrentVerseToQueue: () => handleAddToService(currentRef.verse),
+    workspace,
   });
 
   function handleStrongsClick(numbers: string[]) {
@@ -333,73 +335,81 @@ export default function ReadingView() {
               <kbd className="font-metadata-mono text-[10px] border border-outline-variant rounded px-1 py-0.5 ml-1">⌘K</kbd>
             </button>
 
-            {/* Set from the Live Show console — surfaced here too so reading
-                normally never hides that the actual output is overridden. */}
-            {presentationActive && (liveEmergency || liveBlack) && (
-              <span
-                className="flex items-center gap-1 px-2.5 py-1 rounded-DEFAULT bg-error text-on-error font-metadata-mono text-[10px] uppercase tracking-widest font-bold"
-                title={liveEmergency ? "The output window is showing the emergency standby screen" : "The output window is blacked out"}
-              >
-                <span className="material-symbols-outlined text-[14px]">{liveEmergency ? "emergency" : "brightness_1"}</span>
-                {liveEmergency ? "Emergency" : "Black"}
-              </span>
-            )}
-
-            {/* Go Live / Stop */}
-            <div ref={monitorPickerRef} className="relative flex items-center">
-              <button
-                onClick={async () => {
-                  if (presentationActive) {
-                    await api.closePresentationWindow().catch(() => {});
-                    setPresentationActive(false);
-                  } else if (monitors.length > 1) {
-                    setShowMonitorPicker((v) => !v);
-                  } else {
-                    await api.openPresentationWindow(monitors[0]?.index).catch(() => {});
-                    setPresentationActive(true);
-                  }
-                }}
-                title={presentationActive ? "Stop presentation" : "Go live — open presentation window"}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-DEFAULT text-[13px] font-body-ui font-semibold transition-colors ${
-                  presentationActive
-                    ? "bg-error text-on-error hover:bg-error/90"
-                    : "bg-primary text-on-primary hover:bg-primary/90"
-                }`}
-              >
-                <span className="material-symbols-outlined text-[16px]">
-                  {presentationActive ? "stop_circle" : "slideshow"}
-                </span>
-                {presentationActive ? "● LIVE" : "Go Live"}
-                {!presentationActive && monitors.length > 1 && (
-                  <span className="material-symbols-outlined text-[14px]">expand_more</span>
+            {/* All presenting UI is Presentation-workspace only — see
+                Preferences.workspace. Study mode has no path to open the
+                output window at all, so presentationActive can't become
+                true there; nothing here needs its own separate guard. */}
+            {presenting && (
+              <>
+                {/* Set from the Live Show console — surfaced here too so reading
+                    normally never hides that the actual output is overridden. */}
+                {presentationActive && (liveEmergency || liveBlack) && (
+                  <span
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-DEFAULT bg-error text-on-error font-metadata-mono text-[10px] uppercase tracking-widest font-bold"
+                    title={liveEmergency ? "The output window is showing the emergency standby screen" : "The output window is blacked out"}
+                  >
+                    <span className="material-symbols-outlined text-[14px]">{liveEmergency ? "emergency" : "brightness_1"}</span>
+                    {liveEmergency ? "Emergency" : "Black"}
+                  </span>
                 )}
-              </button>
-              {showMonitorPicker && monitors.length > 1 && (
-                <div className="absolute right-0 top-full mt-1 z-50 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg min-w-[220px] overflow-hidden">
-                  <div className="px-3 py-1.5 bg-surface-container-low border-b border-outline-variant">
-                    <span className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest">
-                      Present on…
-                    </span>
-                  </div>
-                  {monitors.map((m) => (
-                    <button
-                      key={m.index}
-                      onClick={async () => {
-                        setShowMonitorPicker(false);
-                        await api.openPresentationWindow(m.index).catch(() => {});
+
+                {/* Go Live / Stop */}
+                <div ref={monitorPickerRef} className="relative flex items-center">
+                  <button
+                    onClick={async () => {
+                      if (presentationActive) {
+                        await api.closePresentationWindow().catch(() => {});
+                        setPresentationActive(false);
+                      } else if (monitors.length > 1) {
+                        setShowMonitorPicker((v) => !v);
+                      } else {
+                        await api.openPresentationWindow(monitors[0]?.index).catch(() => {});
                         setPresentationActive(true);
-                      }}
-                      className="w-full flex items-center justify-between gap-2 text-left px-3 py-2 font-body-ui text-body-ui text-on-surface hover:bg-surface-container-high transition-colors"
-                    >
-                      <span>{m.name ?? `Display ${m.index + 1}`}</span>
-                      <span className="font-metadata-mono text-[11px] text-on-surface-variant shrink-0">
-                        {m.is_primary ? "Primary · " : ""}{m.width}×{m.height}
-                      </span>
-                    </button>
-                  ))}
+                      }
+                    }}
+                    title={presentationActive ? "Stop presentation" : "Go live — open presentation window"}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-DEFAULT text-[13px] font-body-ui font-semibold transition-colors ${
+                      presentationActive
+                        ? "bg-error text-on-error hover:bg-error/90"
+                        : "bg-primary text-on-primary hover:bg-primary/90"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">
+                      {presentationActive ? "stop_circle" : "slideshow"}
+                    </span>
+                    {presentationActive ? "● LIVE" : "Go Live"}
+                    {!presentationActive && monitors.length > 1 && (
+                      <span className="material-symbols-outlined text-[14px]">expand_more</span>
+                    )}
+                  </button>
+                  {showMonitorPicker && monitors.length > 1 && (
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg min-w-[220px] overflow-hidden">
+                      <div className="px-3 py-1.5 bg-surface-container-low border-b border-outline-variant">
+                        <span className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest">
+                          Present on…
+                        </span>
+                      </div>
+                      {monitors.map((m) => (
+                        <button
+                          key={m.index}
+                          onClick={async () => {
+                            setShowMonitorPicker(false);
+                            await api.openPresentationWindow(m.index).catch(() => {});
+                            setPresentationActive(true);
+                          }}
+                          className="w-full flex items-center justify-between gap-2 text-left px-3 py-2 font-body-ui text-body-ui text-on-surface hover:bg-surface-container-high transition-colors"
+                        >
+                          <span>{m.name ?? `Display ${m.index + 1}`}</span>
+                          <span className="font-metadata-mono text-[11px] text-on-surface-variant shrink-0">
+                            {m.is_primary ? "Primary · " : ""}{m.width}×{m.height}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
 
             {/* Exit fullscreen */}
             <button
@@ -423,7 +433,7 @@ export default function ReadingView() {
               onCompareClick={openCompare}
               onCommentaryClick={openCommentary}
               onNotesClick={openNotes}
-              onAddToServiceClick={handleAddToService}
+              onAddToServiceClick={presenting ? handleAddToService : undefined}
               showBorder={parallelMode}
               showStrongs={showStrongs}
               showCrossRefs={showCrossRefs}
@@ -450,17 +460,19 @@ export default function ReadingView() {
                 )}
               </>
             )}
-            <div
-              className={`absolute inset-0 z-20 flex justify-end transition-all duration-200 ${serviceOrderOpen ? "pointer-events-auto" : "pointer-events-none"}`}
-              onClick={() => setServiceOrderOpen(false)}
-            >
+            {presenting && (
               <div
-                className={`w-[300px] h-full transition-transform duration-200 ease-in-out ${serviceOrderOpen ? "translate-x-0" : "translate-x-full"}`}
-                onClick={(e) => e.stopPropagation()}
+                className={`absolute inset-0 z-20 flex justify-end transition-all duration-200 ${serviceOrderOpen ? "pointer-events-auto" : "pointer-events-none"}`}
+                onClick={() => setServiceOrderOpen(false)}
               >
-                <ServiceOrderPanel />
+                <div
+                  className={`w-[300px] h-full transition-transform duration-200 ease-in-out ${serviceOrderOpen ? "translate-x-0" : "translate-x-full"}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ServiceOrderPanel />
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
         {sheets}
@@ -530,7 +542,7 @@ export default function ReadingView() {
               onCompareClick={openCompare}
               onCommentaryClick={openCommentary}
               onNotesClick={openNotes}
-              onAddToServiceClick={handleAddToService}
+              onAddToServiceClick={presenting ? handleAddToService : undefined}
               showBorder={parallelMode}
               showStrongs={showStrongs}
               showCrossRefs={showCrossRefs}

@@ -136,6 +136,12 @@ export interface Preferences {
   strongs_sheet_height: number;
   presentation_context: 1 | 2 | 3 | 4;
   default_lexicon_source: "ours" | "rich" | "lsj";
+  // Which persona the app is set up for — "study" is the personal Bible
+  // study experience alone (reading, lexicons, commentary, notes);
+  // "presentation" adds the live-show tools on top (service queue, Live
+  // Show console, presentation themes). Study mode genuinely doesn't
+  // expose presentation features, not just deprioritizes them.
+  workspace: "study" | "presentation";
 }
 
 export interface ReadingPosition {
