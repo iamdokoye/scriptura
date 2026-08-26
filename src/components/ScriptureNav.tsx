@@ -85,9 +85,24 @@ export default function ScriptureNav({ inputRef }: Props) {
   }
 
   function handleKey(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Tab" && !matchedBook && suggestions.length > 0) {
-      e.preventDefault();
-      applyBook(suggestions[0]);
+    if (e.key === " ") {
+      if (!matchedBook && suggestions.length > 0) {
+        // "mat" + space -> "Matthew " — same completion Tab used to do.
+        e.preventDefault();
+        applyBook(suggestions[0]);
+      } else if (matchedBook && /^\d+$/.test(refPart)) {
+        // Chapter typed, no ":" yet — "Matthew 1" + space -> "Matthew 1:",
+        // so the next keys typed are straight into the verse number.
+        e.preventDefault();
+        setValue(`${matchedBook} ${refPart}:`);
+      } else if (matchedBook && refPart.includes(":")) {
+        // Verse digits already started — a literal space here would land
+        // inside "chapter:verse" and break parseRef's parsing, so swallow it
+        // instead of inserting anything.
+        e.preventDefault();
+      }
+      // Otherwise (no matched book and no suggestions yet, or a book just
+      // matched with nothing typed after it) fall through to a normal space.
     } else if (e.key === "Enter" && (matchedBook || suggestions.length > 0)) {
       navigate();
     } else if (e.key === "Escape") {
@@ -137,7 +152,7 @@ export default function ScriptureNav({ inputRef }: Props) {
               <span>{book}</span>
               {i === 0 && (
                 <kbd className="font-metadata-mono text-[10px] opacity-60 bg-surface-container px-1.5 py-0.5 rounded ml-3">
-                  Tab
+                  Space
                 </kbd>
               )}
             </button>

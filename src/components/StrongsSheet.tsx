@@ -53,13 +53,26 @@ function useDraggableHeight(initial: number, onCommit: (h: number) => void) {
   return { height, onPointerDown, onPointerMove, onPointerUp };
 }
 
-// Regex for numeric cross-references in lexicon text
-// (?!\)) excludes sense-outline markers like "1)", "1a)", "1a1)" — the
-// STEPBible lexicons (BDB/Abbott-Smith/LSJ) format their numbered senses
-// exactly like a bare cross-reference number, which used to make every "1a"
-// in a definition render as a clickable "look up Strong's 1a" button.
-const REF_RE = /\b([HG]?\d{1,5}[a-z]?)\b(?!\))/g;
+// Regex for numeric cross-references in lexicon text that appear WITHOUT
+// "from"/"same as"/etc. framing (see FROM_CONTEXT below for that case) —
+// requires an explicit H/G prefix, unlike the two regexes below. A bare,
+// unprefixed number in the middle of Abbott-Smith/LSJ prose is far more
+// likely to be a leftover citation fragment than a genuine cross-reference:
+// STEPBible's own source data sometimes only tags the first verse of a
+// pair ("Act.5:4, 9" — Ananias then Sapphira — tags just "Act.5.4", leaving
+// the bare "9" as plain text), which used to render as a nonsensical
+// clickable "Strong's 9" button. Real unframed cross-references in these
+// lexicons are effectively always spelled out with their letter prefix
+// ("H1234"/"G1234"), so requiring it here trades a small amount of recall
+// for not linkifying citation-list noise.
+const REF_RE = /\b([HG]\d{1,5}[a-z]?)\b(?!\))/g;
 const FROM_CONTEXT = /(?:from|same\s+as|see\s+\w+\s+for|akin\s+to|derivative\s+of)\s+/gi;
+
+// Matches only when the etymology clause opens the definition (e.g. "From
+// 1891; emptiness...") — the true etymological root, as opposed to any
+// "from"/"see"/etc. reference appearing later in the prose, which is a
+// cross-reference rather than a derivation.
+const ETYMOLOGY_LEAD_RE = /^(?:from|same as|see\s+\w+\s+for|akin to|derivative of)\s+([HG]?\d{1,5}[a-z]?)\b/i;
 
 function TextWithLinks({
   text,
@@ -184,9 +197,19 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
   const [entries, setEntries] = useState<StrongsEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<string[]>([]);
+  // Stack of sheets left behind by clicking a cross-reference from inside
+  // the sheet — each entry is a snapshot of what was on screen *before*
+  // that click, so Back can restore it exactly (including multi-number
+  // phrase groups, not just a single Strong's number).
+  const [history, setHistory] = useState<{ number: string | null; group: string[] | null }[]>([]);
   const [showMarkers, setShowMarkers] = useState(false);
   const [showUsage, setShowUsage] = useState(false);
+  const [etymology, setEtymology] = useState<{ number: string; lemma: string } | null>(null);
+  // Small side cache for root-word lookups only — separate from `entries`
+  // (the sheet's main navigable state) because looking up a root's lemma
+  // must not replace what's currently on screen the way clicking a
+  // cross-reference link does.
+  const etymologyCache = useRef<Map<string, StrongsEntry>>(new Map());
 
   const isOpen = selectedStrongs !== null;
   const prefix: "H" | "G" = selectedStrongs?.startsWith("H") ? "H" : "G";
@@ -236,16 +259,30 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
 
   const lookup = useCallback(
     (num: string) => {
-      setHistory((h) => [num, ...h.filter((x) => x !== num)]);
+      // Push what's currently on screen — not the word we're navigating
+      // to — so Back returns to it. Skipped when nothing was on screen yet
+      // (the sheet's very first open), since there's nothing to go back to.
+      if (selectedStrongs) {
+        setHistory((h) => [{ number: selectedStrongs, group: strongsGroup }, ...h]);
+      }
       setStrongsGroup(null);
       setSelectedStrongs(num);
     },
-    [setSelectedStrongs, setStrongsGroup]
+    [selectedStrongs, strongsGroup, setSelectedStrongs, setStrongsGroup]
   );
+
+  const goBack = useCallback(() => {
+    const [prev, ...rest] = history;
+    if (!prev) return;
+    setHistory(rest);
+    setStrongsGroup(prev.group);
+    setSelectedStrongs(prev.number);
+  }, [history, setSelectedStrongs, setStrongsGroup]);
 
   const close = useCallback(() => {
     setSelectedStrongs(null);
     setStrongsGroup(null);
+    setHistory([]);
   }, [setSelectedStrongs, setStrongsGroup]);
 
   useEffect(() => {
@@ -274,6 +311,40 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, [selectedStrongs, strongsGroup, primaryModule, source]);
+
+  // If the lexicon entry opens with an etymology clause ("From 1891;
+  // emptiness..."), resolve that referenced number's own lemma so it can be
+  // shown as "Root Word (Etymology): From הָבַל H1891" rather than a bare
+  // number the reader has to click through to decode.
+  useEffect(() => {
+    setEtymology(null);
+    if (!entry?.long_def || !primaryModule) return;
+    const match = entry.long_def.trim().match(ETYMOLOGY_LEAD_RE);
+    if (!match) return;
+    const rawNum = match[1];
+    const fullNum = /^[HG]/i.test(rawNum) ? rawNum.toUpperCase() : prefix + rawNum;
+    if (fullNum === entry.number) return; // self-reference, nothing to add
+
+    const cached = etymologyCache.current.get(fullNum);
+    if (cached) {
+      setEtymology({ number: fullNum, lemma: cached.lemma });
+      return;
+    }
+
+    let cancelled = false;
+    const lang = fullNum.startsWith("G") ? "G" : "H";
+    const lexModule = source === "ours" ? (lang === "G" ? "StrongsGreek" : "StrongsHebrew") : source;
+    api
+      .getStrongsEntry(lexModule, fullNum, primaryModule)
+      .then((root) => {
+        etymologyCache.current.set(fullNum, root);
+        if (!cancelled) setEtymology({ number: fullNum, lemma: root.lemma });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [entry, primaryModule, source, prefix]);
 
   // Escape key closes sheet
   useEffect(() => {
@@ -362,17 +433,12 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
             </div>
 
             <div className="flex items-center gap-1 shrink-0">
-              {/* Back in lookup history */}
+              {/* Back to the word open before the last cross-reference click */}
               {history.length > 0 && (
                 <button
                   className="p-1.5 rounded text-secondary hover:bg-surface-container-low transition-colors"
                   title="Back to previous word"
-                  onClick={() => {
-                    const [, ...rest] = history;
-                    setHistory(rest);
-                    setStrongsGroup(null);
-                    setSelectedStrongs(rest[0] ?? null);
-                  }}
+                  onClick={goBack}
                 >
                   <span className="material-symbols-outlined text-[18px]">arrow_back</span>
                 </button>
@@ -501,18 +567,54 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
               )}
 
               <div className="space-y-5">
+                {/* The old "Definition" section (short_def) was dropped —
+                    it's an auto-extracted opening clause of long_def itself
+                    (see split_at_sentence in lexicon.rs), so it read as a
+                    near-duplicate of the Lexicon Entry below rather than
+                    distinct information. Headword replaces it with the
+                    thing that section never actually gave: the original
+                    word on its own, not folded into English prose. Labeled
+                    "Headword" (this entry's own word), not "Root Word" —
+                    the Lexicon Entry text below may itself say "from XXXX"
+                    to name a *different*, earlier Strong's number as the
+                    true etymological root, which we don't have as separate
+                    structured data. */}
                 <section>
                   <p className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-2">
-                    Definition
+                    Headword
                   </p>
-                  <p className="font-body-ui leading-relaxed text-on-surface" style={{ fontSize: `${bodyFontSize - 1}px`, fontFamily }}>
-                    <TextWithLinks
-                      text={entry.short_def}
-                      prefix={prefix}
-                      onLookup={lookup}
-                    />
-                  </p>
+                  <div className="flex items-baseline gap-3 flex-wrap">
+                    <span className="font-body-reading text-[22px] font-semibold text-primary leading-tight">
+                      {entry.lemma}
+                    </span>
+                    {entry.transliteration && (
+                      <span className="font-metadata-mono text-[13px] text-on-surface-variant">
+                        {entry.transliteration}
+                      </span>
+                    )}
+                  </div>
                 </section>
+
+                {etymology && (
+                  <section>
+                    <p className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-2">
+                      Root Word (Etymology)
+                    </p>
+                    <div
+                      className="flex items-baseline gap-2 flex-wrap font-body-ui"
+                      style={{ fontSize: `${bodyFontSize - 2}px`, fontFamily }}
+                    >
+                      <span className="text-on-surface-variant">From</span>
+                      <span className="text-primary font-semibold">{etymology.lemma}</span>
+                      <button
+                        className="underline decoration-dotted text-primary hover:text-primary/80 font-medium transition-colors"
+                        onClick={() => lookup(etymology.number)}
+                      >
+                        {etymology.number}
+                      </button>
+                    </div>
+                  </section>
+                )}
 
                 {entry.long_def && (
                   <section>

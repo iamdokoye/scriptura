@@ -49,6 +49,15 @@ fn strip_stepbible_markup(s: &str) -> String {
 /// `strip_stepbible_markup` which keeps the content) — used for `<ref>`
 /// verse-citation elements, which read as pure clutter inline in a
 /// definition ("Jo 13:35", "Ro 5:8") rather than part of the meaning.
+///
+/// STEPBible chains multiple `<ref>` citations as a comma-separated list
+/// ("of things: <ref>Mat.5:29</ref>, <ref>Jhn.6:12</ref>, <ref>Heb.1:11</ref>
+/// (LXX"), so deleting just the tag+content leaves every list separator
+/// behind as an orphaned ", " with nothing left to separate — the source of
+/// the "of things :, (LXX" artifact. Consuming one trailing ", " (or "; ")
+/// right after a removed citation collapses the whole list down to the
+/// single separator that belonged to the real prose around it (the
+/// citation's own comma, not the list's).
 fn remove_tag_and_content(xml: &str, tag: &str) -> String {
     let open = format!("<{tag}");
     let close = format!("</{tag}>");
@@ -58,7 +67,14 @@ fn remove_tag_and_content(xml: &str, tag: &str) -> String {
         let abs = pos + rel;
         out.push_str(&xml[pos..abs]);
         match xml[abs..].find(&close) {
-            Some(end_rel) => pos = abs + end_rel + close.len(),
+            Some(end_rel) => {
+                pos = abs + end_rel + close.len();
+                if let Some(rest) = xml[pos..].strip_prefix(", ") {
+                    pos = xml.len() - rest.len();
+                } else if let Some(rest) = xml[pos..].strip_prefix("; ") {
+                    pos = xml.len() - rest.len();
+                }
+            }
             None => {
                 pos = xml.len();
                 break;
@@ -139,7 +155,19 @@ fn cleanup_punctuation(s: &str) -> String {
             .replace("[ ]", "")
             .replace(" ,", ",")
             .replace(" ;", ";")
-            .replace(" .", ".");
+            .replace(" .", ".")
+            // A closing </b> right before ":" (e.g. "<b>of things</b>:")
+            // becomes a space via strip_stepbible_markup's tag-boundary
+            // space, stranding it as "things :".
+            .replace(" :", ":")
+            // The last citation in a list has no trailing ", " for
+            // remove_tag_and_content to consume (it's followed by real
+            // punctuation instead, e.g. "...life, <ref>...</ref>. In" ->
+            // "...life, . In", collapsed by whitespace normalization to
+            // "...life,. In") — collapse that dangling comma into the
+            // period that actually ends the clause, spaced or not.
+            .replace(", .", ".")
+            .replace(",.", ".");
         if replaced == out {
             break;
         }
@@ -186,9 +214,14 @@ fn format_sense_outline(s: &str) -> String {
         } else if let Some(n) = caps.get(2) {
             (n.as_str().to_string(), 0)
         } else if let Some(n) = caps.get(3) {
-            (n.as_str().to_string(), 0)
+            // Bare "__N" nests one level under its enclosing "__N." group
+            // (e.g. Abbott-Smith's "Act."/"Mid." voice groupings) — giving
+            // it the same depth (0) made "2) Mid." and its own first
+            // sub-sense "1) to perish" print as if they were siblings at
+            // the same level, reading like sense 2 came before sense 1.
+            (n.as_str().to_string(), 1)
         } else if let Some(letter) = caps.get(4) {
-            (letter.as_str().to_string(), 1)
+            (letter.as_str().to_string(), 2)
         } else {
             // BDB form: digits, optional letters, optional second digits.
             let digits = caps.get(5).unwrap().as_str();
@@ -459,5 +492,36 @@ mod sense_outline_tests {
         let indent_of = |l: &str| l.len() - l.trim_start().len();
         assert!(indent_of(lines[l1a]) > indent_of(lines[l1]));
         assert!(indent_of(lines[l1a1]) > indent_of(lines[l1a]));
+    }
+
+    #[test]
+    fn formats_abbott_smith_groups_with_nested_sub_senses_in_order() {
+        // Real TBESG row for G0622 (apollymi) — this exact "Act."/"Mid."
+        // group + bare sub-sense + lettered sub-sub-sense shape produced the
+        // reported bug: "2) Mid., 1) to perish; a) of things :, (LXX..."
+        // (group and its own first sub-sense rendered as same-depth
+        // siblings, reading as if sense 2 preceded sense 1) plus dangling
+        // punctuation left behind by stripped <ref> citation lists.
+        let line = "G0622\tG0622G =\tG0622G\tἀπόλλυμι\tapollymi\tG:V\tto destroy\t__1. Act., <BR /> __1 <b>to destroy</b>; <BR /> __2 <b>to lose</b>. <BR /> __2. Mid., <BR /> __1 <b>to perish</b>; <BR /> __(a) <b>of things</b>: <ref='Mat.5.29'>Mat.5:29</ref>, <ref='Jhn.6.12'>Jhn.6:12</ref>, <ref='Heb.1.11'>Heb.1:11</ref> (LXX, al.; <BR /> __(b) <b>of persons</b>: <ref='Mat.8.26'>Mat.8:26</ref>, al. Metaphorical, of loss of eternal life, <ref='Jhn.3.15-16; 10.28; 17.12'>Jhn.3:15-16 10:28 17:12</ref>, <ref='Rom.2.12'>Rom.2:12</ref>. In the perishing, contrasted in <ref='1Co.1.18'>1Co.1:18</ref>, al., with the saved.";
+        let entry = parse_row("G622", line).unwrap();
+        eprintln!("=== FORMATTED ===\n{}\n", entry.long_def);
+
+        // No dangling punctuation left behind by stripped <ref> lists.
+        assert!(!entry.long_def.contains(" :,"));
+        assert!(!entry.long_def.contains(",,"));
+        assert!(!entry.long_def.contains(", ."));
+
+        let lines: Vec<&str> = entry.long_def.lines().collect();
+        let group2 = lines.iter().position(|l| l.trim_start().starts_with("2) Mid.")).unwrap();
+        let sub1 = lines.iter().position(|l| l.trim_start() == "1) to perish;").unwrap();
+        let sub_a = lines.iter().position(|l| l.trim_start().starts_with("a) of things")).unwrap();
+
+        // "2) Mid." (the group) still prints before its own first
+        // sub-sense "1) to perish" — but nested one level deeper, not as
+        // an equal-depth sibling that reads like sense 2 before sense 1.
+        assert!(group2 < sub1);
+        let indent_of = |l: &str| l.len() - l.trim_start().len();
+        assert!(indent_of(lines[sub1]) > indent_of(lines[group2]));
+        assert!(indent_of(lines[sub_a]) > indent_of(lines[sub1]));
     }
 }
