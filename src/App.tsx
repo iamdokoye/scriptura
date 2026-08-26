@@ -12,6 +12,7 @@ import BookmarksNotes from "./views/BookmarksNotes";
 import ServiceOrderPanel from "./components/ServiceOrderPanel";
 import ErrorBoundary from "./components/ErrorBoundary";
 import CustomizationStudio from "./views/CustomizationStudio";
+import LiveShowRunner from "./views/LiveShowRunner";
 
 export default function App() {
   const {
@@ -138,6 +139,11 @@ export default function App() {
           {view === "customize" && (
             <ErrorBoundary label="Customization Studio" onReset={() => setView("reading")} resetLabel="Go to Reading">
               <CustomizationStudio />
+            </ErrorBoundary>
+          )}
+          {view === "live" && (
+            <ErrorBoundary label="Live Show" onReset={() => setView("reading")} resetLabel="Go to Reading">
+              <LiveShowRunner />
             </ErrorBoundary>
           )}
           {(view === "bookmarks" || view === "notes") && (

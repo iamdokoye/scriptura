@@ -23,11 +23,12 @@ import { createPresentationSlice, type PresentationSlice } from "./slices/presen
 import { createServiceOrderSlice, type ServiceOrderSlice } from "./slices/serviceOrderSlice";
 import { createDisplayPrefsSlice, type DisplayPrefsSlice } from "./slices/displayPrefsSlice";
 import { createPresentationThemeSlice, type PresentationThemeSlice } from "./slices/presentationThemeSlice";
+import { createLiveShowSlice, type LiveShowSlice } from "./slices/liveShowSlice";
 import type { PresentationItemOverride } from "../lib/tauri";
 
 // ── Shared types (used by more than one slice, or by consumers outside the store) ──
 
-export type View = "reading" | "search" | "modules" | "bookmarks" | "notes" | "history" | "customize";
+export type View = "reading" | "search" | "modules" | "bookmarks" | "notes" | "history" | "customize" | "live";
 export type Theme = "light" | "dark" | "system";
 export type SearchMode = "word" | "scripture";
 export type FontFamily = "system" | "serif" | "times" | "mono";
@@ -83,7 +84,8 @@ export type AppState = NavigationSlice &
   PresentationSlice &
   ServiceOrderSlice &
   DisplayPrefsSlice &
-  PresentationThemeSlice;
+  PresentationThemeSlice &
+  LiveShowSlice;
 
 export const useAppStore = create<AppState>()((...a) => ({
   ...createNavigationSlice(...a),
@@ -95,4 +97,5 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createServiceOrderSlice(...a),
   ...createDisplayPrefsSlice(...a),
   ...createPresentationThemeSlice(...a),
+  ...createLiveShowSlice(...a),
 }));

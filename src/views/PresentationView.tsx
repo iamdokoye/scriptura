@@ -106,6 +106,19 @@ export default function PresentationView() {
       .catch(() => setParallelChapter(null));
   }, [state?.parallelMode, state?.parallelModule, state?.book, state?.chapter]);
 
+  // Emergency overrides everything (including black) — a fixed, theme-independent
+  // screen so it stays reliable even if a theme or chapter fetch is broken. Checked
+  // before the "waiting for state" fallback too: an operator hitting emergency
+  // before the window has ever received a real state should still see it.
+  if (state?.emergency) {
+    return (
+      <div className="h-screen bg-black flex flex-col items-center justify-center gap-3">
+        <span className="material-symbols-outlined text-[40px] text-white/25">pause_circle</span>
+        <p className="font-body-ui text-[15px] text-white/35 tracking-wide">One moment please</p>
+      </div>
+    );
+  }
+
   if (!state || !chapter) {
     return (
       <div className="h-screen bg-black flex flex-col items-center justify-center gap-4">
@@ -115,6 +128,10 @@ export default function PresentationView() {
         </p>
       </div>
     );
+  }
+
+  if (state.black) {
+    return <div className="h-screen bg-black" />;
   }
 
   const ctx = state.displayPrefs.presentationContext ?? 1;

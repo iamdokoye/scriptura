@@ -13,6 +13,10 @@ export interface PresentState {
   displayPrefs: DisplayPrefs;
   readingFontSize: number;
   presentationTheme: PresentationTheme | null;
+  /** Cut to a plain black screen — verse content keeps its place underneath. */
+  black?: boolean;
+  /** A dedicated "something's wrong" screen, overriding black and live content alike. */
+  emergency?: boolean;
 }
 
 declare global {

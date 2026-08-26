@@ -14,10 +14,14 @@ export function usePresentationSync(args: {
   displayPrefs: DisplayPrefs;
   readingFontSize: number;
   presentationTheme: PresentationTheme | null;
+  /** Live Show console only — ReadingView's plain Go Live flow has no blackout/emergency controls. */
+  black?: boolean;
+  emergency?: boolean;
 }) {
   const {
     presentationActive, primaryModule, currentRef, parallelModule,
     parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme,
+    black, emergency,
   } = args;
 
   useEffect(() => {
@@ -33,6 +37,8 @@ export function usePresentationSync(args: {
       displayPrefs,
       readingFontSize,
       presentationTheme,
+      black,
+      emergency,
     });
-  }, [presentationActive, currentRef, primaryModule, parallelModule, parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme]);
+  }, [presentationActive, currentRef, primaryModule, parallelModule, parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme, black, emergency]);
 }

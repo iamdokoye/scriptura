@@ -8,6 +8,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { id: "reading",   icon: "menu_book",  label: "Library"   },
+  { id: "live",      icon: "live_tv",    label: "Live Show" },
   { id: "bookmarks", icon: "bookmark",   label: "Bookmarks" },
   { id: "search",    icon: "search",     label: "Search"    },
   { id: "history",   icon: "history",    label: "History"   },

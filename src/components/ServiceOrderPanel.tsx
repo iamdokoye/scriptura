@@ -150,6 +150,8 @@ export default function ServiceOrderPanel() {
         </div>
         <button
           disabled={empty}
+          onClick={() => { setView("live"); setServiceOrderOpen(false); }}
+          title="Open the Live Show console with this queue"
           className={`w-full py-2.5 rounded-DEFAULT font-body-ui text-[13px] font-semibold transition-colors flex items-center justify-center gap-2 ${
             empty
               ? "bg-surface-container text-on-surface-variant cursor-not-allowed"

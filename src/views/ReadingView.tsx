@@ -32,6 +32,7 @@ export default function ReadingView() {
     presentationActive, setPresentationActive, selectedStrongs,
     activePresentationTheme, presentationThemes, serviceOrder,
     serviceOrderOpen, setServiceOrderOpen,
+    liveBlack, liveEmergency,
   } = useAppStore();
 
   type VerseRefLocal = { book: string; chapter: number; verse: number };
@@ -117,9 +118,14 @@ export default function ReadingView() {
     return { ...base, ...properties } as PresentationTheme;
   }, [activePresentationTheme, currentRef.book, currentRef.chapter, currentRef.verse, presentationThemes, primaryModule, serviceOrder]);
 
+  // black/emergency are set from the Live Show console, but broadcast from
+  // wherever presentationActive happens to be true — otherwise switching
+  // back to this view while either is engaged would silently clear it on
+  // this effect's next fire, since it wouldn't know to keep sending it.
   usePresentationSync({
     presentationActive, primaryModule, currentRef, parallelModule,
     parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme: effectivePresentationTheme,
+    black: liveBlack, emergency: liveEmergency,
   });
   usePresentationCloseSync(setPresentationActive);
 
@@ -326,6 +332,18 @@ export default function ReadingView() {
               <span className="font-body-ui text-[13px]">Search</span>
               <kbd className="font-metadata-mono text-[10px] border border-outline-variant rounded px-1 py-0.5 ml-1">⌘K</kbd>
             </button>
+
+            {/* Set from the Live Show console — surfaced here too so reading
+                normally never hides that the actual output is overridden. */}
+            {presentationActive && (liveEmergency || liveBlack) && (
+              <span
+                className="flex items-center gap-1 px-2.5 py-1 rounded-DEFAULT bg-error text-on-error font-metadata-mono text-[10px] uppercase tracking-widest font-bold"
+                title={liveEmergency ? "The output window is showing the emergency standby screen" : "The output window is blacked out"}
+              >
+                <span className="material-symbols-outlined text-[14px]">{liveEmergency ? "emergency" : "brightness_1"}</span>
+                {liveEmergency ? "Emergency" : "Black"}
+              </span>
+            )}
 
             {/* Go Live / Stop */}
             <div ref={monitorPickerRef} className="relative flex items-center">
