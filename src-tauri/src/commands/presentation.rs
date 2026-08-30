@@ -31,6 +31,23 @@ pub async fn relay_presentation(
     Ok(())
 }
 
+/// Relay a scroll position to the Strongs sheet in the presentation window.
+/// Uses eval() for the same reason as relay_presentation — macOS throttles
+/// JS events in unfocused WKWebViews but eval() is not affected.
+#[tauri::command]
+pub async fn relay_strongs_scroll(
+    app: AppHandle,
+    scroll_top: f64,
+) -> std::result::Result<(), String> {
+    if let Some(window) = app.get_webview_window("presentation") {
+        let script = format!(
+            "window.__scripturaStrongsScroll && window.__scripturaStrongsScroll({scroll_top});"
+        );
+        window.eval(&script).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// Called by the presentation window on mount to get the current state without
 /// waiting for the next emit (avoids race between window load and first relay call).
 #[tauri::command]

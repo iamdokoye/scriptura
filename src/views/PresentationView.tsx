@@ -71,7 +71,7 @@ export default function PresentationView() {
   const [chapter, setChapter] = useState<ChapterText | null>(null);
   const [parallelChapter, setParallelChapter] = useState<ChapterText | null>(null);
 
-  const { setDisplayPrefs, setSelectedStrongs, setPrimaryModule, setReadingFontSize, setIsFullscreen } = useAppStore();
+  const { setDisplayPrefs, setSelectedStrongs, setStrongsGroup, setStrongsSource, setPrimaryModule, setReadingFontSize, setIsFullscreen } = useAppStore();
 
   // Presentation window is always dark; isFullscreen tells StrongsSheet to use 90% width
   useEffect(() => {
@@ -85,6 +85,8 @@ export default function PresentationView() {
       setState(s);
       setDisplayPrefs(s.displayPrefs);
       setSelectedStrongs(s.selectedStrongs);
+      setStrongsGroup(s.strongsGroup);
+      setStrongsSource(s.strongsSource);
       setPrimaryModule(s.primaryModule);
       setReadingFontSize(s.readingFontSize);
     });

@@ -26,6 +26,10 @@ export interface ReadingSlice {
   // word as the default view instead of guessing at the first number.
   strongsGroup: string[] | null;
   setStrongsGroup: (numbers: string[] | null) => void;
+
+  // Which lexicon source is active in the Strongs sheet (synced to live window)
+  strongsSource: string | null;
+  setStrongsSource: (source: string | null) => void;
 }
 
 export const createReadingSlice: StateCreator<AppState, [], [], ReadingSlice> = (set) => ({
@@ -47,4 +51,7 @@ export const createReadingSlice: StateCreator<AppState, [], [], ReadingSlice> = 
 
   strongsGroup: null,
   setStrongsGroup: (strongsGroup) => set({ strongsGroup }),
+
+  strongsSource: null,
+  setStrongsSource: (strongsSource) => set({ strongsSource }),
 });

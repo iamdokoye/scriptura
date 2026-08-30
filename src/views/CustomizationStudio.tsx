@@ -43,7 +43,7 @@ export default function CustomizationStudio() {
   const {
     presentationThemes, activePresentationTheme, hydratePresentationThemes, setActivePresentationTheme,
     presentationActive, primaryModule, currentRef, parallelModule, parallelMode, selectedStrongs,
-    displayPrefs, readingFontSize,
+    strongsGroup, strongsSource, displayPrefs, readingFontSize,
   } = useAppStore();
   const [selectedId, setSelectedId] = useState<string | null>(activePresentationTheme?.id ?? null);
   const [draft, setDraft] = useState<PresentationThemeInput>(STARTER_THEME);
@@ -80,11 +80,13 @@ export default function CustomizationStudio() {
       parallelModule,
       parallelMode,
       selectedStrongs,
+      strongsGroup,
+      strongsSource,
       displayPrefs,
       readingFontSize,
       presentationTheme: activePresentationTheme,
     });
-  }, [presentationActive, primaryModule, currentRef, parallelModule, parallelMode, selectedStrongs, displayPrefs, readingFontSize, activePresentationTheme]);
+  }, [presentationActive, primaryModule, currentRef, parallelModule, parallelMode, selectedStrongs, strongsGroup, strongsSource, displayPrefs, readingFontSize, activePresentationTheme]);
 
   function chooseTheme(theme: PresentationTheme) {
     setSelectedId(theme.id);

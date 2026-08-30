@@ -27,7 +27,7 @@ export default function ReadingView() {
     currentRef, setCurrentRef, primaryModule, parallelModule, parallelMode,
     setParallelMode, setParallelModule,
     showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes,
-    setSelectedStrongs, setStrongsGroup, isFullscreen, setIsFullscreen,
+    setSelectedStrongs, setStrongsGroup, strongsGroup, strongsSource, isFullscreen, setIsFullscreen,
     currentSearchResults, searchResultIndex, setSearchResultIndex, setCurrentRef: navTo,
     setView, readingFontSize, setReadingFontSize, setLastHistoryRef,
     displayPrefs, setDisplayPrefs, addToServiceOrder,
@@ -141,7 +141,8 @@ export default function ReadingView() {
   // this effect's next fire, since it wouldn't know to keep sending it.
   usePresentationSync({
     presentationActive, primaryModule, currentRef, parallelModule,
-    parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme: effectivePresentationTheme,
+    parallelMode, selectedStrongs, strongsGroup, strongsSource, displayPrefs,
+    readingFontSize, presentationTheme: effectivePresentationTheme,
     black: liveBlack, emergency: liveEmergency,
     versePart: displayPrefs.splitLongVerses ? versePart : undefined,
   });
@@ -215,6 +216,7 @@ export default function ReadingView() {
           book={compareVerse?.book ?? ""}
           chapter={compareVerse?.chapter ?? 1}
           verse={compareVerse?.verse ?? 1}
+          fontSize={readingFontSize}
           onClose={() => setCompareVerse(null)}
         />
       </ErrorBoundary>
@@ -493,7 +495,7 @@ export default function ReadingView() {
             )}
           </div>
         </div>
-        {presenting && activeVerseParts.length > 1 && (
+        {presenting && presentationActive && activeVerseParts.length > 1 && (
           <VerseSplitPanel
             parts={activeVerseParts}
             currentPart={versePart}
@@ -602,7 +604,7 @@ export default function ReadingView() {
         </section>
       </main>
 
-      {presenting && activeVerseParts.length > 1 && (
+      {presenting && presentationActive && activeVerseParts.length > 1 && (
         <VerseSplitPanel
           parts={activeVerseParts}
           currentPart={versePart}

@@ -149,6 +149,7 @@ pub fn run() {
             commands::set_preferences,
             commands::rebuild_search_index,
             commands::relay_presentation,
+            commands::relay_strongs_scroll,
             commands::get_presentation_state,
             commands::list_presentation_themes,
             commands::create_presentation_theme,

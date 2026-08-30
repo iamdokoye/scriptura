@@ -22,7 +22,7 @@ export default function LiveShowRunner() {
   const {
     serviceOrder, currentRef, setCurrentRef, primaryModule,
     presentationActive, setPresentationActive,
-    parallelModule, parallelMode, selectedStrongs, displayPrefs, readingFontSize,
+    parallelModule, parallelMode, selectedStrongs, strongsGroup, strongsSource, displayPrefs, readingFontSize,
     activePresentationTheme,
     liveBlack, setLiveBlack, liveEmergency, setLiveEmergency,
     liveHistory, pushLiveHistory, popLiveHistory,
@@ -55,7 +55,8 @@ export default function LiveShowRunner() {
   usePresentationCloseSync(setPresentationActive);
   usePresentationSync({
     presentationActive, primaryModule, currentRef, parallelModule, parallelMode,
-    selectedStrongs, displayPrefs, readingFontSize, presentationTheme: activePresentationTheme,
+    selectedStrongs, strongsGroup, strongsSource, displayPrefs, readingFontSize,
+    presentationTheme: activePresentationTheme,
     black: liveBlack, emergency: liveEmergency,
   });
 

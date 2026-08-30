@@ -10,6 +10,8 @@ export interface PresentState {
   parallelModule: string | null;
   parallelMode: boolean;
   selectedStrongs: string | null;
+  strongsGroup: string[] | null;
+  strongsSource: string | null;
   displayPrefs: DisplayPrefs;
   readingFontSize: number;
   presentationTheme: PresentationTheme | null;
@@ -28,6 +30,7 @@ export interface PresentState {
 declare global {
   interface Window {
     __scripturaApplyPresentation?: (state: PresentState) => void;
+    __scripturaStrongsScroll?: (scrollTop: number) => void;
   }
 }
 
@@ -37,6 +40,10 @@ declare global {
 // unfocused WKWebViews, but an externally-driven eval() call is not throttled).
 export function emitPresentation(state: PresentState) {
   invoke("relay_presentation", { payload: state }).catch(console.error);
+}
+
+export function relayStrongsScroll(scrollTop: number) {
+  invoke("relay_strongs_scroll", { scrollTop }).catch(console.error);
 }
 
 // Installs a global hook that the Rust backend calls directly via eval() whenever

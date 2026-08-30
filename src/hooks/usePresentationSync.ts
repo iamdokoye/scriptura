@@ -11,6 +11,8 @@ export function usePresentationSync(args: {
   parallelModule: string | null;
   parallelMode: boolean;
   selectedStrongs: string | null;
+  strongsGroup: string[] | null;
+  strongsSource: string | null;
   displayPrefs: DisplayPrefs;
   readingFontSize: number;
   presentationTheme: PresentationTheme | null;
@@ -22,8 +24,8 @@ export function usePresentationSync(args: {
 }) {
   const {
     presentationActive, primaryModule, currentRef, parallelModule,
-    parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme,
-    black, emergency, versePart,
+    parallelMode, selectedStrongs, strongsGroup, strongsSource, displayPrefs,
+    readingFontSize, presentationTheme, black, emergency, versePart,
   } = args;
 
   useEffect(() => {
@@ -36,6 +38,8 @@ export function usePresentationSync(args: {
       parallelModule,
       parallelMode,
       selectedStrongs,
+      strongsGroup,
+      strongsSource,
       displayPrefs,
       readingFontSize,
       presentationTheme,
@@ -43,5 +47,5 @@ export function usePresentationSync(args: {
       emergency,
       versePart,
     });
-  }, [presentationActive, currentRef, primaryModule, parallelModule, parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme, black, emergency, versePart]);
+  }, [presentationActive, currentRef, primaryModule, parallelModule, parallelMode, selectedStrongs, strongsGroup, strongsSource, displayPrefs, readingFontSize, presentationTheme, black, emergency, versePart]);
 }

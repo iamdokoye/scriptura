@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useAppStore } from "../store/app";
 import { api, type StrongsEntry } from "../lib/tauri";
+import { relayStrongsScroll } from "../lib/presentation";
 import { useSheetVisibility } from "../hooks/useSheetVisibility";
 
 // 0 means "never explicitly set" (the persisted preference's own default) —
@@ -186,14 +187,9 @@ const LEXICON_PILLS: Record<"H" | "G", LexiconPill[]> = {
  * that window is activated.
  */
 export default function StrongsSheet({ immediate = false }: { immediate?: boolean }) {
-  const { selectedStrongs, setSelectedStrongs, strongsGroup, setStrongsGroup, primaryModule, readingFontSize, isFullscreen, displayPrefs, setDisplayPrefs } = useAppStore();
+  const { selectedStrongs, setSelectedStrongs, strongsGroup, setStrongsGroup, strongsSource, setStrongsSource, primaryModule, readingFontSize, isFullscreen, displayPrefs, setDisplayPrefs } = useAppStore();
   const fontFamily = FONT_FAMILY_CSS[displayPrefs.fontFamily] ?? FONT_FAMILY_CSS.system;
-  // In the reading view, readingFontSize is the user's own Bible text-size
-  // preference, so the sheet should track it exactly. Inside the presentation
-  // window (`immediate`) that same field instead holds the operator's display
-  // size (up to 98px, meant to be read from across a room) — the sheet there
-  // is still dictionary prose read up close, so cap it instead of following.
-  const bodyFontSize = immediate ? Math.min(readingFontSize, 18) : readingFontSize;
+  const bodyFontSize = readingFontSize;
   const [entries, setEntries] = useState<StrongsEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -210,6 +206,11 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
   // must not replace what's currently on screen the way clicking a
   // cross-reference link does.
   const etymologyCache = useRef<Map<string, StrongsEntry>>(new Map());
+  // Ref to the scrollable body div — used for both sending and receiving scroll sync
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+  // rAF gate so scroll relay fires at most once per frame on the operator side
+  const rafPendingRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
 
   const isOpen = selectedStrongs !== null;
   const prefix: "H" | "G" = selectedStrongs?.startsWith("H") ? "H" : "G";
@@ -231,8 +232,11 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
     },
     [displayPrefs.defaultLexiconSource]
   );
-  const [source, setSource] = useState<LexiconSourceId>(() => defaultSourceFor(prefix));
-  useEffect(() => { setSource(defaultSourceFor(prefix)); }, [selectedStrongs, strongsGroup, defaultSourceFor, prefix]);
+  // source lives in the store so it syncs to the presentation window.
+  // Seed it to the user's default whenever a new word is opened.
+  const source: LexiconSourceId = strongsSource ?? defaultSourceFor(prefix);
+  const setSource = (s: LexiconSourceId) => setStrongsSource(s);
+  useEffect(() => { setStrongsSource(defaultSourceFor(prefix)); }, [selectedStrongs, strongsGroup, defaultSourceFor, prefix]);
 
   const drag = useDraggableHeight(
     displayPrefs.strongsSheetHeight,
@@ -359,6 +363,35 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
     return () => window.removeEventListener("keydown", onKey, true);
   }, [isOpen, close]);
 
+  // Presentation window: receive scroll position from the operator and apply it
+  useEffect(() => {
+    if (!immediate) return;
+    window.__scripturaStrongsScroll = (y: number) => {
+      bodyScrollRef.current?.scrollTo({ top: y, behavior: "instant" });
+    };
+    return () => { delete window.__scripturaStrongsScroll; };
+  }, [immediate]);
+
+  // Reset scroll to top when the entry changes (both windows)
+  useEffect(() => {
+    bodyScrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+    lastScrollTopRef.current = 0;
+  }, [selectedStrongs, strongsGroup, source]);
+
+  // Operator window: relay scroll position to the presentation window on each frame
+  function handleBodyScroll() {
+    if (immediate || rafPendingRef.current) return;
+    rafPendingRef.current = true;
+    requestAnimationFrame(() => {
+      rafPendingRef.current = false;
+      const y = bodyScrollRef.current?.scrollTop ?? 0;
+      if (Math.abs(y - lastScrollTopRef.current) > 0.5) {
+        lastScrollTopRef.current = y;
+        relayStrongsScroll(y);
+      }
+    });
+  }
+
   if (!isOpen) return null;
 
   return (
@@ -457,7 +490,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
         {/* Lexicon source switcher — compare our bundled Strong's data
             against richer companion lexicons for the same number. */}
         <div className="flex items-center gap-1.5 px-6 py-2.5 border-b border-outline-variant shrink-0">
-          {([{ id: "ours", label: "Ours" }, ...LEXICON_PILLS[prefix]] as LexiconPill[]).map((pill) => (
+          {([{ id: "ours", label: "Strong's" }, ...LEXICON_PILLS[prefix]] as LexiconPill[]).map((pill) => (
             <button
               key={pill.id}
               type="button"
@@ -474,7 +507,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto">
+        <div ref={bodyScrollRef} className="flex-1 overflow-y-auto" onScroll={handleBodyScroll}>
           {loading && (
             <div className="flex items-center justify-center h-32">
               <span className="font-body-ui text-body-ui text-on-surface-variant">
@@ -492,7 +525,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                   </span>
                   <p className="font-body-ui text-[14px] text-on-surface-variant">
                     {source === "ours"
-                      ? (prefix === "G" ? "Strong's Greek Dictionary" : "Strong's Hebrew Dictionary")
+                      ? (prefix === "G" ? "Strong's Greek" : "Strong's Hebrew")
                       : LEXICON_PILLS[prefix].find((p) => p.id === source)?.label ?? source}{" "}
                     not installed.
                   </p>
@@ -509,7 +542,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                     search_off
                   </span>
                   <p className="font-body-ui text-[14px] text-on-surface-variant">
-                    No entry for Strong's {selectedStrongs} in {source === "ours" ? "this dictionary" : (LEXICON_PILLS[prefix].find((p) => p.id === source)?.label ?? source)}.
+                    No entry for Strong's {selectedStrongs} in {source === "ours" ? "Strong's" : (LEXICON_PILLS[prefix].find((p) => p.id === source)?.label ?? source)}.
                   </p>
                 </div>
               ) : (

@@ -60,12 +60,16 @@ interface Props {
 }
 
 export default function ScriptureNav({ inputRef }: Props) {
-  const { setCurrentRef, setView } = useAppStore();
+  const { setCurrentRef, setView, currentRef } = useAppStore();
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
 
+  // "v5", "V10" — jump to that verse in the current book + chapter
+  const verseJump = /^v(\d+)$/i.exec(value.trim());
+  const verseJumpNumber = verseJump ? parseInt(verseJump[1]) : null;
+
   const { matchedBook, suggestions, chapter, verse, refPart } = parseInput(value);
-  const showDropdown = open && suggestions.length > 0 && !matchedBook;
+  const showDropdown = open && suggestions.length > 0 && !matchedBook && !verseJumpNumber;
 
   // After selecting / completing a book, put it in the input with a trailing space
   function applyBook(book: string) {
@@ -76,6 +80,13 @@ export default function ScriptureNav({ inputRef }: Props) {
   }
 
   function navigate() {
+    if (verseJumpNumber) {
+      setCurrentRef({ book: currentRef.book, chapter: currentRef.chapter, verse: verseJumpNumber });
+      setView("reading");
+      setValue("");
+      setOpen(false);
+      return;
+    }
     const book = matchedBook ?? suggestions[0];
     if (!book) return;
     setCurrentRef({ book, chapter: chapter ?? 1, verse: verse ?? 1 });
@@ -103,7 +114,7 @@ export default function ScriptureNav({ inputRef }: Props) {
       }
       // Otherwise (no matched book and no suggestions yet, or a book just
       // matched with nothing typed after it) fall through to a normal space.
-    } else if (e.key === "Enter" && (matchedBook || suggestions.length > 0)) {
+    } else if (e.key === "Enter" && (verseJumpNumber || matchedBook || suggestions.length > 0)) {
       navigate();
     } else if (e.key === "Escape") {
       setValue("");
@@ -113,10 +124,11 @@ export default function ScriptureNav({ inputRef }: Props) {
 
   // Show resolved reference as a preview when book is confirmed and chapter is known
   const previewBook = matchedBook ?? (suggestions.length === 1 ? suggestions[0] : null);
-  const previewText =
-    previewBook && chapter
-      ? `${previewBook} ${chapter}${verse ? `:${verse}` : ""}`
-      : null;
+  const previewText = verseJumpNumber
+    ? `${currentRef.book} ${currentRef.chapter}:${verseJumpNumber}`
+    : previewBook && chapter
+    ? `${previewBook} ${chapter}${verse ? `:${verse}` : ""}`
+    : null;
 
   return (
     <div className="relative flex-1">
@@ -126,7 +138,7 @@ export default function ScriptureNav({ inputRef }: Props) {
       <input
         ref={inputRef}
         className="w-full pl-8 pr-3 py-1 bg-surface-container-low border border-outline-variant rounded-DEFAULT focus:outline-none focus:border-primary text-body-ui font-body-ui transition-colors placeholder:text-on-surface-variant"
-        placeholder="Go to… e.g. jn 3:16  (Ctrl+L)"
+        placeholder="Go to… jn 3:16 or v5  (Ctrl+L)"
         value={value}
         onChange={(e) => { setValue(e.target.value); setOpen(true); }}
         onKeyDown={handleKey}
