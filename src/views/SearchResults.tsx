@@ -3,11 +3,13 @@ import { useAppStore } from "../store/app";
 import { api, type SearchResult } from "../lib/tauri";
 import { sanitizeSnippet } from "../lib/sanitize";
 import SideNav from "../components/SideNav";
+import SearchScopeBar from "../components/SearchScopeBar";
 
 export default function SearchResults() {
   const {
     searchQuery, setSearchQuery, primaryModule, setCurrentRef, setView,
     addToSearchHistory, setCurrentSearchResults, setSearchResultIndex, setLastHistoryRef,
+    searchTestament, searchBooks,
   } = useAppStore();
 
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -20,10 +22,16 @@ export default function SearchResults() {
     setResults([]);
     if (!searchQuery.trim() || !primaryModule) return;
 
+    const scopeOptions = searchBooks.length > 0
+      ? { book_filter: searchBooks }
+      : searchTestament !== "all"
+        ? { testament: searchTestament as "OT" | "NT" }
+        : {};
+
     const timer = setTimeout(() => {
       setLoading(true);
       api
-        .search(searchQuery, { modules: [primaryModule] })
+        .search(searchQuery, { modules: [primaryModule], ...scopeOptions })
         .then((r) => {
           setResults(r);
           setCurrentSearchResults(r);
@@ -40,7 +48,7 @@ export default function SearchResults() {
     }, 120);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, primaryModule]);
+  }, [searchQuery, primaryModule, searchTestament, searchBooks]);
 
   function navigateTo(r: SearchResult, index: number) {
     const ref = { book: r.book, chapter: r.chapter, verse: r.verse };
@@ -67,7 +75,7 @@ export default function SearchResults() {
               History
             </button>
           </div>
-          <div className="relative max-w-xl">
+          <div className="relative max-w-xl mb-3">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
             <input
               autoFocus
@@ -77,9 +85,12 @@ export default function SearchResults() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
+          <SearchScopeBar />
           {ran && (
             <p className="font-metadata-mono text-metadata-mono text-secondary mt-2">
               {results.length} result{results.length !== 1 ? "s" : ""} for "{searchQuery}"
+              {searchBooks.length > 0 && ` in ${searchBooks.length} book${searchBooks.length !== 1 ? "s" : ""}`}
+              {searchBooks.length === 0 && searchTestament !== "all" && ` in ${searchTestament === "OT" ? "Old Testament" : "New Testament"}`}
               {results.length > 0 && (
                 <span className="ml-2 text-on-surface-variant/70">
                   — use Alt+P / Alt+N to navigate results from the reading view

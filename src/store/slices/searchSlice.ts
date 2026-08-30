@@ -12,11 +12,19 @@ function fromBackend(e: BackendSearchHistoryEntry): SearchHistoryEntry {
   };
 }
 
+export type SearchTestament = "all" | "OT" | "NT";
+
 export interface SearchSlice {
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   searchMode: SearchMode;
   setSearchMode: (m: SearchMode) => void;
+
+  // Scope: testament quick-filter + optional per-book override
+  searchTestament: SearchTestament;
+  setSearchTestament: (t: SearchTestament) => void;
+  searchBooks: string[]; // non-empty = specific books (overrides testament)
+  setSearchBooks: (books: string[]) => void;
 
   // Search result navigation (Alt+P / Alt+N)
   currentSearchResults: SearchResult[];
@@ -40,6 +48,11 @@ export const createSearchSlice: StateCreator<AppState, [], [], SearchSlice> = (s
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   searchMode: "word",
   setSearchMode: (searchMode) => set({ searchMode }),
+
+  searchTestament: "all",
+  setSearchTestament: (searchTestament) => set({ searchTestament, searchBooks: [] }),
+  searchBooks: [],
+  setSearchBooks: (searchBooks) => set({ searchBooks }),
 
   currentSearchResults: [],
   setCurrentSearchResults: (currentSearchResults) => set({ currentSearchResults }),

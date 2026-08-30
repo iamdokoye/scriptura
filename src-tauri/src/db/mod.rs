@@ -1,4 +1,5 @@
 use crate::types::*;
+use crate::versification::BOOK_NAMES;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
@@ -431,11 +432,36 @@ impl Database {
             .collect::<Vec<_>>()
             .join(",");
 
+        // Resolve which books to restrict to, if any.
+        // Explicit book_filter takes priority; testament is a shorthand for the full list.
+        let effective_books: Option<Vec<String>> =
+            if let Some(ref bf) = options.book_filter {
+                if bf.is_empty() { None } else { Some(bf.clone()) }
+            } else {
+                match options.testament.as_deref() {
+                    Some("OT") => Some(BOOK_NAMES[..39].iter().map(|s| s.to_string()).collect()),
+                    Some("NT") => Some(BOOK_NAMES[39..].iter().map(|s| s.to_string()).collect()),
+                    _ => None,
+                }
+            };
+
+        let book_clause = if let Some(ref books) = effective_books {
+            let base = options.modules.len() + 2; // ?1=query, ?2..?{n+1}=modules
+            let placeholders: String = (0..books.len())
+                .map(|i| format!("?{}", base + i))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("AND book IN ({placeholders})")
+        } else {
+            String::new()
+        };
+
         let sql = format!(
             "SELECT module_id, book, chapter, verse, snippet(verse_fts, 4, '<mark>', '</mark>', '…', 64) as text
              FROM verse_fts
              WHERE verse_fts MATCH ?1
                AND module_id IN ({module_placeholders})
+               {book_clause}
              ORDER BY rank
              LIMIT {page_size} OFFSET {offset}"
         );
@@ -444,6 +470,11 @@ impl Database {
         let mut params_vec: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(fts_query)];
         for m in &options.modules {
             params_vec.push(Box::new(m.clone()));
+        }
+        if let Some(ref books) = effective_books {
+            for b in books {
+                params_vec.push(Box::new(b.clone()));
+            }
         }
 
         let params_refs: Vec<&dyn rusqlite::types::ToSql> =

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../store/app";
 import { api, type SearchResult } from "../lib/tauri";
 import { sanitizeSnippet } from "../lib/sanitize";
+import SearchScopeBar from "./SearchScopeBar";
 
 interface Props {
   isOpen: boolean;
@@ -9,7 +10,7 @@ interface Props {
 }
 
 export default function FullscreenSearchPalette({ isOpen, onClose }: Props) {
-  const { primaryModule, setCurrentRef, setCurrentSearchResults, setSearchResultIndex, setLastHistoryRef, addToSearchHistory } = useAppStore();
+  const { primaryModule, setCurrentRef, setCurrentSearchResults, setSearchResultIndex, setLastHistoryRef, addToSearchHistory, searchTestament, searchBooks } = useAppStore();
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -45,9 +46,14 @@ export default function FullscreenSearchPalette({ isOpen, onClose }: Props) {
       return;
     }
     setLoading(true);
+    const scopeOptions = searchBooks.length > 0
+      ? { book_filter: searchBooks }
+      : searchTestament !== "all"
+        ? { testament: searchTestament as "OT" | "NT" }
+        : {};
     const timer = setTimeout(() => {
       api
-        .search(query, { modules: [primaryModule], page_size: 30 })
+        .search(query, { modules: [primaryModule], page_size: 30, ...scopeOptions })
         .then((r) => {
           setResults(r);
           setActiveIdx(0);
@@ -60,7 +66,7 @@ export default function FullscreenSearchPalette({ isOpen, onClose }: Props) {
         .finally(() => setLoading(false));
     }, 180);
     return () => clearTimeout(timer);
-  }, [query, primaryModule, isOpen]);
+  }, [query, primaryModule, isOpen, searchTestament, searchBooks]);
 
   // Keep active item scrolled into view
   useEffect(() => {
@@ -123,6 +129,11 @@ export default function FullscreenSearchPalette({ isOpen, onClose }: Props) {
           <kbd className="text-[10px] font-metadata-mono text-on-surface-variant border border-outline-variant rounded px-1.5 py-0.5 shrink-0">Esc</kbd>
         </div>
 
+        {/* Scope bar */}
+        <div className="px-4 py-2 border-b border-outline-variant bg-surface-container-low/50">
+          <SearchScopeBar compact />
+        </div>
+
         {/* Results */}
         <div ref={listRef} className="overflow-y-auto" style={{ maxHeight: "55vh" }}>
           {results.length === 0 && query.trim() && !loading && (
@@ -133,7 +144,11 @@ export default function FullscreenSearchPalette({ isOpen, onClose }: Props) {
 
           {results.length === 0 && !query.trim() && (
             <p className="text-center text-on-surface-variant font-body-ui text-[13px] py-10">
-              Type to search across {primaryModule ?? "the loaded module"}
+              {searchBooks.length > 0
+                ? `Type to search in ${searchBooks.length} selected book${searchBooks.length !== 1 ? "s" : ""}`
+                : searchTestament !== "all"
+                  ? `Type to search the ${searchTestament === "OT" ? "Old Testament" : "New Testament"}`
+                  : `Type to search across ${primaryModule ?? "the loaded module"}`}
             </p>
           )}
 
