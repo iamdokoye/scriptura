@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useAppStore, type Theme } from "../store/app";
 import { api } from "../lib/tauri";
 import ScriptureNav from "./ScriptureNav";
-import SettingsSheet from "./SettingsSheet";
+import SettingsSheet from "./Settings";
 
 export default function TopBar() {
   const {

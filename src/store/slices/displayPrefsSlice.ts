@@ -13,6 +13,7 @@ const DEFAULT_DISPLAY_PREFS: DisplayPrefs = {
   strongsSheetHeight: 0,
   presentationContext: 1,
   defaultLexiconSource: "ours",
+  splitLongVerses: false,
 };
 
 const FONT_FAMILIES: readonly FontFamily[] = ["system", "serif", "times", "mono"];
@@ -45,6 +46,7 @@ function fromPreferences(prefs: Preferences): DisplayPrefs {
     defaultLexiconSource: (LEXICON_SOURCES as readonly string[]).includes(prefs.default_lexicon_source)
       ? (prefs.default_lexicon_source as "ours" | "rich" | "lsj")
       : DEFAULT_DISPLAY_PREFS.defaultLexiconSource,
+    splitLongVerses: prefs.split_long_verses,
   };
 }
 
@@ -79,6 +81,7 @@ export const createDisplayPrefsSlice: StateCreator<AppState, [], [], DisplayPref
         strongs_sheet_height: patch.strongsSheetHeight,
         presentation_context: patch.presentationContext,
         default_lexicon_source: patch.defaultLexiconSource,
+        split_long_verses: patch.splitLongVerses,
       })
       .catch((e) => console.error("[displayPrefs] failed to persist", e));
   },

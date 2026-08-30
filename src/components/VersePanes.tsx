@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef } from "react";
-import type { ChapterText, TextSpan } from "../lib/tauri";
+import type { ChapterText, TextSpan, PresentationTheme } from "../lib/tauri";
 import type { DisplayPrefs } from "../store/app";
+import { splitVerse, PART_LABELS, type ThemeForSplit } from "../lib/verseSplit";
 
 export const FONT_FAMILY_CSS: Record<string, string> = {
   system: `-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`,
@@ -10,7 +11,7 @@ export const FONT_FAMILY_CSS: Record<string, string> = {
 };
 
 export function PrimaryPane({
-  chapter, loading, error, currentVerse, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showBorder, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, readingFontSize, displayPrefs, fullscreen, scrollContainerRef,
+  chapter, loading, error, currentVerse, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showBorder, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, readingFontSize, displayPrefs, presentationTheme, fullscreen, scrollContainerRef,
 }: {
   chapter: ChapterText | null;
   loading: boolean;
@@ -32,6 +33,7 @@ export function PrimaryPane({
   showNotes: boolean;
   readingFontSize: number;
   displayPrefs: DisplayPrefs;
+  presentationTheme?: PresentationTheme | null;
   fullscreen?: boolean;
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }) {
@@ -83,6 +85,9 @@ export function PrimaryPane({
             showCommentary={showCommentary}
             showNotes={showNotes}
             textStyle={textStyle}
+            splitLongVerses={displayPrefs.splitLongVerses}
+            readingFontSize={readingFontSize}
+            presentationTheme={presentationTheme}
           />
         ))}
       </div>
@@ -131,7 +136,7 @@ export function ParallelPane({ chapter, onStrongsClick, showStrongs, readingFont
 }
 
 export const VerseRow = memo(function VerseRow({
-  verse, spans, active, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, textStyle,
+  verse, spans, active, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, textStyle, splitLongVerses, readingFontSize, presentationTheme,
 }: {
   verse: number;
   spans: TextSpan[];
@@ -149,7 +154,14 @@ export const VerseRow = memo(function VerseRow({
   showCommentary: boolean;
   showNotes: boolean;
   textStyle: React.CSSProperties;
+  splitLongVerses?: boolean;
+  readingFontSize?: number;
+  presentationTheme?: ThemeForSplit | null;
 }) {
+  // Compute split parts for the split-marker indicator
+  const splitParts = active && splitLongVerses && readingFontSize
+    ? splitVerse(spans.map((s) => s.text).join("").trim(), readingFontSize, presentationTheme ?? undefined)
+    : null;
   return (
     <div
       data-verse={verse}
@@ -167,45 +179,70 @@ export const VerseRow = memo(function VerseRow({
       >
         {verse}
       </span>
-      <p
-        className="font-body-reading text-on-surface flex-1 select-text"
-        style={textStyle}
-      >
-        {spans.map((span, i) => {
-          const red = showRedLetter && span.is_red_letter;
-          const strongsNumbers = span.strongs ?? [];
-          if (strongsNumbers.length > 0 && showStrongs) {
-            return (
-              <span
-                key={i}
-                className={`strongs-word relative group/word border-b border-dashed hover:bg-secondary/10 pb-0.5 ${red ? "text-red-600 dark:text-red-400 border-red-400" : "border-primary"}`}
-                title={strongsNumbers.length === 1 ? "Double-click to look up in concordance" : "Double-click to look up this phrase's Strong's numbers"}
-                onDoubleClick={(e) => { e.stopPropagation(); onStrongsClick(strongsNumbers); }}
-              >
-                <span className="strongs-tag absolute -top-3 left-1/2 -translate-x-1/2 flex gap-1 whitespace-nowrap font-metadata-mono text-[9px] text-secondary opacity-0 transition-opacity">
-                  {strongsNumbers.map((strongs) => (
-                    <button
-                      key={strongs}
-                      type="button"
-                      className="hover:text-primary hover:underline"
-                      title={`Look up ${strongs}`}
-                      onClick={(e) => { e.stopPropagation(); onStrongsClick([strongs]); }}
-                      onDoubleClick={(e) => e.stopPropagation()}
-                    >
-                      {strongs}
-                    </button>
-                  ))}
+      <div className="flex-1 min-w-0">
+        <p
+          className="font-body-reading text-on-surface select-text"
+          style={textStyle}
+        >
+          {spans.map((span, i) => {
+            const red = showRedLetter && span.is_red_letter;
+            const strongsNumbers = span.strongs ?? [];
+            if (strongsNumbers.length > 0 && showStrongs) {
+              return (
+                <span
+                  key={i}
+                  className={`strongs-word relative group/word border-b border-dashed hover:bg-secondary/10 pb-0.5 ${red ? "text-red-600 dark:text-red-400 border-red-400" : "border-primary"}`}
+                  title={strongsNumbers.length === 1 ? "Double-click to look up in concordance" : "Double-click to look up this phrase's Strong's numbers"}
+                  onDoubleClick={(e) => { e.stopPropagation(); onStrongsClick(strongsNumbers); }}
+                >
+                  <span className="strongs-tag absolute -top-3 left-1/2 -translate-x-1/2 flex gap-1 whitespace-nowrap font-metadata-mono text-[9px] text-secondary opacity-0 transition-opacity">
+                    {strongsNumbers.map((strongs) => (
+                      <button
+                        key={strongs}
+                        type="button"
+                        className="hover:text-primary hover:underline"
+                        title={`Look up ${strongs}`}
+                        onClick={(e) => { e.stopPropagation(); onStrongsClick([strongs]); }}
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        {strongs}
+                      </button>
+                    ))}
+                  </span>
+                  {span.text}
                 </span>
-                {span.text}
-              </span>
-            );
-          }
-          if (span.is_added) {
-            return <em key={i} className={red ? "text-red-600 dark:text-red-400" : undefined}>{span.text}</em>;
-          }
-          return <span key={i} className={red ? "text-red-600 dark:text-red-400" : undefined}>{span.text}</span>;
-        })}
-      </p>
+              );
+            }
+            if (span.is_added) {
+              return <em key={i} className={red ? "text-red-600 dark:text-red-400" : undefined}>{span.text}</em>;
+            }
+            return <span key={i} className={red ? "text-red-600 dark:text-red-400" : undefined}>{span.text}</span>;
+          })}
+        </p>
+
+        {/* Split-part markers — shown under the active verse when split mode is on */}
+        {splitParts && splitParts.length > 1 && (
+          <div className="flex items-start gap-1.5 mt-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+            <span className="font-metadata-mono text-[10px] text-on-surface-variant/60 mt-0.5 mr-0.5 shrink-0">
+              <span className="material-symbols-outlined text-[12px] align-middle">content_cut</span>
+            </span>
+            {splitParts.map((part, i) => {
+              const label = PART_LABELS[i] ?? String.fromCharCode(97 + i);
+              const preview = part.slice(0, 35).trim();
+              return (
+                <span
+                  key={i}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container border border-outline-variant font-metadata-mono text-[10px] text-on-surface-variant"
+                  title={part}
+                >
+                  <span className="font-bold text-secondary">{label}</span>
+                  <span className="text-on-surface-variant/70">{preview}{part.length > 35 ? "…" : ""}</span>
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <div className="verse-actions absolute -right-2 top-2 opacity-0 pointer-events-none flex flex-col gap-1 bg-surface border border-outline-variant shadow-sm rounded p-1 transition-opacity z-10">
         <button className="p-1 text-secondary hover:text-primary hover:bg-secondary-container rounded" title="Copy">

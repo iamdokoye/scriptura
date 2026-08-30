@@ -11,6 +11,7 @@ import NotesSheet from "../components/NotesSheet";
 import FullscreenSearchPalette from "../components/FullscreenSearchPalette";
 import ScriptureNav from "../components/ScriptureNav";
 import ServiceOrderPanel from "../components/ServiceOrderPanel";
+import VerseSplitPanel from "../components/VerseSplitPanel";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { PrimaryPane, ParallelPane } from "../components/VersePanes";
 import { useReadingShortcuts } from "../hooks/useReadingShortcuts";
@@ -19,6 +20,7 @@ import { useChapterData } from "../hooks/useChapterData";
 import { usePresentationSync } from "../hooks/usePresentationSync";
 import { usePresentationCloseSync } from "../hooks/usePresentationCloseSync";
 import { useReadingPositionPersistence } from "../hooks/useReadingPositionPersistence";
+import { splitVerse } from "../lib/verseSplit";
 
 export default function ReadingView() {
   const {
@@ -33,8 +35,12 @@ export default function ReadingView() {
     activePresentationTheme, presentationThemes, serviceOrder,
     serviceOrderOpen, setServiceOrderOpen,
     liveBlack, liveEmergency, workspace,
+    versePart, setVersePart,
   } = useAppStore();
   const presenting = workspace === "presentation";
+
+  // Reset to part "a" whenever the verse reference changes
+  useEffect(() => { setVersePart(0); }, [currentRef.book, currentRef.chapter, currentRef.verse]);
 
   type VerseRefLocal = { book: string; chapter: number; verse: number };
   const [crossRefVerse, setCrossRefVerse] = useState<VerseRefLocal | null>(null);
@@ -119,6 +125,16 @@ export default function ReadingView() {
     return { ...base, ...properties } as PresentationTheme;
   }, [activePresentationTheme, currentRef.book, currentRef.chapter, currentRef.verse, presentationThemes, primaryModule, serviceOrder]);
 
+  // Compute split parts for the active verse using the effective theme so the
+  // capacity calculation reflects the actual box dimensions on screen.
+  const activeVerseParts = useMemo(() => {
+    if (!displayPrefs.splitLongVerses || !chapter) return [];
+    const v = chapter.verses.find((vv) => vv.verse === currentRef.verse);
+    if (!v) return [];
+    const text = v.spans.map((s) => s.text).join("").trim();
+    return splitVerse(text, readingFontSize, effectivePresentationTheme ?? undefined);
+  }, [displayPrefs.splitLongVerses, chapter, currentRef.verse, readingFontSize, effectivePresentationTheme]);
+
   // black/emergency are set from the Live Show console, but broadcast from
   // wherever presentationActive happens to be true — otherwise switching
   // back to this view while either is engaged would silently clear it on
@@ -127,6 +143,7 @@ export default function ReadingView() {
     presentationActive, primaryModule, currentRef, parallelModule,
     parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme: effectivePresentationTheme,
     black: liveBlack, emergency: liveEmergency,
+    versePart: displayPrefs.splitLongVerses ? versePart : undefined,
   });
   usePresentationCloseSync(setPresentationActive);
 
@@ -442,6 +459,7 @@ export default function ReadingView() {
               showNotes={showNotes}
               readingFontSize={readingFontSize}
               displayPrefs={displayPrefs}
+              presentationTheme={effectivePresentationTheme}
               fullscreen
               scrollContainerRef={primaryScrollRef}
             />
@@ -475,6 +493,16 @@ export default function ReadingView() {
             )}
           </div>
         </div>
+        {presenting && activeVerseParts.length > 1 && (
+          <VerseSplitPanel
+            parts={activeVerseParts}
+            currentPart={versePart}
+            onPartClick={setVersePart}
+            scrollContainerRef={primaryScrollRef}
+            verseNumber={currentRef.verse}
+            leftOffset={4}
+          />
+        )}
         {sheets}
       </>
     );
@@ -551,6 +579,7 @@ export default function ReadingView() {
               showNotes={showNotes}
               readingFontSize={readingFontSize}
               displayPrefs={displayPrefs}
+              presentationTheme={effectivePresentationTheme}
               scrollContainerRef={primaryScrollRef}
             />
 
@@ -573,6 +602,16 @@ export default function ReadingView() {
         </section>
       </main>
 
+      {presenting && activeVerseParts.length > 1 && (
+        <VerseSplitPanel
+          parts={activeVerseParts}
+          currentPart={versePart}
+          onPartClick={setVersePart}
+          scrollContainerRef={primaryScrollRef}
+          verseNumber={currentRef.verse}
+          leftOffset={72}
+        />
+      )}
       {sheets}
     </div>
   );

@@ -4,6 +4,7 @@ import { api, type ChapterText, type PresentationTheme } from "../lib/tauri";
 import StrongsSheet from "../components/StrongsSheet";
 import { useShrinkToFit } from "../hooks/useShrinkToFit";
 import { useAppStore, type DisplayPrefs } from "../store/app";
+import { splitVerse, PART_LABELS } from "../lib/verseSplit";
 
 const FONT_FAMILY_CSS: Record<string, string> = {
   system: `-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`,
@@ -213,7 +214,17 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
     return parallelChapter.verses.find((pv) => pv.verse === v.verse)?.spans.map((s) => s.text).join("") ?? "";
   }
 
-  const ref = `${state.book} ${state.chapter}:${state.verse}`;
+  const rawActiveText = verseText(active);
+  // Compute parts once so isSplitVerse, activeDisplayText, suffix, and noShrink
+  // all derive from the same calculation.
+  const activeParts = state.displayPrefs.splitLongVerses
+    ? splitVerse(rawActiveText.trim(), state.readingFontSize, presentationTheme ?? undefined)
+    : [rawActiveText];
+  const isSplitVerse = activeParts.length > 1;
+  const partIdx = state.versePart ?? 0;
+  const activeDisplayText = isSplitVerse ? (activeParts[partIdx] ?? activeParts[0]) : rawActiveText;
+  const suffix = isSplitVerse ? (PART_LABELS[partIdx] ?? String.fromCharCode(97 + partIdx)) : "";
+  const ref = `${state.book} ${state.chapter}:${state.verse}${suffix}`;
   // Context verses (prev/next) render at 68% of the active size
   const contextStyle = makeTextStyle(prefs, Math.round(fontSize * 0.68), presentationTheme);
   const refSize = Math.max(12, Math.round(fontSize * 0.28));
@@ -221,18 +232,18 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
   // Single verse — vertically centred, shrunk to fit if it's long
   if (ctx === 1) {
     if (!state.parallelMode && presentationTheme) {
-      return <FreeformVerseLayout text={verseText(active)} reference={ref} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} refSize={refSize} theme={presentationTheme} />;
+      return <FreeformVerseLayout text={activeDisplayText} reference={ref} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} refSize={refSize} theme={presentationTheme} noShrink={isSplitVerse} />;
     }
     return (
       <div className="h-full flex items-center justify-center" style={{ paddingLeft: hPad, paddingRight: hPad }}>
         {state.parallelMode && parallelChapter ? (
           <div className="w-full h-full py-10 grid grid-cols-2 gap-16">
-            <VerseColumn text={verseText(active)} reference={ref} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} refSize={refSize} />
+            <VerseColumn text={activeDisplayText} reference={ref} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} refSize={refSize} noShrink={isSplitVerse} />
             <VerseColumn text={parallelText(active)} reference={ref} module={state.parallelModule ?? ""} prefs={prefs} maxFontSize={fontSize} refSize={refSize} dim />
           </div>
         ) : (
           <div className="w-full h-full py-10 text-center">
-            <VerseColumn text={verseText(active)} reference={ref} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} refSize={refSize} centered widen />
+            <VerseColumn text={activeDisplayText} reference={ref} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} refSize={refSize} centered widen noShrink={isSplitVerse} />
           </div>
         )}
       </div>
@@ -266,11 +277,11 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
           >
             {state.parallelMode && parallelChapter ? (
               <div className="grid grid-cols-2 gap-12 h-full">
-                <ContextVerseBlock text={verseText(v)} label={label} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} contextStyle={contextStyle} refSize={refSize} active={isActive} />
+                <ContextVerseBlock text={isActive ? activeDisplayText : verseText(v)} label={label} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} contextStyle={contextStyle} refSize={refSize} active={isActive} noShrink={isActive && isSplitVerse} />
                 <ContextVerseBlock text={parallelText(v)} label={label} module={state.parallelModule ?? ""} prefs={prefs} maxFontSize={fontSize} contextStyle={contextStyle} refSize={refSize} active={isActive} dim />
               </div>
             ) : (
-              <ContextVerseBlock text={verseText(v)} label={label} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} contextStyle={contextStyle} refSize={refSize} active={isActive} />
+              <ContextVerseBlock text={isActive ? activeDisplayText : verseText(v)} label={label} module={state.primaryModule} prefs={prefs} maxFontSize={fontSize} contextStyle={contextStyle} refSize={refSize} active={isActive} noShrink={isActive && isSplitVerse} />
             )}
           </div>
         );
@@ -279,7 +290,7 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
   );
 }
 
-function ContextVerseBlock({ text, label, module, prefs, maxFontSize, contextStyle, refSize, active, dim }: {
+function ContextVerseBlock({ text, label, module, prefs, maxFontSize, contextStyle, refSize, active, dim, noShrink }: {
   text: string;
   label: string;
   module: string;
@@ -289,6 +300,7 @@ function ContextVerseBlock({ text, label, module, prefs, maxFontSize, contextSty
   refSize: number;
   active: boolean;
   dim?: boolean;
+  noShrink?: boolean;
 }) {
   const presentationTheme = useContext(PresentationThemeContext);
   if (!active) {
@@ -302,7 +314,7 @@ function ContextVerseBlock({ text, label, module, prefs, maxFontSize, contextSty
   return (
     <div className={`flex flex-col gap-3 h-full ${dim ? "opacity-60" : ""}`}>
       {referenceIsTop(presentationTheme) && <ReferenceLabel label={label} module={module} fontSize={refSize} />}
-      <ShrinkingVerseText text={text} maxFontSize={maxFontSize} prefs={prefs} />
+      <ShrinkingVerseText text={text} maxFontSize={maxFontSize} prefs={prefs} noShrink={noShrink} />
       {!referenceIsTop(presentationTheme) && <ReferenceLabel label={label} module={module} fontSize={refSize} />}
     </div>
   );
@@ -316,7 +328,7 @@ function ContextVerseBlock({ text, label, module, prefs, maxFontSize, contextSty
 // verse still reads as an intentional, narrower centered block.
 const SINGLE_VERSE_WIDTH_RANGE = { min: 55, max: 100 };
 
-function ShrinkingVerseText({ text, maxFontSize, prefs, centered, widen, maxHeightVh }: {
+function ShrinkingVerseText({ text, maxFontSize, prefs, centered, widen, maxHeightVh, noShrink }: {
   text: string;
   maxFontSize: number;
   prefs: DisplayPrefs;
@@ -332,11 +344,16 @@ function ShrinkingVerseText({ text, maxFontSize, prefs, centered, widen, maxHeig
    * actually taller than the budget, e.g. Esther 9:8's ten-name list.
    */
   maxHeightVh?: number;
+  /** When true the font stays locked at maxFontSize — used when split mode is
+   *  on so each part renders at the user's configured size, not a shrunk one. */
+  noShrink?: boolean;
 }) {
   const presentationTheme = useContext(PresentationThemeContext);
-  const minSize = presentationTheme
-    ? (presentationTheme.auto_layout ? Math.max(14, maxFontSize * presentationTheme.min_font_scale) : maxFontSize)
-    : 24;
+  const minSize = noShrink
+    ? maxFontSize
+    : presentationTheme
+      ? (presentationTheme.auto_layout ? Math.max(14, maxFontSize * presentationTheme.min_font_scale) : maxFontSize)
+      : 24;
   const { containerRef, textRef, fontSize, widthPct } = useShrinkToFit({
     text,
     maxSize: maxFontSize,
@@ -348,6 +365,7 @@ function ShrinkingVerseText({ text, maxFontSize, prefs, centered, widen, maxHeig
     ...(widen ? { width: `${widthPct}%` } : undefined),
     ...(maxHeightVh ? { maxHeight: `${maxHeightVh}vh` } : undefined),
   };
+
   return (
     <div
       ref={containerRef}
@@ -364,7 +382,7 @@ function ShrinkingVerseText({ text, maxFontSize, prefs, centered, widen, maxHeig
 // Freeform boxes are intentionally used for the single-verse layout, where an
 // operator expects a slide-like canvas. Context and chapter modes stay in their
 // structured reading layouts so adjacent verses retain their visual hierarchy.
-function FreeformVerseLayout({ text, reference, module, prefs, maxFontSize, refSize, theme }: {
+function FreeformVerseLayout({ text, reference, module, prefs, maxFontSize, refSize, theme, noShrink }: {
   text: string;
   reference: string;
   module: string;
@@ -372,6 +390,7 @@ function FreeformVerseLayout({ text, reference, module, prefs, maxFontSize, refS
   maxFontSize: number;
   refSize: number;
   theme: PresentationTheme;
+  noShrink?: boolean;
 }) {
   const verseBox: React.CSSProperties = {
     left: `${theme.verse_box_x}%`, top: `${theme.verse_box_y}%`,
@@ -388,7 +407,7 @@ function FreeformVerseLayout({ text, reference, module, prefs, maxFontSize, refS
           content-determined, so scrollHeight never exceeds clientHeight and
           the shrink loop never fires. */}
       <div className="absolute flex flex-col overflow-hidden" style={verseBox}>
-        <ShrinkingVerseText text={text} maxFontSize={maxFontSize} prefs={prefs} centered={theme.text_align === "center"} widen={false} />
+        <ShrinkingVerseText text={text} maxFontSize={maxFontSize} prefs={prefs} centered={theme.text_align === "center"} widen={false} noShrink={noShrink} />
       </div>
       <div className={`absolute flex items-center ${referenceAlignment(theme)}`} style={referenceBox}>
         <ReferenceLabel label={reference} module={module} fontSize={refSize} />
@@ -412,14 +431,14 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad }
 
   useEffect(() => {
     activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [state.book, state.chapter, state.verse, chapter]);
+  }, [state.book, state.chapter, state.verse, state.versePart, chapter]);
 
   const ref = `${state.book} ${state.chapter}`;
   const textStyle = makeTextStyle(prefs, fontSize, presentationTheme);
   const verseNumSize = Math.max(10, Math.round(fontSize * 0.28));
 
   return (
-    <div className="h-full overflow-y-auto py-12" style={{ paddingLeft: hPad, paddingRight: hPad }}>
+    <div className="h-full overflow-y-auto" style={{ paddingTop: presentationTheme?.scroll_v_padding ?? 32, paddingBottom: presentationTheme?.scroll_v_padding ?? 32, paddingLeft: hPad, paddingRight: hPad }}>
       <p
         className="font-metadata-mono text-white/40 mb-8 tracking-widest uppercase"
         style={referenceStyle(presentationTheme, verseNumSize)}
@@ -433,10 +452,43 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad }
       <div className="space-y-6">
         {chapter.verses.map((v) => {
           const isActive = v.verse === state.verse;
-          const text = v.spans.map((s) => s.text).join("");
-          const parallelText = parallelChapter?.verses
+          const rawText = v.spans.map((s) => s.text).join("");
+          const parallelRawText = parallelChapter?.verses
             .find((pv) => pv.verse === v.verse)
             ?.spans.map((s) => s.text).join("") ?? "";
+
+          // When split mode is on and this is a split active verse, render each
+          // part as its own block so the scroll target is just the active part.
+          if (isActive && state.displayPrefs.splitLongVerses) {
+            const parts = splitVerse(rawText.trim(), state.readingFontSize, presentationTheme ?? undefined);
+            if (parts.length > 1) {
+              const activePartIdx = state.versePart ?? 0;
+              return (
+                <div key={v.verse} className="space-y-6">
+                  {parts.map((part, pi) => {
+                    const isActivePart = pi === activePartIdx;
+                    const label = PART_LABELS[pi] ?? String.fromCharCode(97 + pi);
+                    return (
+                      <div
+                        key={pi}
+                        ref={isActivePart ? activeRef : null}
+                        className={isActivePart ? "opacity-100" : "opacity-30"}
+                      >
+                        {state.parallelMode && parallelChapter ? (
+                          <div className="grid grid-cols-2 gap-12">
+                            <ScrollVerseBlock verseLabel={`${v.verse}${label}`} text={part} active={isActivePart} textStyle={textStyle} verseNumSize={verseNumSize} fontSize={fontSize} prefs={prefs} />
+                            <ScrollVerseBlock verseLabel={`${v.verse}${label}`} text={parallelRawText} active={isActivePart} textStyle={textStyle} verseNumSize={verseNumSize} fontSize={fontSize} prefs={prefs} dim />
+                          </div>
+                        ) : (
+                          <ScrollVerseBlock verseLabel={`${v.verse}${label}`} text={part} active={isActivePart} textStyle={textStyle} verseNumSize={verseNumSize} fontSize={fontSize} prefs={prefs} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            }
+          }
 
           return (
             <div
@@ -446,11 +498,11 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad }
             >
               {state.parallelMode && parallelChapter ? (
                 <div className="grid grid-cols-2 gap-12">
-                  <ScrollVerseBlock verse={v.verse} text={text} active={isActive} textStyle={textStyle} verseNumSize={verseNumSize} fontSize={fontSize} prefs={prefs} />
-                  <ScrollVerseBlock verse={v.verse} text={parallelText} active={isActive} textStyle={textStyle} verseNumSize={verseNumSize} fontSize={fontSize} prefs={prefs} dim />
+                  <ScrollVerseBlock verseLabel={String(v.verse)} text={rawText} active={isActive} textStyle={textStyle} verseNumSize={verseNumSize} fontSize={fontSize} prefs={prefs} />
+                  <ScrollVerseBlock verseLabel={String(v.verse)} text={parallelRawText} active={isActive} textStyle={textStyle} verseNumSize={verseNumSize} fontSize={fontSize} prefs={prefs} dim />
                 </div>
               ) : (
-                <ScrollVerseBlock verse={v.verse} text={text} active={isActive} textStyle={textStyle} verseNumSize={verseNumSize} fontSize={fontSize} prefs={prefs} />
+                <ScrollVerseBlock verseLabel={String(v.verse)} text={rawText} active={isActive} textStyle={textStyle} verseNumSize={verseNumSize} fontSize={fontSize} prefs={prefs} />
               )}
             </div>
           );
@@ -466,8 +518,8 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad }
 // ten-name list) can be taller than the viewport even after being centered.
 const ACTIVE_VERSE_MAX_HEIGHT_VH = 75;
 
-function ScrollVerseBlock({ verse, text, active, textStyle, verseNumSize, dim, fontSize, prefs }: {
-  verse: number;
+function ScrollVerseBlock({ verseLabel, text, active, textStyle, verseNumSize, dim, fontSize, prefs }: {
+  verseLabel: string;
   text: string;
   active: boolean;
   textStyle: TextStyle;
@@ -488,7 +540,7 @@ function ScrollVerseBlock({ verse, text, active, textStyle, verseNumSize, dim, f
         className={`font-metadata-mono shrink-0 mt-1 ${active ? "text-white/60" : "text-white/20"}`}
         style={referenceStyle(presentationTheme, verseNumSize)}
       >
-        {verse}
+        {verseLabel}
       </span>
       {active ? (
         <ShrinkingVerseText text={text} maxFontSize={fontSize} prefs={prefs} maxHeightVh={ACTIVE_VERSE_MAX_HEIGHT_VH} />
@@ -499,7 +551,7 @@ function ScrollVerseBlock({ verse, text, active, textStyle, verseNumSize, dim, f
   );
 }
 
-function VerseColumn({ text, reference, module, prefs, maxFontSize, refSize, dim, centered, widen }: {
+function VerseColumn({ text, reference, module, prefs, maxFontSize, refSize, dim, centered, widen, noShrink }: {
   text: string;
   reference: string;
   module: string;
@@ -509,12 +561,13 @@ function VerseColumn({ text, reference, module, prefs, maxFontSize, refSize, dim
   dim?: boolean;
   centered?: boolean;
   widen?: boolean;
+  noShrink?: boolean;
 }) {
   const presentationTheme = useContext(PresentationThemeContext);
   return (
     <div className={`flex flex-col gap-6 h-full ${centered ? "items-center" : ""} ${dim ? "opacity-60" : ""}`}>
       {referenceIsTop(presentationTheme) && <ReferenceLabel label={reference} module={module} fontSize={refSize} />}
-      <ShrinkingVerseText text={text} maxFontSize={maxFontSize} prefs={prefs} centered={centered} widen={widen} />
+      <ShrinkingVerseText text={text} maxFontSize={maxFontSize} prefs={prefs} centered={centered} widen={widen} noShrink={noShrink} />
       {!referenceIsTop(presentationTheme) && <ReferenceLabel label={reference} module={module} fontSize={refSize} />}
     </div>
   );

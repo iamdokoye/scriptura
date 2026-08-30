@@ -29,6 +29,7 @@ const DEFAULT_PREFS: Preferences = {
   presentation_context: 1,
   default_lexicon_source: "ours",
   workspace: "study",
+  split_long_verses: false,
 };
 
 const FONTS: { id: DisplayPrefs["fontFamily"]; label: string }[] = [
@@ -39,7 +40,7 @@ const FONTS: { id: DisplayPrefs["fontFamily"]; label: string }[] = [
 ];
 
 
-export default function SettingsSheet() {
+export default function Settings() {
   const {
     settingsOpen, setSettingsOpen,
     setTheme, setShowStrongs, setReadingFontSize,
@@ -339,6 +340,12 @@ export default function SettingsSheet() {
                   </ChipButton>
                 ))}
               </div>
+            </SubRow>
+            <SubRow
+              label="Auto-split long verses"
+              description="When on, a long verse is split into labelled parts (a, b, c…) sized to fit the screen at your font size. A panel appears on the left of the operator console so you can send each part to the screen in sequence."
+            >
+              <Toggle value={displayPrefs.splitLongVerses} onChange={(v) => setDisplayPrefs({ splitLongVerses: v })} />
             </SubRow>
           </AccordionSection>
 

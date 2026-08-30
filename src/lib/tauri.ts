@@ -142,6 +142,8 @@ export interface Preferences {
   // Show console, presentation themes). Study mode genuinely doesn't
   // expose presentation features, not just deprioritizes them.
   workspace: "study" | "presentation";
+  /** Split long verses into labelled parts (a, b, c…) for the presentation screen. */
+  split_long_verses: boolean;
 }
 
 export interface ReadingPosition {
@@ -248,6 +250,7 @@ export interface PresentationTheme {
   min_font_scale: number;
   transition_type: "none" | "fade" | "slide";
   transition_duration: number;
+  scroll_v_padding: number;
   // Which theme is currently applied — a session preference, freely
   // reassignable to any theme (including personal ones) and unrelated to
   // whether it can be deleted. See is_builtin for that.

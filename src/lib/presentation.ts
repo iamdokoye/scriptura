@@ -17,6 +17,12 @@ export interface PresentState {
   black?: boolean;
   /** A dedicated "something's wrong" screen, overriding black and live content alike. */
   emergency?: boolean;
+  /**
+   * Which part of a split verse is currently displayed (0 = part a, 1 = part b, …).
+   * Only meaningful when displayPrefs.splitLongVerses is true and the verse splits into
+   * more than one part at the active font size.
+   */
+  versePart?: number;
 }
 
 declare global {

@@ -241,6 +241,10 @@ pub struct Preferences {
     /// genuinely doesn't expose presentation features, not just
     /// deprioritizes them.
     pub workspace: String,
+    /// When true, long verses can be split into labelled parts (a, b, c…)
+    /// so each part fits the presentation screen at the configured font size
+    /// without excessive shrinking.
+    pub split_long_verses: bool,
 }
 
 /// A reusable presentation design for Scripture output. The data model is
@@ -275,6 +279,7 @@ pub struct PresentationTheme {
     pub min_font_scale: f64,
     pub transition_type: String,
     pub transition_duration: u32,
+    pub scroll_v_padding: u32,
     /// Which theme is currently applied — a session preference, freely
     /// reassignable to any theme (including personal ones) and unrelated
     /// to whether it can be deleted. See `is_builtin` for that.
@@ -316,6 +321,7 @@ pub struct PresentationThemeInput {
     pub min_font_scale: f64,
     pub transition_type: String,
     pub transition_duration: u32,
+    pub scroll_v_padding: u32,
 }
 
 impl Default for Preferences {
@@ -347,6 +353,7 @@ impl Default for Preferences {
             presentation_context: 1,
             default_lexicon_source: "ours".into(),
             workspace: "study".into(),
+            split_long_verses: false,
         }
     }
 }

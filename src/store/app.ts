@@ -72,6 +72,11 @@ export interface DisplayPrefs {
   presentationContext: 1 | 2 | 3 | 4;
   /** Which lexicon the Strong's sheet opens to by default — the pill switcher can still override per-lookup */
   defaultLexiconSource: "ours" | "rich" | "lsj";
+  /**
+   * When true, long verses are split into labelled parts (a, b, c…) so each
+   * part fits the presentation screen at the configured font size.
+   */
+  splitLongVerses: boolean;
 }
 
 // ── Combined state ──────────────────────────────────────────────────────────────

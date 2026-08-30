@@ -17,11 +17,13 @@ export function usePresentationSync(args: {
   /** Live Show console only — ReadingView's plain Go Live flow has no blackout/emergency controls. */
   black?: boolean;
   emergency?: boolean;
+  /** Which split part of the active verse to show (0 = a, 1 = b, …). */
+  versePart?: number;
 }) {
   const {
     presentationActive, primaryModule, currentRef, parallelModule,
     parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme,
-    black, emergency,
+    black, emergency, versePart,
   } = args;
 
   useEffect(() => {
@@ -39,6 +41,7 @@ export function usePresentationSync(args: {
       presentationTheme,
       black,
       emergency,
+      versePart,
     });
-  }, [presentationActive, currentRef, primaryModule, parallelModule, parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme, black, emergency]);
+  }, [presentationActive, currentRef, primaryModule, parallelModule, parallelMode, selectedStrongs, displayPrefs, readingFontSize, presentationTheme, black, emergency, versePart]);
 }

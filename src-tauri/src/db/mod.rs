@@ -66,6 +66,8 @@ impl Database {
             (11, SCHEMA_V11_DEFAULT_LEXICON_SOURCE),
             (12, SCHEMA_V12_PRESENTATION_THEME_BUILTIN_FLAG),
             (13, SCHEMA_V13_WORKSPACE),
+            (14, SCHEMA_V14_SPLIT_LONG_VERSES),
+            (15, SCHEMA_V15_SCROLL_V_PADDING),
         ]
     }
 
@@ -92,7 +94,8 @@ impl Database {
     const PREFS_COLUMNS: &'static str = "theme, font_size_reading, show_strongs, show_morph, \
         verse_display, default_commentary, show_commentary, show_notes, show_cross_refs, \
         show_red_letter, font_family, text_align, margins, line_spacing, letter_spacing, \
-        strongs_sheet_height, presentation_context, default_lexicon_source, workspace";
+        strongs_sheet_height, presentation_context, default_lexicon_source, workspace, \
+        split_long_verses";
 
     fn read_preferences(conn: &Connection) -> rusqlite::Result<Option<Preferences>> {
         let result = conn.query_row(
@@ -119,6 +122,7 @@ impl Database {
                     presentation_context: row.get(16)?,
                     default_lexicon_source: row.get(17)?,
                     workspace: row.get(18)?,
+                    split_long_verses: row.get::<_, i32>(19).map(|v| v != 0).unwrap_or(false),
                 })
             },
         );
@@ -134,8 +138,9 @@ impl Database {
             "INSERT INTO preferences (id, theme, font_size_reading, show_strongs, show_morph,
                 verse_display, default_commentary, show_commentary, show_notes, show_cross_refs,
                 show_red_letter, font_family, text_align, margins, line_spacing, letter_spacing,
-                strongs_sheet_height, presentation_context, default_lexicon_source, workspace)
-             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+                strongs_sheet_height, presentation_context, default_lexicon_source, workspace,
+                split_long_verses)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
              ON CONFLICT(id) DO UPDATE SET
                theme=excluded.theme,
                font_size_reading=excluded.font_size_reading,
@@ -155,7 +160,8 @@ impl Database {
                strongs_sheet_height=excluded.strongs_sheet_height,
                presentation_context=excluded.presentation_context,
                default_lexicon_source=excluded.default_lexicon_source,
-               workspace=excluded.workspace",
+               workspace=excluded.workspace,
+               split_long_verses=excluded.split_long_verses",
             params![
                 prefs.theme,
                 prefs.font_size_reading,
@@ -176,6 +182,7 @@ impl Database {
                 prefs.presentation_context,
                 prefs.default_lexicon_source,
                 prefs.workspace,
+                prefs.split_long_verses as i32,
             ],
         )?;
         Ok(())
@@ -257,6 +264,9 @@ impl Database {
             }
             if let Some(v) = obj.get("workspace").and_then(|v| v.as_str()) {
                 current.workspace = v.to_string();
+            }
+            if let Some(v) = obj.get("split_long_verses").and_then(|v| v.as_bool()) {
+                current.split_long_verses = v;
             }
         }
 
@@ -584,7 +594,7 @@ impl Database {
                     verse_box_x, verse_box_y, verse_box_width, verse_box_height,
                     reference_box_x, reference_box_y, reference_box_width, reference_box_height,
                     auto_layout, min_font_scale, transition_type, transition_duration,
-                    is_default, is_builtin, created_at, updated_at
+                    scroll_v_padding, is_default, is_builtin, created_at, updated_at
              FROM presentation_themes
              ORDER BY is_default DESC, name COLLATE NOCASE",
         )?;
@@ -605,8 +615,9 @@ impl Database {
                 reference_font_weight, safe_margin, text_shadow, reference_position,
                 verse_box_x, verse_box_y, verse_box_width, verse_box_height,
                 reference_box_x, reference_box_y, reference_box_width, reference_box_height,
-                auto_layout, min_font_scale, transition_type, transition_duration
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
+                auto_layout, min_font_scale, transition_type, transition_duration,
+                scroll_v_padding
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
             params![
                 id, input.name, input.background_color, input.background_gradient,
                 input.text_color, input.reference_color, input.font_family, input.text_align,
@@ -619,6 +630,7 @@ impl Database {
                 input.reference_box_width.clamp(10.0, 100.0), input.reference_box_height.clamp(5.0, 100.0),
                 input.auto_layout, input.min_font_scale.clamp(0.5, 1.0),
                 input.transition_type, input.transition_duration.clamp(0, 2_000),
+                input.scroll_v_padding.min(50),
             ],
         )?;
         self.presentation_theme_by_id(&conn, &id)
@@ -639,7 +651,7 @@ impl Database {
                 verse_box_x=?16, verse_box_y=?17, verse_box_width=?18, verse_box_height=?19,
                 reference_box_x=?20, reference_box_y=?21, reference_box_width=?22, reference_box_height=?23,
                 auto_layout=?24, min_font_scale=?25, transition_type=?26, transition_duration=?27,
-                updated_at=datetime('now')
+                scroll_v_padding=?28, updated_at=datetime('now')
              WHERE id=?1",
             params![
                 id, input.name, input.background_color, input.background_gradient,
@@ -653,6 +665,7 @@ impl Database {
                 input.reference_box_width.clamp(10.0, 100.0), input.reference_box_height.clamp(5.0, 100.0),
                 input.auto_layout, input.min_font_scale.clamp(0.5, 1.0),
                 input.transition_type, input.transition_duration.clamp(0, 2_000),
+                input.scroll_v_padding.min(50),
             ],
         )?;
         if changed == 0 {
@@ -734,7 +747,7 @@ impl Database {
                     verse_box_x, verse_box_y, verse_box_width, verse_box_height,
                     reference_box_x, reference_box_y, reference_box_width, reference_box_height,
                     auto_layout, min_font_scale, transition_type, transition_duration,
-                    is_default, is_builtin, created_at, updated_at
+                    scroll_v_padding, is_default, is_builtin, created_at, updated_at
              FROM presentation_themes WHERE id=?1",
             params![id],
             presentation_theme_from_row,
@@ -1207,6 +1220,17 @@ const SCHEMA_V13_WORKSPACE: &str = r#"
 ALTER TABLE preferences ADD COLUMN workspace TEXT NOT NULL DEFAULT 'study';
 "#;
 
+/// v14: operator-side verse splitting — long verses can be broken into
+/// labelled parts (a, b, c…) so each part fits the presentation screen
+/// at the configured font size without excessive auto-shrinking.
+const SCHEMA_V14_SPLIT_LONG_VERSES: &str = r#"
+ALTER TABLE preferences ADD COLUMN split_long_verses INTEGER NOT NULL DEFAULT 0;
+"#;
+
+const SCHEMA_V15_SCROLL_V_PADDING: &str = r#"
+ALTER TABLE presentation_themes ADD COLUMN scroll_v_padding INTEGER NOT NULL DEFAULT 32;
+"#;
+
 fn presentation_theme_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PresentationTheme> {
     Ok(PresentationTheme {
         id: row.get(0)?,
@@ -1236,10 +1260,11 @@ fn presentation_theme_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Pres
         min_font_scale: row.get(24)?,
         transition_type: row.get(25)?,
         transition_duration: row.get(26)?,
-        is_default: row.get(27)?,
-        is_builtin: row.get(28)?,
-        created_at: row.get(29)?,
-        updated_at: row.get(30)?,
+        scroll_v_padding: row.get::<_, Option<u32>>(27)?.unwrap_or(32),
+        is_default: row.get(28)?,
+        is_builtin: row.get(29)?,
+        created_at: row.get(30)?,
+        updated_at: row.get(31)?,
     })
 }
 
@@ -1401,6 +1426,7 @@ mod tests {
             min_font_scale: 0.7,
             transition_type: "slide".into(),
             transition_duration: 450,
+            scroll_v_padding: 32,
         };
         let created = db.create_presentation_theme(&input).unwrap();
         assert_eq!(created.name, "Lower third");
@@ -1460,6 +1486,7 @@ mod tests {
             min_font_scale: 0.7,
             transition_type: "slide".into(),
             transition_duration: 450,
+            scroll_v_padding: 32,
         };
         let created = db.create_presentation_theme(&input).unwrap();
         db.set_default_presentation_theme(&created.id).unwrap();
@@ -1518,6 +1545,7 @@ mod tests {
             min_font_scale: 0.7,
             transition_type: "slide".into(),
             transition_duration: 450,
+            scroll_v_padding: 32,
         };
         let created = db.create_presentation_theme(&input).unwrap();
         assert!(!created.is_default);

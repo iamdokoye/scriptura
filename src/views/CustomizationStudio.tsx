@@ -31,6 +31,7 @@ const STARTER_THEME: PresentationThemeInput = {
   min_font_scale: 0.65,
   transition_type: "fade",
   transition_duration: 300,
+  scroll_v_padding: 32,
 };
 
 function toInput(theme: PresentationTheme): PresentationThemeInput {
@@ -174,8 +175,23 @@ export default function CustomizationStudio() {
     }
   }
 
+  const [showGrid, setShowGrid] = useState(false);
+
   const preview = draft;
   const previewBackground = preview.background_gradient?.trim() || preview.background_color;
+
+  function GridToggle() {
+    return (
+      <button
+        onClick={() => setShowGrid((v) => !v)}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-DEFAULT font-body-ui text-[12px] border transition-colors ${showGrid ? "bg-primary/10 border-primary/40 text-primary" : "border-outline-variant text-on-surface-variant hover:bg-surface-container-low"}`}
+        title="Toggle alignment grid"
+      >
+        <span className="material-symbols-outlined text-[15px]">grid_4x4</span>
+        Grid
+      </button>
+    );
+  }
 
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -259,15 +275,43 @@ export default function CustomizationStudio() {
                   </label>
                 </div>
 
-                <div>
-                  <span className="field-label">Reference label position</span>
-                  <div className="grid grid-cols-3 gap-1.5 max-w-[280px]">
-                    {(["top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"] as const).map((reference_position) => (
-                      <button key={reference_position} onClick={() => setDraft({ ...draft, reference_position })} className={`py-1.5 rounded-DEFAULT text-[11px] capitalize ${draft.reference_position === reference_position ? "bg-primary text-on-primary" : "bg-surface-container text-on-surface-variant"}`}>
-                        {reference_position.replace("-", " · ").replace("center", "middle")}
-                      </button>
-                    ))}
+                <div className="space-y-2">
+                  <span className="field-label block">Reference label</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="font-body-ui text-[11px] text-on-surface-variant mb-1">Alignment</p>
+                      <div className="flex gap-1">
+                        {(["left", "center", "right"] as const).map((align) => {
+                          const current = draft.reference_position.split("-")[1] ?? "center";
+                          const active = current === align;
+                          const vertical = draft.reference_position.split("-")[0] ?? "bottom";
+                          return (
+                            <button key={align} onClick={() => setDraft({ ...draft, reference_position: `${vertical}-${align}` as PresentationThemeInput["reference_position"] })}
+                              className={`flex-1 py-1.5 rounded-DEFAULT text-[12px] capitalize ${active ? "bg-primary text-on-primary" : "bg-surface-container text-on-surface-variant"}`}>
+                              {align}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="font-body-ui text-[11px] text-on-surface-variant mb-1">Placement <span className="text-on-surface-variant/50">(modes 2–3)</span></p>
+                      <div className="flex gap-1">
+                        {(["top", "bottom"] as const).map((vert) => {
+                          const current = draft.reference_position.split("-")[0] ?? "bottom";
+                          const active = current === vert;
+                          const horizontal = draft.reference_position.split("-")[1] ?? "center";
+                          return (
+                            <button key={vert} onClick={() => setDraft({ ...draft, reference_position: `${vert}-${horizontal}` as PresentationThemeInput["reference_position"] })}
+                              className={`flex-1 py-1.5 rounded-DEFAULT text-[12px] capitalize ${active ? "bg-primary text-on-primary" : "bg-surface-container text-on-surface-variant"}`}>
+                              {vert}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
+                  <p className="font-body-ui text-[11px] text-on-surface-variant/60">In mode 1, drag the reference box directly in the preview.</p>
                 </div>
 
                 <RangeField label="Text scale" value={draft.font_scale} min={0.7} max={1.5} step={0.05} format={(value) => `${Math.round(value * 100)}%`} onChange={(font_scale) => setDraft({ ...draft, font_scale })} />
@@ -275,6 +319,7 @@ export default function CustomizationStudio() {
                 <RangeField label="Reference label size" value={draft.reference_font_scale} min={0.7} max={1.8} step={0.05} format={(value) => `${Math.round(value * 100)}%`} onChange={(reference_font_scale) => setDraft({ ...draft, reference_font_scale })} />
                 <RangeField label="Reference label weight" value={draft.reference_font_weight} min={100} max={900} step={100} format={(value) => `${value}`} onChange={(reference_font_weight) => setDraft({ ...draft, reference_font_weight })} />
                 <RangeField label="Safe margin" value={draft.safe_margin} min={2} max={15} step={1} format={(value) => `${value}%`} onChange={(safe_margin) => setDraft({ ...draft, safe_margin })} />
+                <RangeField label="Scroll padding" value={draft.scroll_v_padding} min={0} max={120} step={4} format={(value) => `${value}px`} onChange={(scroll_v_padding) => setDraft({ ...draft, scroll_v_padding })} />
                 <div className="pt-1 border-t border-outline-variant space-y-4">
                   <div className="flex items-center justify-between gap-3">
                     <div><span className="field-label">Auto-layout</span><p className="font-body-ui text-[11px] text-on-surface-variant">Shrink long verses inside their text box.</p></div>
@@ -310,8 +355,11 @@ export default function CustomizationStudio() {
               </section>
 
               <section>
-                <p className="font-headline-sm text-headline-sm text-on-surface mb-3">Live preview</p>
-                <LayoutPreview preview={preview} background={previewBackground} onChange={setDraft} />
+                <div className="flex items-center justify-between mb-3">
+                  <p className="font-headline-sm text-headline-sm text-on-surface">Live preview</p>
+                  <GridToggle />
+                </div>
+                <LayoutPreview preview={preview} background={previewBackground} showGrid={showGrid} onChange={setDraft} />
                 <AccessibilityChecker theme={preview} />
                 <div className="mt-4 p-4 rounded-DEFAULT bg-surface-container-low border border-outline-variant">
                   <p className="font-body-ui text-[13px] text-on-surface font-medium">How this applies</p>
@@ -328,7 +376,7 @@ export default function CustomizationStudio() {
 
 type LayoutBox = "verse" | "reference";
 
-function LayoutPreview({ preview, background, onChange }: { preview: PresentationThemeInput; background: string; onChange: (next: PresentationThemeInput) => void }) {
+function LayoutPreview({ preview, background, showGrid, onChange }: { preview: PresentationThemeInput; background: string; showGrid: boolean; onChange: (next: PresentationThemeInput) => void }) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
 
   function beginDrag(event: React.PointerEvent, box: LayoutBox, resize: boolean) {
@@ -380,7 +428,43 @@ function LayoutPreview({ preview, background, onChange }: { preview: Presentatio
   };
   const [_, horizontal] = preview.reference_position.split("-");
 
+  const GRID_STEPS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+
   return <div ref={canvasRef} className="aspect-video rounded-xl border border-outline-variant shadow-lg overflow-hidden relative" style={{ background, color: preview.text_color }}>
+    {showGrid && (
+      <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 5 }}>
+        {/* vertical lines */}
+        {GRID_STEPS.map((pct) => (
+          <div
+            key={`v${pct}`}
+            className="absolute top-0 bottom-0"
+            style={{
+              left: `${pct}%`,
+              width: "1px",
+              background: pct === 50 ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.12)",
+            }}
+          >
+            <span className="absolute top-1 left-0.5 font-metadata-mono text-white/40 leading-none" style={{ fontSize: "0.45vw" }}>{pct}</span>
+          </div>
+        ))}
+        {/* horizontal lines */}
+        {GRID_STEPS.map((pct) => (
+          <div
+            key={`h${pct}`}
+            className="absolute left-0 right-0"
+            style={{
+              top: `${pct}%`,
+              height: "1px",
+              background: pct === 50 ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.12)",
+            }}
+          >
+            <span className="absolute top-0.5 left-1 font-metadata-mono text-white/40 leading-none" style={{ fontSize: "0.45vw" }}>{pct}</span>
+          </div>
+        ))}
+        {/* centre crosshair dot */}
+        <div className="absolute" style={{ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 5, height: 5, borderRadius: "50%", background: "rgba(255,255,255,0.5)" }} />
+      </div>
+    )}
     <EditableBox label="Verse text box" style={boxStyle("verse")} onPointerDown={(event) => beginDrag(event, "verse", false)} onResizePointerDown={(event) => beginDrag(event, "verse", true)}>
       <p className="leading-tight h-full flex items-center" style={{ fontFamily: fontFamilyCss(preview.font_family), fontSize: `${3.1 * preview.font_scale}vw`, fontWeight: preview.text_font_weight, textAlign: preview.text_align, textShadow: preview.text_shadow ? "0 2px 12px rgba(0,0,0,.75)" : undefined }}>For God so loved the world, that he gave his only begotten Son.</p>
     </EditableBox>
