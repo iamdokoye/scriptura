@@ -173,7 +173,9 @@ impl LexiconReader {
             }
         }
 
-        Err(AppError::Sword(format!("Strong's number {n} not found (windowed)")))
+        Err(AppError::Sword(format!(
+            "Strong's number {n} not found (windowed)"
+        )))
     }
 
     fn lookup_strongs_zld_exhaustive(&self, n: u32, number: &str) -> Result<String> {
@@ -487,7 +489,8 @@ fn parse_strongs_tei(number: &str, raw: &str) -> Result<StrongsEntry> {
         .unwrap_or_else(|| number.to_string());
 
     // Extract <orth rend="bold" type="trans"> for romanized transliteration
-    let transliteration = strip_cjk(&extract_tag_by_attr(raw, "orth", "type", "trans").unwrap_or_default());
+    let transliteration =
+        strip_cjk(&extract_tag_by_attr(raw, "orth", "type", "trans").unwrap_or_default());
 
     // Extract <pron> for pronunciation hint (in braces like {ag-ap-ah'-o}).
     // A subset of entries in this specific StrongsGreek module (found via a
@@ -516,7 +519,10 @@ fn parse_strongs_tei(number: &str, raw: &str) -> Result<StrongsEntry> {
     // truncation below would surface that cross-reference clutter as the
     // headline instead of the real meaning ("love, goodwill, esteem").
     let short_source = if is_rich_fallback {
-        Some(tei_senses_to_text(&remove_tag_block(&remove_tag_block(raw, "title"), "etym")))
+        Some(tei_senses_to_text(&remove_tag_block(
+            &remove_tag_block(raw, "title"),
+            "etym",
+        )))
     } else {
         None
     };
@@ -553,7 +559,9 @@ fn parse_strongs_tei(number: &str, raw: &str) -> Result<StrongsEntry> {
             .unwrap_or_else(|| def_clean.clone());
         let short = if short_clean.chars().count() > 180 {
             let mut cut = 180;
-            while !short_clean.is_char_boundary(cut) { cut -= 1; }
+            while !short_clean.is_char_boundary(cut) {
+                cut -= 1;
+            }
             match short_clean[..cut].rfind(' ') {
                 Some(space) => format!("{}…", &short_clean[..space]),
                 None => short_clean[..cut].to_string(),
@@ -691,9 +699,18 @@ fn strip_cjk(s: &str) -> String {
 fn looks_like_etymology(s: &str) -> bool {
     let lower = s.to_lowercase();
     const OPENERS: &[&str] = &[
-        "from ", "a primitive", "of uncertain", "probably from", "apparently a",
-        "apparently from", "see ", "prolongation", "contracted from",
-        "feminine of", "masculine of", "neuter of",
+        "from ",
+        "a primitive",
+        "of uncertain",
+        "probably from",
+        "apparently a",
+        "apparently from",
+        "see ",
+        "prolongation",
+        "contracted from",
+        "feminine of",
+        "masculine of",
+        "neuter of",
     ];
     OPENERS.iter().any(|o| lower.starts_with(o))
 }
@@ -706,7 +723,13 @@ fn looks_like_etymology(s: &str) -> bool {
 // Strong's number actually cited in the KJV text, not just the two-clause
 // common case.
 const TRAILING_FOOTNOTE_OPENERS: &[&str] = &[
-    "also ", "often ", "sometimes ", "chiefly ", "generally ", "usually ", "frequently ",
+    "also ",
+    "often ",
+    "sometimes ",
+    "chiefly ",
+    "generally ",
+    "usually ",
+    "frequently ",
 ];
 
 fn split_at_sentence(s: &str) -> (String, String) {
@@ -727,7 +750,9 @@ fn split_at_sentence(s: &str) -> (String, String) {
         .rev()
         .find(|c| {
             let lower = c.to_lowercase();
-            !TRAILING_FOOTNOTE_OPENERS.iter().any(|o| lower.starts_with(o))
+            !TRAILING_FOOTNOTE_OPENERS
+                .iter()
+                .any(|o| lower.starts_with(o))
         })
         .copied()
         .unwrap_or("");
@@ -1078,4 +1103,3 @@ mod rich_lexicon_tests {
         assert!(!entry.short_def.contains("LXX"));
     }
 }
-

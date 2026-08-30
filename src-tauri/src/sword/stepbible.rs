@@ -118,7 +118,9 @@ fn remove_foreign_script_words(s: &str) -> String {
             || (0x0590..=0x05FF).contains(&cp) // Hebrew (incl. points/cantillation)
     }
     fn continues_foreign(chars: &[char], i: usize) -> bool {
-        is_foreign(chars[i]) || ((chars[i] == '-' || chars[i] == '\'') && chars.get(i + 1).is_some_and(|&c| is_foreign(c)))
+        is_foreign(chars[i])
+            || ((chars[i] == '-' || chars[i] == '\'')
+                && chars.get(i + 1).is_some_and(|&c| is_foreign(c)))
     }
 
     let chars: Vec<char> = s.chars().collect();
@@ -251,7 +253,11 @@ fn format_sense_outline(s: &str) -> String {
     out.lines()
         .map(|l| {
             let indent = l.len() - l.trim_start().len();
-            format!("{}{}", &l[..indent], l[indent..].split_whitespace().collect::<Vec<_>>().join(" "))
+            format!(
+                "{}{}",
+                &l[..indent],
+                l[indent..].split_whitespace().collect::<Vec<_>>().join(" ")
+            )
         })
         .filter(|l| !l.trim().is_empty())
         .collect::<Vec<_>>()
@@ -343,9 +349,8 @@ pub fn ensure_downloaded(cache_dir: &Path, source: &StepBibleSource) -> Result<(
 
 pub fn get_entry(cache_dir: &Path, source: &StepBibleSource, number: &str) -> Result<StrongsEntry> {
     let path = local_path(cache_dir, source);
-    let content = std::fs::read_to_string(&path).map_err(|_| {
-        AppError::Sword(format!("{} not downloaded yet", source.id))
-    })?;
+    let content = std::fs::read_to_string(&path)
+        .map_err(|_| AppError::Sword(format!("{} not downloaded yet", source.id)))?;
 
     // Numbers in this data are zero-padded to 4 digits after the language
     // prefix (e.g. "G0026", "H0157"), unlike our bare-number SWORD modules.
@@ -386,7 +391,11 @@ fn parse_row(number: &str, line: &str) -> Result<StrongsEntry> {
 
     Ok(StrongsEntry {
         number: number.to_string(),
-        lemma: if lemma.is_empty() { number.to_string() } else { lemma },
+        lemma: if lemma.is_empty() {
+            number.to_string()
+        } else {
+            lemma
+        },
         transliteration,
         part_of_speech,
         short_def: if gloss.is_empty() {
@@ -418,7 +427,10 @@ mod tests {
         // this parser is meant to strip from the readable definition.
         assert!(!entry.long_def.contains('['));
         assert!(!entry.long_def.contains("LXX"));
-        assert!(!entry.long_def.chars().any(|c| (0x0370..=0x03FF).contains(&(c as u32))));
+        assert!(!entry
+            .long_def
+            .chars()
+            .any(|c| (0x0370..=0x03FF).contains(&(c as u32))));
     }
 
     #[test]
@@ -437,7 +449,10 @@ mod tests {
         assert!(!entry.long_def.contains("2:5"));
         assert!(!entry.long_def.contains('['));
         assert!(!entry.long_def.contains('<'));
-        assert!(!entry.long_def.chars().any(|c| (0x0370..=0x03FF).contains(&(c as u32))));
+        assert!(!entry
+            .long_def
+            .chars()
+            .any(|c| (0x0370..=0x03FF).contains(&(c as u32))));
         // No orphaned punctuation left behind by the removed words.
         assert!(!entry.long_def.contains(" ,"));
         assert!(!entry.long_def.contains(", ,"));
@@ -483,12 +498,23 @@ mod sense_outline_tests {
         // Each sense/sub-sense is its own line, not run together.
         assert!(lines.iter().any(|l| l.trim_start() == "1) to love"));
         assert!(lines.iter().any(|l| l.trim_start() == "1a) (Qal)"));
-        assert!(lines.iter().any(|l| l.trim_start().starts_with("1a1) human love for another")));
+        assert!(lines
+            .iter()
+            .any(|l| l.trim_start().starts_with("1a1) human love for another")));
         assert!(lines.iter().any(|l| l.trim_start() == "2) to like"));
         // Sub-senses are indented further than their parent.
-        let l1 = lines.iter().position(|l| l.trim_start() == "1) to love").unwrap();
-        let l1a = lines.iter().position(|l| l.trim_start() == "1a) (Qal)").unwrap();
-        let l1a1 = lines.iter().position(|l| l.trim_start().starts_with("1a1)")).unwrap();
+        let l1 = lines
+            .iter()
+            .position(|l| l.trim_start() == "1) to love")
+            .unwrap();
+        let l1a = lines
+            .iter()
+            .position(|l| l.trim_start() == "1a) (Qal)")
+            .unwrap();
+        let l1a1 = lines
+            .iter()
+            .position(|l| l.trim_start().starts_with("1a1)"))
+            .unwrap();
         let indent_of = |l: &str| l.len() - l.trim_start().len();
         assert!(indent_of(lines[l1a]) > indent_of(lines[l1]));
         assert!(indent_of(lines[l1a1]) > indent_of(lines[l1a]));
@@ -512,9 +538,18 @@ mod sense_outline_tests {
         assert!(!entry.long_def.contains(", ."));
 
         let lines: Vec<&str> = entry.long_def.lines().collect();
-        let group2 = lines.iter().position(|l| l.trim_start().starts_with("2) Mid.")).unwrap();
-        let sub1 = lines.iter().position(|l| l.trim_start() == "1) to perish;").unwrap();
-        let sub_a = lines.iter().position(|l| l.trim_start().starts_with("a) of things")).unwrap();
+        let group2 = lines
+            .iter()
+            .position(|l| l.trim_start().starts_with("2) Mid."))
+            .unwrap();
+        let sub1 = lines
+            .iter()
+            .position(|l| l.trim_start() == "1) to perish;")
+            .unwrap();
+        let sub_a = lines
+            .iter()
+            .position(|l| l.trim_start().starts_with("a) of things"))
+            .unwrap();
 
         // "2) Mid." (the group) still prints before its own first
         // sub-sense "1) to perish" — but nested one level deeper, not as

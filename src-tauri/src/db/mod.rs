@@ -1533,7 +1533,9 @@ mod tests {
         // the frontend's catch-and-report-errors path never fires and a
         // failed delete looks indistinguishable from a successful one.
         assert!(db.delete_presentation_theme(&created.id).is_err());
-        assert!(db.delete_presentation_theme("theme-does-not-exist").is_err());
+        assert!(db
+            .delete_presentation_theme("theme-does-not-exist")
+            .is_err());
 
         cleanup(&path);
     }

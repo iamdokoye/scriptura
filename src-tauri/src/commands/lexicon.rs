@@ -8,7 +8,9 @@ use tauri::State;
 /// STEPBible-Data's lexicons (TBESG, TBESH, TFLSJ) aren't SWORD modules —
 /// plain tab-separated files fetched straight from GitHub and cached
 /// alongside the installed modules directory, not through it.
-fn stepbible_cache_dir(registry: &ModuleRegistry) -> std::result::Result<std::path::PathBuf, AppError> {
+fn stepbible_cache_dir(
+    registry: &ModuleRegistry,
+) -> std::result::Result<std::path::PathBuf, AppError> {
     let dir = registry
         .modules_dir()
         .parent()
