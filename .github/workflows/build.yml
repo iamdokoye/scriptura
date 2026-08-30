@@ -83,7 +83,7 @@ jobs:
           # the in-app updater only sees *published* releases (it reads
           # releases/latest/download/latest.json), so remember to publish the
           # draft once it's ready for users to auto-update to.
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
 
