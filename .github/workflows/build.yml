@@ -41,6 +41,10 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
+          # Share one cache across branch pushes and tag builds so a tag
+          # triggered immediately after a main push reuses the warm cache.
+          shared-key: "release-${{ matrix.platform }}"
+          cache-on-failure: true
 
       - name: Install frontend dependencies
         run: npm ci
