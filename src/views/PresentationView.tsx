@@ -149,10 +149,18 @@ export default function PresentationView() {
     "--presentation-transition-duration": `${presentationTheme?.transition_duration ?? 0}ms`,
   } as React.CSSProperties;
 
+  // Scroll layout (ctx=4) must NOT remount on verse change — that resets the
+  // scroll position to the top before scrollIntoView can run. Only remount
+  // when book/chapter/module change (where a full re-render is correct).
+  // Ctx 1-3 do include verse in the key so CSS transition animations fire.
+  const layoutKey = ctx === 4
+    ? `${state.book}-${state.chapter}-${state.primaryModule}`
+    : `${state.book}-${state.chapter}-${state.verse}-${state.primaryModule}`;
+
   return (
     <PresentationThemeContext.Provider value={presentationTheme}>
       <div className="presentation-output h-screen flex flex-col overflow-hidden select-none" style={themeStyle}>
-        <div key={`${state.book}-${state.chapter}-${state.verse}-${state.primaryModule}`} className={`flex-1 overflow-hidden presentation-transition presentation-transition-${presentationTheme?.transition_type ?? "none"}`}>
+        <div key={layoutKey} className={`flex-1 overflow-hidden presentation-transition presentation-transition-${presentationTheme?.transition_type ?? "none"}`}>
           {ctx === 4 ? (
             <ScrollLayout
               state={state}
@@ -375,7 +383,11 @@ function FreeformVerseLayout({ text, reference, module, prefs, maxFontSize, refS
   };
   return (
     <div className="relative h-full overflow-hidden">
-      <div className="absolute flex items-center overflow-hidden" style={verseBox}>
+      {/* flex-col so ShrinkingVerseText's flex-1 gets a definite height equal
+          to the frame — items-center on a row-flex parent leaves height
+          content-determined, so scrollHeight never exceeds clientHeight and
+          the shrink loop never fires. */}
+      <div className="absolute flex flex-col overflow-hidden" style={verseBox}>
         <ShrinkingVerseText text={text} maxFontSize={maxFontSize} prefs={prefs} centered={theme.text_align === "center"} widen={false} />
       </div>
       <div className={`absolute flex items-center ${referenceAlignment(theme)}`} style={referenceBox}>
