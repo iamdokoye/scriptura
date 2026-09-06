@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { api, type SearchResult } from "../lib/tauri";
+import { api, type ChapterText, type SearchResult } from "../lib/tauri";
 import type { VerseRef, DisplayPrefs, View } from "../store/app";
 import type { Workspace } from "../store/slices/navigationSlice";
 
@@ -29,6 +29,8 @@ interface Args {
   addCurrentVerseToQueue: () => void;
   /** Service-queue shortcuts are Presentation-only — see Preferences.workspace. */
   workspace: Workspace;
+  /** Current chapter's verse list, for Ctrl+↓/↑ next/previous-verse navigation. */
+  chapter: ChapterText | null;
 }
 
 /**
@@ -43,7 +45,7 @@ export function useReadingShortcuts(args: Args) {
     readingFontSize, setReadingFontSize, currentRef, setCurrentRef,
     currentSearchResults, searchResultIndex, setSearchResultIndex, navTo, setLastHistoryRef,
     setView, serviceOrderOpen, setServiceOrderOpen, presentationActive, setDisplayPrefs,
-    addCurrentVerseToQueue, workspace,
+    addCurrentVerseToQueue, workspace, chapter,
   } = args;
 
   useEffect(() => {
@@ -131,6 +133,19 @@ export function useReadingShortcuts(args: Args) {
         return;
       }
 
+      // Ctrl+ArrowDown / Ctrl+ArrowUp: next/previous verse in the current chapter
+      if (ctrl && (e.code === "ArrowDown" || e.code === "ArrowUp") && chapter) {
+        const idx = chapter.verses.findIndex((v) => v.verse === currentRef.verse);
+        if (idx !== -1) {
+          const nextIdx = e.code === "ArrowDown" ? idx + 1 : idx - 1;
+          if (nextIdx >= 0 && nextIdx < chapter.verses.length) {
+            e.preventDefault();
+            setCurrentRef({ ...currentRef, verse: chapter.verses[nextIdx].verse });
+          }
+        }
+        return;
+      }
+
       // Alt+H: go to search history view (use code for macOS Option key)
       if (alt && e.code === "KeyH") {
         e.preventDefault();
@@ -202,6 +217,6 @@ export function useReadingShortcuts(args: Args) {
     serviceOrderOpen, setServiceOrderOpen,
     setIsFullscreen, setCurrentRef, navTo,
     setSearchResultIndex, setView, setReadingFontSize, setLastHistoryRef,
-    setDisplayPrefs, addCurrentVerseToQueue, workspace,
+    setDisplayPrefs, addCurrentVerseToQueue, workspace, chapter,
   ]);
 }

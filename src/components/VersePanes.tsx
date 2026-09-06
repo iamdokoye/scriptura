@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef } from "react";
 import type { ChapterText, TextSpan, PresentationTheme } from "../lib/tauri";
 import type { DisplayPrefs } from "../store/app";
-import { splitVerse, PART_LABELS, type ThemeForSplit } from "../lib/verseSplit";
+import { splitVerse, PART_LABELS, capacityDims, minFontFor, type ThemeForSplit } from "../lib/verseSplit";
 
 export const FONT_FAMILY_CSS: Record<string, string> = {
   system: `-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`,
@@ -88,6 +88,8 @@ export function PrimaryPane({
             splitLongVerses={displayPrefs.splitLongVerses}
             readingFontSize={readingFontSize}
             presentationTheme={presentationTheme}
+            presentationContext={displayPrefs.presentationContext}
+            hPadPct={presentationTheme?.safe_margin ?? (5 + displayPrefs.margins / 2)}
           />
         ))}
       </div>
@@ -136,7 +138,7 @@ export function ParallelPane({ chapter, onStrongsClick, showStrongs, readingFont
 }
 
 export const VerseRow = memo(function VerseRow({
-  verse, spans, active, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, textStyle, splitLongVerses, readingFontSize, presentationTheme,
+  verse, spans, active, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, textStyle, splitLongVerses, readingFontSize, presentationTheme, presentationContext, hPadPct,
 }: {
   verse: number;
   spans: TextSpan[];
@@ -157,10 +159,21 @@ export const VerseRow = memo(function VerseRow({
   splitLongVerses?: boolean;
   readingFontSize?: number;
   presentationTheme?: ThemeForSplit | null;
+  presentationContext?: 1 | 2 | 3 | 4;
+  hPadPct?: number;
 }) {
-  // Compute split parts for the split-marker indicator
+  // Compute split parts for the split-marker indicator, using the same
+  // context-aware capacity box the presentation output renders against (see
+  // verseSplit.ts / PresentationView.tsx) so this marker stays accurate.
   const splitParts = active && splitLongVerses && readingFontSize
-    ? splitVerse(spans.map((s) => s.text).join("").trim(), readingFontSize, presentationTheme ?? undefined)
+    ? splitVerse(
+        spans.map((s) => s.text).join("").trim(),
+        {
+          ...capacityDims(presentationContext ?? 1, presentationTheme, hPadPct ?? 5, presentationContext === 4 ? 6 : 0),
+          minFontSize: minFontFor(presentationTheme, readingFontSize),
+        },
+        presentationTheme ?? undefined,
+      )
     : null;
   return (
     <div

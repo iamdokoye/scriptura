@@ -20,7 +20,7 @@ import { useChapterData } from "../hooks/useChapterData";
 import { usePresentationSync } from "../hooks/usePresentationSync";
 import { usePresentationCloseSync } from "../hooks/usePresentationCloseSync";
 import { useReadingPositionPersistence } from "../hooks/useReadingPositionPersistence";
-import { splitVerse } from "../lib/verseSplit";
+import { splitVerse, capacityDims, minFontFor } from "../lib/verseSplit";
 
 export default function ReadingView() {
   const {
@@ -125,15 +125,25 @@ export default function ReadingView() {
     return { ...base, ...properties } as PresentationTheme;
   }, [activePresentationTheme, currentRef.book, currentRef.chapter, currentRef.verse, presentationThemes, primaryModule, serviceOrder]);
 
-  // Compute split parts for the active verse using the effective theme so the
-  // capacity calculation reflects the actual box dimensions on screen.
+  // Compute split parts for the active verse using the SAME context-aware
+  // capacity box the presentation output window uses (capacityDims/minFontFor
+  // in verseSplit.ts) so this operator-side preview always agrees with what
+  // actually renders on screen — see PresentationView.tsx's ContextLayout /
+  // ScrollLayout for the mirrored calculation.
   const activeVerseParts = useMemo(() => {
     if (!displayPrefs.splitLongVerses || !chapter) return [];
     const v = chapter.verses.find((vv) => vv.verse === currentRef.verse);
     if (!v) return [];
     const text = v.spans.map((s) => s.text).join("").trim();
-    return splitVerse(text, readingFontSize, effectivePresentationTheme ?? undefined);
-  }, [displayPrefs.splitLongVerses, chapter, currentRef.verse, readingFontSize, effectivePresentationTheme]);
+    const hPadPct = effectivePresentationTheme?.safe_margin ?? (5 + displayPrefs.margins / 2);
+    const ctx = displayPrefs.presentationContext ?? 1;
+    const gutterPct = ctx === 4 ? 6 : 0;
+    const dims = {
+      ...capacityDims(ctx, effectivePresentationTheme, hPadPct, gutterPct),
+      minFontSize: minFontFor(effectivePresentationTheme, readingFontSize),
+    };
+    return splitVerse(text, dims, effectivePresentationTheme ?? undefined);
+  }, [displayPrefs.splitLongVerses, displayPrefs.margins, displayPrefs.presentationContext, chapter, currentRef.verse, readingFontSize, effectivePresentationTheme]);
 
   // black/emergency are set from the Live Show console, but broadcast from
   // wherever presentationActive happens to be true — otherwise switching
@@ -154,7 +164,7 @@ export default function ReadingView() {
     currentSearchResults, searchResultIndex, setSearchResultIndex, navTo, setLastHistoryRef,
     setView, serviceOrderOpen, setServiceOrderOpen, presentationActive, setDisplayPrefs,
     addCurrentVerseToQueue: () => handleAddToService(currentRef.verse),
-    workspace,
+    workspace, chapter,
   });
 
   function handleStrongsClick(numbers: string[]) {

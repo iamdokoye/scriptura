@@ -4,7 +4,7 @@ import { api, type ChapterText, type PresentationTheme } from "../lib/tauri";
 import StrongsSheet from "../components/StrongsSheet";
 import { useShrinkToFit } from "../hooks/useShrinkToFit";
 import { useAppStore, type DisplayPrefs } from "../store/app";
-import { splitVerse, PART_LABELS } from "../lib/verseSplit";
+import { splitVerse, PART_LABELS, capacityDims, minFontFor } from "../lib/verseSplit";
 
 const FONT_FAMILY_CSS: Record<string, string> = {
   system: `-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`,
@@ -143,7 +143,8 @@ export default function PresentationView() {
   // 5% baseline keeps text off the edges even at margins=0;
   // the margins slider adds on top of that (same half-each-side formula as the reading view)
   const presentationTheme = state.presentationTheme;
-  const hPad = `${presentationTheme?.safe_margin ?? (5 + prefs.margins / 2)}%`;
+  const hPadPct = presentationTheme?.safe_margin ?? (5 + prefs.margins / 2);
+  const hPad = `${hPadPct}%`;
   const themeStyle: React.CSSProperties = {
     background: presentationTheme?.background_gradient || presentationTheme?.background_color || "#000000",
     "--presentation-text": presentationTheme?.text_color ?? "#ffffff",
@@ -172,6 +173,7 @@ export default function PresentationView() {
               fontSize={fontSize}
               prefs={prefs}
               hPad={hPad}
+              hPadPct={hPadPct}
             />
           ) : (
             <ContextLayout
@@ -182,6 +184,7 @@ export default function PresentationView() {
               fontSize={fontSize}
               prefs={prefs}
               hPad={hPad}
+              hPadPct={hPadPct}
             />
           )}
         </div>
@@ -193,7 +196,7 @@ export default function PresentationView() {
 
 // ── Context layout (1, 2, or 3 verses) ───────────────────────────────────────
 
-function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, hPad }: {
+function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, hPad, hPadPct }: {
   ctx: 1 | 2 | 3;
   state: PresentState;
   chapter: ChapterText;
@@ -201,6 +204,7 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
   fontSize: number;
   prefs: DisplayPrefs;
   hPad: string;
+  hPadPct: number;
 }) {
   const presentationTheme = useContext(PresentationThemeContext);
   const idx = chapter.verses.findIndex((v) => v.verse === state.verse);
@@ -218,9 +222,16 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
 
   const rawActiveText = verseText(active);
   // Compute parts once so isSplitVerse, activeDisplayText, suffix, and noShrink
-  // all derive from the same calculation.
+  // all derive from the same calculation. The capacity box is context-aware
+  // (ctx 1's theme box vs. ctx 2/3's fixed 60vh/50vh active row) and sized
+  // against the theme's shrink floor, so a verse only splits once shrinking
+  // alone genuinely can't fit it in THIS context's real geometry.
+  const splitDims = {
+    ...capacityDims(ctx, presentationTheme, hPadPct),
+    minFontSize: minFontFor(presentationTheme, state.readingFontSize),
+  };
   const activeParts = state.displayPrefs.splitLongVerses
-    ? splitVerse(rawActiveText.trim(), state.readingFontSize, presentationTheme ?? undefined)
+    ? splitVerse(rawActiveText.trim(), splitDims, presentationTheme ?? undefined)
     : [rawActiveText];
   const isSplitVerse = activeParts.length > 1;
   const partIdx = state.versePart ?? 0;
@@ -420,16 +431,24 @@ function FreeformVerseLayout({ text, reference, module, prefs, maxFontSize, refS
 
 // ── Scroll layout (full chapter, active verse highlighted) ───────────────────
 
-function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad }: {
+function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad, hPadPct }: {
   state: PresentState;
   chapter: ChapterText;
   parallelChapter: ChapterText | null;
   fontSize: number;
   prefs: DisplayPrefs;
   hPad: string;
+  hPadPct: number;
 }) {
   const presentationTheme = useContext(PresentationThemeContext);
   const activeRef = useRef<HTMLDivElement | null>(null);
+  // Small fixed deduction for the verse-number gutter column so the split
+  // capacity box isn't overestimated relative to the text's real width.
+  const SCROLL_GUTTER_PCT = 6;
+  const scrollSplitDims = {
+    ...capacityDims(4, presentationTheme, hPadPct, SCROLL_GUTTER_PCT),
+    minFontSize: minFontFor(presentationTheme, state.readingFontSize),
+  };
 
   useEffect(() => {
     activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -462,7 +481,7 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad }
           // When split mode is on and this is a split active verse, render each
           // part as its own block so the scroll target is just the active part.
           if (isActive && state.displayPrefs.splitLongVerses) {
-            const parts = splitVerse(rawText.trim(), state.readingFontSize, presentationTheme ?? undefined);
+            const parts = splitVerse(rawText.trim(), scrollSplitDims, presentationTheme ?? undefined);
             if (parts.length > 1) {
               const activePartIdx = state.versePart ?? 0;
               return (
