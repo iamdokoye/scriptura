@@ -475,6 +475,8 @@ export default function ReadingView() {
               presentationTheme={effectivePresentationTheme}
               fullscreen
               scrollContainerRef={primaryScrollRef}
+              currentPart={versePart}
+              onPartClick={setVersePart}
             />
             {parallelMode && (
               <>
@@ -594,6 +596,8 @@ export default function ReadingView() {
               displayPrefs={displayPrefs}
               presentationTheme={effectivePresentationTheme}
               scrollContainerRef={primaryScrollRef}
+              currentPart={versePart}
+              onPartClick={setVersePart}
             />
 
             {parallelMode && (

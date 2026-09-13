@@ -11,7 +11,7 @@ export const FONT_FAMILY_CSS: Record<string, string> = {
 };
 
 export function PrimaryPane({
-  chapter, loading, error, currentVerse, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showBorder, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, readingFontSize, displayPrefs, presentationTheme, fullscreen, scrollContainerRef,
+  chapter, loading, error, currentVerse, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showBorder, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, readingFontSize, displayPrefs, presentationTheme, fullscreen, scrollContainerRef, currentPart, onPartClick,
 }: {
   chapter: ChapterText | null;
   loading: boolean;
@@ -36,6 +36,8 @@ export function PrimaryPane({
   presentationTheme?: PresentationTheme | null;
   fullscreen?: boolean;
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
+  currentPart?: number;
+  onPartClick?: (part: number) => void;
 }) {
   const internalRef = useRef<HTMLDivElement>(null);
   const scrollRef = (scrollContainerRef ?? internalRef) as React.RefObject<HTMLDivElement>;
@@ -90,6 +92,8 @@ export function PrimaryPane({
             presentationTheme={presentationTheme}
             presentationContext={displayPrefs.presentationContext}
             hPadPct={presentationTheme?.safe_margin ?? (5 + displayPrefs.margins / 2)}
+            currentPart={v.verse === currentVerse ? currentPart : undefined}
+            onPartClick={v.verse === currentVerse ? onPartClick : undefined}
           />
         ))}
       </div>
@@ -138,7 +142,7 @@ export function ParallelPane({ chapter, onStrongsClick, showStrongs, readingFont
 }
 
 export const VerseRow = memo(function VerseRow({
-  verse, spans, active, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, textStyle, splitLongVerses, readingFontSize, presentationTheme, presentationContext, hPadPct,
+  verse, spans, active, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, textStyle, splitLongVerses, readingFontSize, presentationTheme, presentationContext, hPadPct, currentPart, onPartClick,
 }: {
   verse: number;
   spans: TextSpan[];
@@ -161,6 +165,8 @@ export const VerseRow = memo(function VerseRow({
   presentationTheme?: ThemeForSplit | null;
   presentationContext?: 1 | 2 | 3 | 4;
   hPadPct?: number;
+  currentPart?: number;
+  onPartClick?: (part: number) => void;
 }) {
   // Compute split parts for the split-marker indicator, using the same
   // context-aware capacity box the presentation output renders against (see
@@ -243,15 +249,21 @@ export const VerseRow = memo(function VerseRow({
             {splitParts.map((part, i) => {
               const label = PART_LABELS[i] ?? String.fromCharCode(97 + i);
               const preview = part.slice(0, 35).trim();
+              const isCurrent = (currentPart ?? 0) === i;
               return (
-                <span
+                <button
                   key={i}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container border border-outline-variant font-metadata-mono text-[10px] text-on-surface-variant"
+                  onClick={() => onPartClick?.(i)}
                   title={part}
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-metadata-mono text-[10px] transition-colors ${
+                    isCurrent
+                      ? "bg-secondary-container border-secondary text-on-secondary-container"
+                      : "bg-surface-container border-outline-variant text-on-surface-variant hover:bg-surface-container-high hover:border-outline"
+                  }`}
                 >
-                  <span className="font-bold text-secondary">{label}</span>
+                  <span className={`font-bold ${isCurrent ? "text-secondary" : "text-secondary/70"}`}>{label}</span>
                   <span className="text-on-surface-variant/70">{preview}{part.length > 35 ? "…" : ""}</span>
-                </span>
+                </button>
               );
             })}
           </div>
