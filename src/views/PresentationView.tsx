@@ -1,10 +1,10 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { listenPresentation, type PresentState } from "../lib/presentation";
 import { api, type ChapterText, type PresentationTheme } from "../lib/tauri";
 import StrongsSheet from "../components/StrongsSheet";
 import { useShrinkToFit } from "../hooks/useShrinkToFit";
 import { useAppStore, type DisplayPrefs } from "../store/app";
-import { splitVerse, PART_LABELS, capacityDims, minFontFor } from "../lib/verseSplit";
+import { PART_LABELS, measureVersePartsDOM, type MeasureTextStyle } from "../lib/verseSplit";
 
 const FONT_FAMILY_CSS: Record<string, string> = {
   system: `-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`,
@@ -36,6 +36,18 @@ function makeTextStyle(prefs: DisplayPrefs, fontSize: number, theme: Presentatio
     textAlign: (theme?.text_align as TextStyle["textAlign"] | undefined) ?? prefs.textAlign,
     fontWeight: theme?.text_font_weight ?? 600,
     textShadow: theme?.text_shadow ? "0 2px 12px rgba(0,0,0,.75)" : undefined,
+  };
+}
+
+/** Returns a MeasureTextStyle whose values exactly match makeTextStyle(), for use
+ *  with measureVersePartsDOM so the split decision uses the real rendered font. */
+function measureStyle(prefs: DisplayPrefs, fontSize: number, theme: PresentationTheme | null): MeasureTextStyle {
+  return {
+    fontFamily: FONT_FAMILY_CSS[theme?.font_family ?? prefs.fontFamily] ?? FONT_FAMILY_CSS.system,
+    fontSizePx: fontSize * (theme?.font_scale ?? 1),
+    lineHeight: 1 + prefs.lineSpacing,
+    fontWeight: theme?.text_font_weight ?? 600,
+    textAlign: (theme?.text_align ?? prefs.textAlign) as string,
   };
 }
 
@@ -221,19 +233,25 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
   }
 
   const rawActiveText = verseText(active);
-  // Compute parts once so isSplitVerse, activeDisplayText, suffix, and noShrink
-  // all derive from the same calculation. The capacity box is context-aware
-  // (ctx 1's theme box vs. ctx 2/3's fixed 60vh/50vh active row) and sized
-  // against the theme's shrink floor, so a verse only splits once shrinking
-  // alone genuinely can't fit it in THIS context's real geometry.
-  const splitDims = {
-    ...capacityDims(ctx, presentationTheme, hPadPct),
-    minFontSize: minFontFor(presentationTheme, state.readingFontSize),
-    maxFontSize: state.readingFontSize,
-  };
-  const activeParts = state.displayPrefs.splitLongVerses
-    ? splitVerse(rawActiveText.trim(), splitDims, presentationTheme ?? undefined)
-    : [rawActiveText];
+  // Measure whether the verse fits by actually rendering it in a hidden element
+  // sized to match this context's real presentation box — no hardcoded ratios.
+  const activeParts = useMemo(() => {
+    if (!state.displayPrefs.splitLongVerses) return [rawActiveText];
+    const style = measureStyle(prefs, fontSize, presentationTheme);
+    if (ctx === 1 && presentationTheme) {
+      // Freeform layout: box is absolutely positioned at the theme percentages.
+      const w = (presentationTheme.verse_box_width / 100) * window.innerWidth;
+      const h = (presentationTheme.verse_box_height / 100) * window.innerHeight;
+      return measureVersePartsDOM(rawActiveText.trim(), w, h, style);
+    }
+    // ctx 1 no-theme, ctx 2, ctx 3 — centred column or stacked rows.
+    // Active row takes 60vh (ctx 2) or 50vh (ctx 3); no-theme ctx 1 = full height.
+    const activeVh = ctx === 3 ? 50 : ctx === 2 ? 60 : 100;
+    const w = window.innerWidth * (100 - 2 * hPadPct) / 100;
+    const h = window.innerHeight * activeVh / 100;
+    return measureVersePartsDOM(rawActiveText.trim(), w, h, style);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawActiveText, ctx, presentationTheme, fontSize, prefs.lineSpacing, prefs.fontFamily, prefs.textAlign, hPadPct, state.displayPrefs.splitLongVerses]);
   const isSplitVerse = activeParts.length > 1;
   const partIdx = state.versePart ?? 0;
   const activeDisplayText = isSplitVerse ? (activeParts[partIdx] ?? activeParts[0]) : rawActiveText;
@@ -446,11 +464,10 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad, 
   // Small fixed deduction for the verse-number gutter column so the split
   // capacity box isn't overestimated relative to the text's real width.
   const SCROLL_GUTTER_PCT = 6;
-  const scrollSplitDims = {
-    ...capacityDims(4, presentationTheme, hPadPct, SCROLL_GUTTER_PCT),
-    minFontSize: minFontFor(presentationTheme, state.readingFontSize),
-    maxFontSize: state.readingFontSize,
-  };
+  // Reusable style for DOM measurement; gutter deducted from width.
+  const scrollMeasureStyle = measureStyle(prefs, fontSize, presentationTheme);
+  const scrollBoxW = window.innerWidth * (100 - 2 * hPadPct - SCROLL_GUTTER_PCT) / 100;
+  const scrollBoxH = window.innerHeight * 0.75; // matches ACTIVE_VERSE_MAX_HEIGHT_VH
 
   useEffect(() => {
     activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -483,7 +500,7 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad, 
           // When split mode is on and this is a split active verse, render each
           // part as its own block so the scroll target is just the active part.
           if (isActive && state.displayPrefs.splitLongVerses) {
-            const parts = splitVerse(rawText.trim(), scrollSplitDims, presentationTheme ?? undefined);
+            const parts = measureVersePartsDOM(rawText.trim(), scrollBoxW, scrollBoxH, scrollMeasureStyle);
             if (parts.length > 1) {
               const activePartIdx = state.versePart ?? 0;
               return (

@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef } from "react";
 import type { ChapterText, TextSpan, PresentationTheme } from "../lib/tauri";
 import type { DisplayPrefs } from "../store/app";
-import { splitVerse, PART_LABELS, capacityDims, minFontFor, type ThemeForSplit } from "../lib/verseSplit";
+import { PART_LABELS, type ThemeForSplit } from "../lib/verseSplit";
 
 export const FONT_FAMILY_CSS: Record<string, string> = {
   system: `-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`,
@@ -11,7 +11,7 @@ export const FONT_FAMILY_CSS: Record<string, string> = {
 };
 
 export function PrimaryPane({
-  chapter, loading, error, currentVerse, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showBorder, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, readingFontSize, displayPrefs, presentationTheme, fullscreen, scrollContainerRef, currentPart, onPartClick,
+  chapter, loading, error, currentVerse, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showBorder, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, readingFontSize, displayPrefs, presentationTheme, fullscreen, scrollContainerRef, currentPart, onPartClick, activeVerseParts,
 }: {
   chapter: ChapterText | null;
   loading: boolean;
@@ -38,6 +38,8 @@ export function PrimaryPane({
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
   currentPart?: number;
   onPartClick?: (part: number) => void;
+  /** Pre-measured split parts for the active verse, passed from ReadingView. */
+  activeVerseParts?: string[];
 }) {
   const internalRef = useRef<HTMLDivElement>(null);
   const scrollRef = (scrollContainerRef ?? internalRef) as React.RefObject<HTMLDivElement>;
@@ -94,6 +96,7 @@ export function PrimaryPane({
             hPadPct={presentationTheme?.safe_margin ?? (5 + displayPrefs.margins / 2)}
             currentPart={v.verse === currentVerse ? currentPart : undefined}
             onPartClick={v.verse === currentVerse ? onPartClick : undefined}
+            precomputedSplitParts={v.verse === currentVerse ? activeVerseParts : undefined}
           />
         ))}
       </div>
@@ -142,7 +145,10 @@ export function ParallelPane({ chapter, onStrongsClick, showStrongs, readingFont
 }
 
 export const VerseRow = memo(function VerseRow({
-  verse, spans, active, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, textStyle, splitLongVerses, readingFontSize, presentationTheme, presentationContext, hPadPct, currentPart, onPartClick,
+  verse, spans, active, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, textStyle, splitLongVerses, currentPart, onPartClick, precomputedSplitParts,
+  // These are kept in the interface for caller compatibility but unused here
+  // since split parts are now pre-computed by ReadingView.
+  readingFontSize: _readingFontSize, presentationTheme: _presentationTheme, presentationContext: _presentationContext, hPadPct: _hPadPct,
 }: {
   verse: number;
   spans: TextSpan[];
@@ -167,20 +173,14 @@ export const VerseRow = memo(function VerseRow({
   hPadPct?: number;
   currentPart?: number;
   onPartClick?: (part: number) => void;
+  /** Pre-measured split parts from ReadingView — used instead of local estimation. */
+  precomputedSplitParts?: string[];
 }) {
-  // Compute split parts for the split-marker indicator, using the same
-  // context-aware capacity box the presentation output renders against (see
-  // verseSplit.ts / PresentationView.tsx) so this marker stays accurate.
-  const splitParts = active && splitLongVerses && readingFontSize
-    ? splitVerse(
-        spans.map((s) => s.text).join("").trim(),
-        {
-          ...capacityDims(presentationContext ?? 1, presentationTheme, hPadPct ?? 5, presentationContext === 4 ? 6 : 0),
-          minFontSize: minFontFor(presentationTheme, readingFontSize),
-          maxFontSize: readingFontSize,
-        },
-        presentationTheme ?? undefined,
-      )
+  // Use the pre-measured parts from ReadingView when available (they come from
+  // actual DOM measurement against the presentation box dimensions), otherwise
+  // fall back to null (no chips shown for inactive verses).
+  const splitParts = active && splitLongVerses
+    ? (precomputedSplitParts && precomputedSplitParts.length > 0 ? precomputedSplitParts : null)
     : null;
   return (
     <div

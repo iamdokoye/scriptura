@@ -1,20 +1,19 @@
 /**
- * Verse splitting — breaks a verse into screen-sized parts (a, b, c…) only
- * when even the smallest allowed font (the theme's shrink floor) still can't
- * fit the full text in the box the ACTIVE presentation context actually
- * renders into. Auto-layout shrinking always gets first refusal: a verse
- * that fits once shrunk to the floor is never split, only shrunk.
+ * Verse splitting — determines whether a verse needs to be broken into
+ * screen-sized parts (a, b, c…) and where to cut it.
  *
- * Capacity is derived from the real box for the active presentation context:
- *   • ctx 1 (single verse)     → the theme's verse_box_width/height
- *   • ctx 2/3 (context rows)   → the fixed 60vh / 50vh active-row height
- *   • ctx 4 (chapter scroll)   → the fixed active-verse max-height clamp
- * via `capacityDims()`, and the floor font size via `minFontFor()` — both
- * exported so `PresentationView.tsx` (the presentation output window) and
- * `ReadingView.tsx` / `VersePanes.tsx` (the operator's own console) derive
- * identical inputs and therefore always agree on where a verse splits.
+ * The primary split path is DOM-measurement: `measureVersePartsDOM()` renders
+ * text into a hidden off-screen element sized exactly like the real
+ * presentation box and binary-searches word boundaries to find where each part
+ * ends. This is called:
  *
- * The 1920 × 1080 reference frame is used for the percentage→pixel conversion.
+ *   • In `PresentationView.tsx` using `window.innerWidth/Height` (the actual
+ *     presentation screen dimensions).
+ *   • In `ReadingView.tsx` using the presentation monitor dimensions from the
+ *     Tauri MonitorInfo API so the operator console agrees with the output.
+ *
+ * The old character-counting helpers (`splitVerse`, `capacityDims`, etc.) are
+ * kept for fallback and for contexts where DOM measurement isn't practical.
  */
 
 export type PresentationContext = 1 | 2 | 3 | 4;
@@ -158,4 +157,105 @@ export function needsSplit(text: string, dims: CapacityDims, theme?: ThemeForSpl
 export function partPreview(part: string, maxLen = 50): string {
   const t = part.trim();
   return t.length <= maxLen ? t : `${t.slice(0, maxLen).trimEnd()}…`;
+}
+
+// ── DOM-based split (accurate, no hardcoded ratios) ───────────────────────────
+
+export interface MeasureTextStyle {
+  fontFamily: string;
+  /** Rendered font size in pixels (already scaled by font_scale). */
+  fontSizePx: number;
+  lineHeight: number;
+  fontWeight?: number;
+  textAlign?: string;
+}
+
+/**
+ * Splits `text` into parts that each fit inside a box of `widthPx × heightPx`
+ * at the given text style, using actual browser layout instead of hardcoded
+ * character-width ratios. A temporary hidden element is created, measured, and
+ * immediately removed — no lasting DOM side effects.
+ *
+ * Returns a single-element array when the full text fits.
+ */
+export function measureVersePartsDOM(
+  text: string,
+  widthPx: number,
+  heightPx: number,
+  style: MeasureTextStyle,
+  maxParts = MAX_PARTS,
+): string[] {
+  const trimmed = text.trim();
+  if (!trimmed || widthPx <= 0 || heightPx <= 0) return [trimmed];
+
+  const el = document.createElement("div");
+  Object.assign(el.style, {
+    position: "fixed",
+    top: "-99999px",
+    left: "-99999px",
+    width: `${widthPx}px`,
+    maxHeight: `${heightPx}px`,
+    overflow: "hidden",
+    fontFamily: style.fontFamily,
+    fontSize: `${style.fontSizePx}px`,
+    lineHeight: String(style.lineHeight),
+    fontWeight: String(style.fontWeight ?? 600),
+    textAlign: style.textAlign ?? "left",
+    whiteSpace: "normal",
+    wordBreak: "break-word",
+    boxSizing: "border-box",
+    padding: "0",
+    margin: "0",
+    visibility: "hidden",
+    pointerEvents: "none",
+  });
+  document.body.appendChild(el);
+
+  try {
+    el.textContent = trimmed;
+    // Full text fits — no split needed
+    if (el.scrollHeight <= el.clientHeight) return [trimmed];
+
+    const parts: string[] = [];
+    let remaining = trimmed;
+
+    while (remaining.length > 0 && parts.length < maxParts - 1) {
+      const words = remaining.split(" ");
+
+      if (words.length <= 1) {
+        parts.push(remaining);
+        remaining = "";
+        break;
+      }
+
+      // Guard: if even the first word alone overflows, push everything
+      el.textContent = words[0];
+      if (el.scrollHeight > el.clientHeight) {
+        parts.push(remaining);
+        remaining = "";
+        break;
+      }
+
+      // Binary search for the largest word prefix that still fits
+      let lo = 0;
+      let hi = words.length - 1;
+      while (lo < hi) {
+        const mid = Math.floor((lo + hi + 1) / 2);
+        el.textContent = words.slice(0, mid + 1).join(" ");
+        if (el.scrollHeight <= el.clientHeight) {
+          lo = mid;
+        } else {
+          hi = mid - 1;
+        }
+      }
+
+      parts.push(words.slice(0, lo + 1).join(" "));
+      remaining = words.slice(lo + 1).join(" ").trim();
+    }
+
+    if (remaining.length > 0) parts.push(remaining);
+    return parts.length > 0 ? parts : [trimmed];
+  } finally {
+    document.body.removeChild(el);
+  }
 }

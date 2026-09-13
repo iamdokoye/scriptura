@@ -13,14 +13,14 @@ import ScriptureNav from "../components/ScriptureNav";
 import ServiceOrderPanel from "../components/ServiceOrderPanel";
 import VerseSplitPanel from "../components/VerseSplitPanel";
 import ErrorBoundary from "../components/ErrorBoundary";
-import { PrimaryPane, ParallelPane } from "../components/VersePanes";
+import { PrimaryPane, ParallelPane, FONT_FAMILY_CSS } from "../components/VersePanes";
 import { useReadingShortcuts } from "../hooks/useReadingShortcuts";
 import { useScrollSync } from "../hooks/useScrollSync";
 import { useChapterData } from "../hooks/useChapterData";
 import { usePresentationSync } from "../hooks/usePresentationSync";
 import { usePresentationCloseSync } from "../hooks/usePresentationCloseSync";
 import { useReadingPositionPersistence } from "../hooks/useReadingPositionPersistence";
-import { splitVerse, capacityDims, minFontFor } from "../lib/verseSplit";
+import { measureVersePartsDOM } from "../lib/verseSplit";
 
 export default function ReadingView() {
   const {
@@ -125,26 +125,51 @@ export default function ReadingView() {
     return { ...base, ...properties } as PresentationTheme;
   }, [activePresentationTheme, currentRef.book, currentRef.chapter, currentRef.verse, presentationThemes, primaryModule, serviceOrder]);
 
-  // Compute split parts for the active verse using the SAME context-aware
-  // capacity box the presentation output window uses (capacityDims/minFontFor
-  // in verseSplit.ts) so this operator-side preview always agrees with what
-  // actually renders on screen — see PresentationView.tsx's ContextLayout /
-  // ScrollLayout for the mirrored calculation.
+  // Compute split parts for the active verse by measuring text against the
+  // actual presentation box dimensions — same approach as PresentationView.tsx
+  // so the operator console always agrees with the output screen.
   const activeVerseParts = useMemo(() => {
     if (!displayPrefs.splitLongVerses || !chapter) return [];
     const v = chapter.verses.find((vv) => vv.verse === currentRef.verse);
     if (!v) return [];
     const text = v.spans.map((s) => s.text).join("").trim();
-    const hPadPct = effectivePresentationTheme?.safe_margin ?? (5 + displayPrefs.margins / 2);
+
     const ctx = displayPrefs.presentationContext ?? 1;
-    const gutterPct = ctx === 4 ? 6 : 0;
-    const dims = {
-      ...capacityDims(ctx, effectivePresentationTheme, hPadPct, gutterPct),
-      minFontSize: minFontFor(effectivePresentationTheme, readingFontSize),
-      maxFontSize: readingFontSize,
-    };
-    return splitVerse(text, dims, effectivePresentationTheme ?? undefined);
-  }, [displayPrefs.splitLongVerses, displayPrefs.margins, displayPrefs.presentationContext, chapter, currentRef.verse, readingFontSize, effectivePresentationTheme]);
+    const theme = effectivePresentationTheme;
+    const hPadPct = theme?.safe_margin ?? (5 + displayPrefs.margins / 2);
+
+    // Use the presentation monitor's real pixel dimensions so the operator
+    // console and the presentation window always agree on where to split.
+    const screenW = monitors[0]?.width ?? 1920;
+    const screenH = monitors[0]?.height ?? 1080;
+
+    let boxW: number;
+    let boxH: number;
+    if (ctx === 1 && theme) {
+      boxW = (theme.verse_box_width / 100) * screenW;
+      boxH = (theme.verse_box_height / 100) * screenH;
+    } else if (ctx === 2 || ctx === 3) {
+      boxW = ((100 - 2 * hPadPct) / 100) * screenW;
+      boxH = screenH * (ctx === 3 ? 0.5 : 0.6);
+    } else { // ctx 4
+      boxW = ((100 - 2 * hPadPct - 6) / 100) * screenW;
+      boxH = screenH * 0.75;
+    }
+
+    // Font style must mirror PresentationView's makeTextStyle exactly.
+    const fontFamily = FONT_FAMILY_CSS[theme?.font_family ?? displayPrefs.fontFamily] ?? FONT_FAMILY_CSS.system;
+    return measureVersePartsDOM(text, boxW, boxH, {
+      fontFamily,
+      fontSizePx: readingFontSize * (theme?.font_scale ?? 1),
+      lineHeight: 1 + displayPrefs.lineSpacing,
+      fontWeight: theme?.text_font_weight ?? 600,
+      textAlign: theme?.text_align ?? displayPrefs.textAlign,
+    });
+  }, [
+    displayPrefs.splitLongVerses, displayPrefs.margins, displayPrefs.presentationContext,
+    displayPrefs.lineSpacing, displayPrefs.fontFamily, displayPrefs.textAlign,
+    chapter, currentRef.verse, readingFontSize, effectivePresentationTheme, monitors,
+  ]);
 
   // black/emergency are set from the Live Show console, but broadcast from
   // wherever presentationActive happens to be true — otherwise switching
@@ -477,6 +502,7 @@ export default function ReadingView() {
               scrollContainerRef={primaryScrollRef}
               currentPart={versePart}
               onPartClick={setVersePart}
+              activeVerseParts={activeVerseParts}
             />
             {parallelMode && (
               <>
@@ -598,6 +624,7 @@ export default function ReadingView() {
               scrollContainerRef={primaryScrollRef}
               currentPart={versePart}
               onPartClick={setVersePart}
+              activeVerseParts={activeVerseParts}
             />
 
             {parallelMode && (
