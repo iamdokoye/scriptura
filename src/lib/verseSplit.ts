@@ -46,12 +46,13 @@ export interface CapacityDims {
 
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
-/** Average character width as a fraction of the rendered font size. */
-const CHAR_W_RATIO = 0.55;
+/** Average character width as a fraction of the rendered font size.
+ *  0.65 matches real bold/serif fonts better than 0.55, keeping thresholds realistic. */
+const CHAR_W_RATIO = 0.65;
 /** Line height as a fraction of the rendered font size. */
-const LINE_H_RATIO = 1.35;
-/** Target lines per split part — keeps each part to a readable projection chunk. */
-const TARGET_LINES_PER_PART = 3;
+const LINE_H_RATIO = 1.6;
+/** Target lines per split part — 2 lines per part keeps splits tight and readable. */
+const TARGET_LINES_PER_PART = 2;
 
 /** ctx 2/3's fixed active-row height (matches PresentationView's `activeRowHeight`). */
 const ACTIVE_ROW_HEIGHT_VH: Record<2 | 3, number> = { 2: 60, 3: 50 };
