@@ -53,6 +53,12 @@ pub struct TextSpan {
     pub is_footnote: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_red_letter: Option<bool>,
+    /// A canonical section heading embedded in the verse text — e.g. a Psalm
+    /// superscription like "To the chief Musician upon Mahalath, Maschil, A
+    /// Psalm of David." (OSIS `<title>`). Rendered distinctly (bold) so it
+    /// reads as a heading rather than as part of verse 1's prose.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_title: Option<bool>,
 }
 
 impl TextSpan {
@@ -64,6 +70,7 @@ impl TextSpan {
             is_added: None,
             is_footnote: None,
             is_red_letter: None,
+            is_title: None,
         }
     }
 
@@ -76,6 +83,7 @@ impl TextSpan {
             is_added: None,
             is_footnote: None,
             is_red_letter: None,
+            is_title: None,
         }
     }
 }

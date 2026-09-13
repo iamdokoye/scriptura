@@ -75,6 +75,7 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
                     is_added: None,
                     is_footnote: None,
                     is_red_letter: None,
+                    is_title: None,
                 });
             }
             Ok(Event::Eof) => break,

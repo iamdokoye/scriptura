@@ -30,6 +30,11 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
     let mut is_red_letter = false;
     let mut in_note = false;
     let mut note_depth = 0u32;
+    // Canonical section headings (e.g. Psalm superscriptions) are wrapped in
+    // <title> and otherwise fall through to plain text with no separator from
+    // the verse content that follows — track it so we can flag it and inject
+    // the missing whitespace on close.
+    let mut in_title = false;
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -94,6 +99,9 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
                             spans.push(TextSpan::plain(" "));
                         }
                     }
+                    "title" => {
+                        in_title = true;
+                    }
                     _ => {}
                 }
             }
@@ -118,6 +126,14 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
                     }
                     "q" => {
                         is_red_letter = false;
+                    }
+                    "title" => {
+                        in_title = false;
+                        // The verse content that follows a title rarely has its
+                        // own leading whitespace in the source markup.
+                        if !spans.is_empty() {
+                            spans.push(TextSpan::plain(" "));
+                        }
                     }
                     _ => {}
                 }
@@ -178,6 +194,7 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
                     is_added: if is_added { Some(true) } else { None },
                     is_footnote: None,
                     is_red_letter: if is_red_letter { Some(true) } else { None },
+                    is_title: if in_title { Some(true) } else { None },
                 };
                 spans.push(span);
             }
@@ -238,18 +255,20 @@ fn normalize_spans(spans: Vec<TextSpan>) -> Vec<TextSpan> {
         if span.text.is_empty() {
             continue;
         }
-        // Merge adjacent plain text spans (preserves embedded spaces)
-        if span.strongs.is_none()
+        // Merge adjacent spans that carry no per-word metadata and agree on
+        // is_title (so consecutive title-text nodes collapse into one span,
+        // same as plain text does, without merging title into non-title).
+        let span_mergeable = span.strongs.is_none()
             && span.morph.is_none()
             && span.is_added.is_none()
-            && span.is_red_letter.is_none()
-        {
+            && span.is_red_letter.is_none();
+        if span_mergeable {
             if let Some(last) = out.last_mut() {
-                if last.strongs.is_none()
+                let last_mergeable = last.strongs.is_none()
                     && last.morph.is_none()
                     && last.is_added.is_none()
-                    && last.is_red_letter.is_none()
-                {
+                    && last.is_red_letter.is_none();
+                if last_mergeable && last.is_title == span.is_title {
                     last.text.push_str(&span.text);
                     continue;
                 }
@@ -306,5 +325,20 @@ mod tests {
         assert_eq!(spans[1].strongs.as_ref().unwrap(), &vec!["G2".to_string()]);
         assert_eq!(spans[2].strongs.as_ref().unwrap(), &vec!["G1".to_string()]);
         assert_eq!(spans[3].strongs, None);
+    }
+
+    #[test]
+    fn flags_psalm_superscription_as_title_and_separates_it_from_verse_text() {
+        let spans = parse(
+            r#"<title canonical="true" type="psalm">To the chief Musician, A Psalm of David.</title>The fool hath said"#,
+        )
+        .unwrap();
+
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].text, "To the chief Musician, A Psalm of David.");
+        assert_eq!(spans[0].is_title, Some(true));
+        // A separating space must be injected since the source markup has none.
+        assert_eq!(spans[1].text, " The fool hath said");
+        assert_eq!(spans[1].is_title, None);
     }
 }

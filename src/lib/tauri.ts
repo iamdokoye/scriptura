@@ -9,6 +9,7 @@ export interface TextSpan {
   is_added?: boolean;   // italics / added words
   is_footnote?: boolean;
   is_red_letter?: boolean; // words of Jesus (red letter)
+  is_title?: boolean;      // canonical section heading, e.g. a Psalm superscription
 }
 
 export interface VerseText {

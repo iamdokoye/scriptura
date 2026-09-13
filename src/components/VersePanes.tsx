@@ -233,6 +233,9 @@ export const VerseRow = memo(function VerseRow({
                 </span>
               );
             }
+            if (span.is_title) {
+              return <strong key={i} className={`font-bold ${red ? "text-red-600 dark:text-red-400" : ""}`}>{span.text}</strong>;
+            }
             if (span.is_added) {
               return <em key={i} className={red ? "text-red-600 dark:text-red-400" : undefined}>{span.text}</em>;
             }

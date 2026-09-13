@@ -67,6 +67,7 @@ pub fn parse(raw: &str) -> Result<Vec<TextSpan>> {
                     is_added: None,
                     is_footnote: None,
                     is_red_letter: if red_letter { Some(true) } else { None },
+                    is_title: None,
                 });
             }
             pos = end;
