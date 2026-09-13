@@ -176,6 +176,11 @@ export interface MeasureTextStyle {
  * character-width ratios. A temporary hidden element is created, measured, and
  * immediately removed — no lasting DOM side effects.
  *
+ * Each part is capped at TARGET_LINES_PER_PART lines so long verses produce
+ * 3-4 readable parts rather than one giant remainder that technically fits the
+ * full box height. The full heightPx is only used for the initial "does it
+ * fit at all?" check.
+ *
  * Returns a single-element array when the full text fits.
  */
 export function measureVersePartsDOM(
@@ -211,10 +216,19 @@ export function measureVersePartsDOM(
   });
   document.body.appendChild(el);
 
+  // Per-part height budget: TARGET_LINES_PER_PART lines, capped by the full
+  // box height.  This prevents "remaining text fits in the big box → one giant
+  // part b" by giving each split part a tight line budget.
+  const lineHeightPx = style.fontSizePx * style.lineHeight;
+  const partHeightPx = Math.min(heightPx, Math.ceil(TARGET_LINES_PER_PART * lineHeightPx));
+
   try {
     el.textContent = trimmed;
-    // Full text fits — no split needed
+    // Full text fits in the whole box — no split needed
     if (el.scrollHeight <= el.clientHeight) return [trimmed];
+
+    // Switch to per-part budget for the iteration
+    el.style.maxHeight = `${partHeightPx}px`;
 
     const parts: string[] = [];
     let remaining = trimmed;
@@ -228,7 +242,8 @@ export function measureVersePartsDOM(
         break;
       }
 
-      // Guard: if even the first word alone overflows, push everything
+      // Guard: if even the first word alone overflows the part budget, push
+      // everything remaining (degenerate long word — let the box wrap it).
       el.textContent = words[0];
       if (el.scrollHeight > el.clientHeight) {
         parts.push(remaining);
@@ -236,7 +251,8 @@ export function measureVersePartsDOM(
         break;
       }
 
-      // Binary search for the largest word prefix that still fits
+      // Binary search for the largest word prefix that still fits in the
+      // per-part budget.
       let lo = 0;
       let hi = words.length - 1;
       while (lo < hi) {
