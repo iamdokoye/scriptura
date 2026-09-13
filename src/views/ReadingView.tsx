@@ -141,6 +141,7 @@ export default function ReadingView() {
     const dims = {
       ...capacityDims(ctx, effectivePresentationTheme, hPadPct, gutterPct),
       minFontSize: minFontFor(effectivePresentationTheme, readingFontSize),
+      maxFontSize: readingFontSize,
     };
     return splitVerse(text, dims, effectivePresentationTheme ?? undefined);
   }, [displayPrefs.splitLongVerses, displayPrefs.margins, displayPrefs.presentationContext, chapter, currentRef.verse, readingFontSize, effectivePresentationTheme]);

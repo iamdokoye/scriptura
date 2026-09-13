@@ -40,6 +40,8 @@ export interface CapacityDims {
   heightPct: number;
   /** Smallest font (px) the box is ever shrunk to before splitting kicks in. */
   minFontSize: number;
+  /** Actual (max) font size — used to decide whether splitting is needed. */
+  maxFontSize?: number;
 }
 
 const SCREEN_W = 1920;
@@ -48,6 +50,8 @@ const SCREEN_H = 1080;
 const CHAR_W_RATIO = 0.55;
 /** Line height as a fraction of the rendered font size. */
 const LINE_H_RATIO = 1.35;
+/** Target lines per split part — keeps each part to a readable projection chunk. */
+const TARGET_LINES_PER_PART = 3;
 
 /** ctx 2/3's fixed active-row height (matches PresentationView's `activeRowHeight`). */
 const ACTIVE_ROW_HEIGHT_VH: Record<2 | 3, number> = { 2: 60, 3: 50 };
@@ -100,18 +104,21 @@ function charsForBox(fontSize: number, dims: { widthPct: number; heightPct: numb
 }
 
 /**
- * Character capacity of one split part, computed at the box's shrink floor
- * (`dims.minFontSize`) so a verse only splits once shrinking alone — down to
- * that floor — genuinely can't fit it, and each part uses the box's full
- * line capacity at that size rather than an arbitrary line target.
+ * Character capacity of one split part. Uses the actual (max) rendering font
+ * size with a TARGET_LINES_PER_PART line cap — same heuristic as the original
+ * split logic — so a verse splits when it would need more than ~3 lines at
+ * the user's configured font, not only when it can't fit even at the shrink
+ * floor.
  */
 export function charsPerPart(dims: CapacityDims, theme?: ThemeForSplit): number {
+  const fontSize = dims.maxFontSize ?? dims.minFontSize;
   if (!theme) {
     // Legacy heuristic — ≈140 chars at 32 px, scales inversely with font size.
-    return Math.max(60, Math.round(140 * (32 / dims.minFontSize)));
+    return Math.max(60, Math.round(140 * (32 / fontSize)));
   }
-  const { charsPerLine, linesPerBox } = charsForBox(dims.minFontSize, dims, theme.font_scale);
-  return Math.max(60, charsPerLine * linesPerBox);
+  const { charsPerLine, linesPerBox } = charsForBox(fontSize, dims, theme.font_scale);
+  const linesPerPart = Math.min(linesPerBox, TARGET_LINES_PER_PART);
+  return Math.max(60, charsPerLine * linesPerPart);
 }
 
 /**

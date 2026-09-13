@@ -171,6 +171,7 @@ export const VerseRow = memo(function VerseRow({
         {
           ...capacityDims(presentationContext ?? 1, presentationTheme, hPadPct ?? 5, presentationContext === 4 ? 6 : 0),
           minFontSize: minFontFor(presentationTheme, readingFontSize),
+          maxFontSize: readingFontSize,
         },
         presentationTheme ?? undefined,
       )

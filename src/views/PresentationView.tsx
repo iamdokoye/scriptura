@@ -229,6 +229,7 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
   const splitDims = {
     ...capacityDims(ctx, presentationTheme, hPadPct),
     minFontSize: minFontFor(presentationTheme, state.readingFontSize),
+    maxFontSize: state.readingFontSize,
   };
   const activeParts = state.displayPrefs.splitLongVerses
     ? splitVerse(rawActiveText.trim(), splitDims, presentationTheme ?? undefined)
@@ -448,6 +449,7 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad, 
   const scrollSplitDims = {
     ...capacityDims(4, presentationTheme, hPadPct, SCROLL_GUTTER_PCT),
     minFontSize: minFontFor(presentationTheme, state.readingFontSize),
+    maxFontSize: state.readingFontSize,
   };
 
   useEffect(() => {
