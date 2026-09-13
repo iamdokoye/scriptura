@@ -211,7 +211,7 @@ export const VerseRow = memo(function VerseRow({
               return (
                 <span
                   key={i}
-                  className={`strongs-word relative group/word border-b border-dashed hover:bg-secondary/10 pb-0.5 ${red ? "text-red-600 dark:text-red-400 border-red-400" : "border-primary"}`}
+                  className={`strongs-word relative group/word border-b border-dashed hover:bg-secondary/10 pb-0.5 ${span.is_title ? "font-bold" : ""} ${red ? "text-red-600 dark:text-red-400 border-red-400" : "border-primary"}`}
                   title={strongsNumbers.length === 1 ? "Double-click to look up in concordance" : "Double-click to look up this phrase's Strong's numbers"}
                   onDoubleClick={(e) => { e.stopPropagation(); onStrongsClick(strongsNumbers); }}
                 >
