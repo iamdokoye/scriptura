@@ -176,10 +176,13 @@ export interface MeasureTextStyle {
  * character-width ratios. A temporary hidden element is created, measured, and
  * immediately removed — no lasting DOM side effects.
  *
- * Each part is capped at TARGET_LINES_PER_PART lines so long verses produce
- * 3-4 readable parts rather than one giant remainder that technically fits the
- * full box height. The full heightPx is only used for the initial "does it
- * fit at all?" check.
+ * Every part — including the last one — is measured against the same
+ * `heightPx` budget (the real on-screen box), so each slide fills the screen
+ * properly and no part is left to overflow. The loop keeps cutting off
+ * screen-sized chunks until the remainder actually fits in one box; `maxParts`
+ * is a generous safety valve, not a target, so a Bible-longest verse like
+ * Esther 8:9 still gets split fully instead of having its tail squeezed into
+ * one final oversized part.
  *
  * Returns a single-element array when the full text fits.
  */
@@ -188,7 +191,7 @@ export function measureVersePartsDOM(
   widthPx: number,
   heightPx: number,
   style: MeasureTextStyle,
-  maxParts = MAX_PARTS,
+  maxParts = 20,
 ): string[] {
   const trimmed = text.trim();
   if (!trimmed || widthPx <= 0 || heightPx <= 0) return [trimmed];
@@ -216,19 +219,10 @@ export function measureVersePartsDOM(
   });
   document.body.appendChild(el);
 
-  // Per-part height budget: TARGET_LINES_PER_PART lines, capped by the full
-  // box height.  This prevents "remaining text fits in the big box → one giant
-  // part b" by giving each split part a tight line budget.
-  const lineHeightPx = style.fontSizePx * style.lineHeight;
-  const partHeightPx = Math.min(heightPx, Math.ceil(TARGET_LINES_PER_PART * lineHeightPx));
-
   try {
     el.textContent = trimmed;
-    // Full text fits in the whole box — no split needed
+    // Full text fits in the box — no split needed
     if (el.scrollHeight <= el.clientHeight) return [trimmed];
-
-    // Switch to per-part budget for the iteration
-    el.style.maxHeight = `${partHeightPx}px`;
 
     const parts: string[] = [];
     let remaining = trimmed;
@@ -242,7 +236,16 @@ export function measureVersePartsDOM(
         break;
       }
 
-      // Guard: if even the first word alone overflows the part budget, push
+      // Does the whole remainder already fit in one box? Then this is the
+      // last part — no further cutting needed.
+      el.textContent = remaining;
+      if (el.scrollHeight <= el.clientHeight) {
+        parts.push(remaining);
+        remaining = "";
+        break;
+      }
+
+      // Guard: if even the first word alone overflows the box, push
       // everything remaining (degenerate long word — let the box wrap it).
       el.textContent = words[0];
       if (el.scrollHeight > el.clientHeight) {
@@ -251,8 +254,7 @@ export function measureVersePartsDOM(
         break;
       }
 
-      // Binary search for the largest word prefix that still fits in the
-      // per-part budget.
+      // Binary search for the largest word prefix that still fits in the box.
       let lo = 0;
       let hi = words.length - 1;
       while (lo < hi) {
