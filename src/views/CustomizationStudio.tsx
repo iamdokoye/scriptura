@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import SideNav from "../components/SideNav";
 import { api, type PresentationTheme, type PresentationThemeInput } from "../lib/tauri";
 import { emitPresentation } from "../lib/presentation";
 import { useAppStore } from "../store/app";
@@ -197,7 +196,6 @@ export default function CustomizationStudio() {
 
   return (
     <div className="flex flex-1 overflow-hidden">
-      <SideNav variant="full" />
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden bg-background">
         <header className="px-8 py-6 border-b border-outline-variant bg-surface shrink-0 flex items-start justify-between gap-5">
           <div>

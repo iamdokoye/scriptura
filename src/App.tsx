@@ -3,6 +3,7 @@ import { useAppStore } from "./store/app";
 import { api } from "./lib/tauri";
 import { importLegacyLocalStorageIfNeeded } from "./lib/legacyImport";
 import TopBar from "./components/TopBar";
+import PresentationTopBar from "./components/PresentationTopBar";
 import ReadingView from "./views/ReadingView";
 import EmptyLibrary from "./views/EmptyLibrary";
 import ModuleManager from "./views/ModuleManager";
@@ -127,7 +128,7 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background text-on-background font-body-ui text-body-ui selection:bg-secondary-container selection:text-on-secondary-container">
-      {!isFullscreen && <TopBar />}
+      {!isFullscreen && (presenting ? <PresentationTopBar /> : <TopBar />)}
 
       <div className="relative flex flex-1 overflow-hidden">
         <div className="flex flex-1 overflow-hidden">
