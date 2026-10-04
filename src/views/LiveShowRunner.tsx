@@ -4,6 +4,7 @@ import { api, type TextSpan } from "../lib/tauri";
 import { useChapterData } from "../hooks/useChapterData";
 import { usePresentationSync } from "../hooks/usePresentationSync";
 import { measureVersePartsDOM, sliceSpansForPart } from "../lib/verseSplit";
+import { animateScrollBy } from "../lib/animateScroll";
 import { FONT_FAMILY_CSS } from "../components/VersePanes";
 import StrongsSheet from "../components/StrongsSheet";
 import OutputPreview from "../components/OutputPreview";
@@ -157,24 +158,26 @@ export default function LiveShowRunner() {
     if (!list || !loadedChapterMatches) return;
     const el = list.querySelector<HTMLElement>(`[data-verse="${previewRef.verse}"]`);
     if (!el) return;
-    // Instant, not smooth: smooth scrolling needs animation frames, which
-    // macOS withholds from an unfocused WKWebView, and a live operator wants a
-    // predictable jump anyway.
     const listRect = list.getBoundingClientRect();
     const rect = el.getBoundingClientRect();
     const delta = rect.top - listRect.top - (list.clientHeight - rect.height) / 2;
-    list.scrollBy({ top: delta, behavior: "auto" });
+    return animateScrollBy(list, delta);
   }, [previewRef.book, previewRef.chapter, previewRef.verse, loadedChapterMatches]);
 
   // Unfolding a split verse can push its parts below the fold.
   useEffect(() => {
     if (!expandedKey) return;
+    let cancel = () => {};
     const timer = setTimeout(() => {
-      verseListRef.current
-        ?.querySelector<HTMLElement>(`[data-verse="${previewRef.verse}"]`)
-        ?.scrollIntoView({ block: "nearest", behavior: "auto" });
+      const list = verseListRef.current;
+      const el = list?.querySelector<HTMLElement>(`[data-verse="${previewRef.verse}"]`);
+      if (!list || !el) return;
+      const l = list.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      const delta = r.bottom > l.bottom ? r.bottom - l.bottom + 8 : r.top < l.top ? r.top - l.top - 8 : 0;
+      if (delta !== 0) cancel = animateScrollBy(list, delta);
     }, 220);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); cancel(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedKey]);
 
