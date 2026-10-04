@@ -210,29 +210,60 @@ export default function LiveShowRunner() {
     }
   }, [previewChapter, previewRef, primaryModule]);
 
+  // Ctrl+P / Ctrl+N: previous/next chapter, same as the reading view. Looks
+  // the chapter up first so stepping past the end of a book is a no-op
+  // instead of leaving Preview blank.
+  const stepChapter = useCallback(async (delta: number) => {
+    if (!primaryModule) return;
+    const chapter = previewRef.chapter + delta;
+    if (chapter < 1) return;
+    try {
+      const ch = await api.getChapter(primaryModule, previewRef.book, chapter);
+      if (ch.verses.length === 0) return;
+      setPreviewRef({ book: previewRef.book, chapter, verse: ch.verses[0].verse });
+    } catch {
+      // Past the end of the book — nothing to step into.
+    }
+  }, [primaryModule, previewRef]);
+
   // Keyboard shortcuts, scoped to this console only (not the global reading
   // shortcuts) — an operator running a live show wants Up/Down/Left/Right/
   // Enter to behave predictably without colliding with reading-view bindings.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      const typing = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      const mod = e.ctrlKey || e.metaKey;
 
-      if (e.ctrlKey && e.altKey && e.code === "KeyQ") {
+      // Modifier shortcuts work even while a text field has focus — the jump
+      // input keeps focus after use and used to swallow every shortcut.
+      if (mod && e.altKey && e.code === "KeyQ") {
         e.preventDefault();
         addPreviewToQueue();
         return;
       }
-      if (e.ctrlKey && !e.altKey && e.code === "KeyL") {
+      if (mod && !e.altKey && e.code === "KeyL") {
         e.preventDefault();
         searchBarRef.current?.focus("scripture");
         return;
       }
-      if (e.ctrlKey && !e.altKey && e.code === "KeyK") {
+      if (mod && !e.altKey && e.code === "KeyK") {
         e.preventDefault();
         searchBarRef.current?.focus("word");
         return;
       }
+      if (mod && !e.altKey && (e.code === "KeyP" || e.code === "KeyN")) {
+        e.preventDefault();
+        stepChapter(e.code === "KeyN" ? 1 : -1);
+        return;
+      }
+      if (mod && !e.altKey && (e.code === "ArrowDown" || e.code === "ArrowUp")) {
+        e.preventDefault();
+        stepVerse(e.code === "ArrowDown" ? 1 : -1);
+        return;
+      }
+
+      if (typing || mod || e.altKey) return;
 
       switch (e.key) {
         case "ArrowUp":
@@ -263,7 +294,7 @@ export default function LiveShowRunner() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [stepQueue, stepVerse, goLive, goBack, addPreviewToQueue]);
+  }, [stepQueue, stepVerse, stepChapter, goLive, goBack, addPreviewToQueue]);
 
   const liveText = verseText(liveChapter?.verses, currentRef.verse);
   const liveParts = displayPrefs.splitLongVerses ? splitParts(liveText) : [liveText];

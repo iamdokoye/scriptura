@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { useAppStore } from "../store/app";
+import { api } from "../lib/tauri";
 import { usePresentationOutput } from "../hooks/usePresentationOutput";
 import OutputsPanel from "./OutputsPanel";
 import SettingsSheet from "./Settings";
@@ -18,6 +19,7 @@ export default function PresentationTopBar() {
   const {
     view, setView, settingsOpen, setSettingsOpen, liveBlack, setLiveBlack, liveEmergency, setLiveEmergency,
     serviceOrderOpen, setServiceOrderOpen, setDisplayPrefs, presentationActive,
+    readingFontSize, setReadingFontSize,
   } = useAppStore();
   const output = usePresentationOutput();
   const [outputsOpen, setOutputsOpen] = useState(false);
@@ -35,6 +37,8 @@ export default function PresentationTopBar() {
     Numpad1: 1, Numpad2: 2, Numpad3: 3, Numpad4: 4,
   };
 
+  const FONT_SIZE_PRESETS = [14, 16, 32, 48, 64, 72, 98];
+
   // Shortcuts that apply across the whole presentation workspace (not just
   // LiveShowRunner), scoped here since this bar is mounted regardless of
   // which presentation screen is on screen:
@@ -42,37 +46,73 @@ export default function PresentationTopBar() {
   //  - Ctrl+Q: open the queue editor (reorder/remove — the inline Queue
   //    column in LiveShowRunner is preview-only)
   //  - Ctrl+1-4: presentation verse context, while output is live
+  //  - Ctrl +/-, Ctrl+Alt +/-: font size (same bindings as the reading view)
+  //  - Alt+H: search history
   // These used to only fire from inside ReadingView (see
   // useReadingShortcuts.ts), which is no longer reachable once presenting —
   // the sidebar nav that reached it is gone in this design.
+  //
+  // Modifier shortcuts work even while a text field has focus (the verse
+  // jump / search input keeps focus after use, which used to silently
+  // disable every shortcut); only bare keys like "C" are skipped when typing.
   useEffect(() => {
+    function saveFont(next: number) {
+      setReadingFontSize(next);
+      api.setPreferences({ font_size_reading: next }).catch(() => {});
+    }
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      const typing = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      const mod = e.ctrlKey || e.metaKey;
 
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "e") {
+      if (mod && e.shiftKey && e.key.toLowerCase() === "e") {
         e.preventDefault();
         setLiveEmergency(!liveEmergency);
         return;
       }
-      if (e.ctrlKey && !e.altKey && e.code === "KeyQ") {
+      if (mod && !e.altKey && e.code === "KeyQ") {
         e.preventDefault();
         setServiceOrderOpen(!serviceOrderOpen);
         return;
       }
-      if (e.ctrlKey && presentationActive && e.code in presentationContextKeys) {
+      if (mod && presentationActive && e.code in presentationContextKeys) {
         e.preventDefault();
         setDisplayPrefs({ presentationContext: presentationContextKeys[e.code] });
         return;
       }
-      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "c") {
+      if (e.altKey && !mod && e.code === "KeyH") {
+        e.preventDefault();
+        setView("history");
+        return;
+      }
+      if (mod && !e.altKey && (e.code === "Equal" || e.code === "NumpadAdd")) {
+        e.preventDefault();
+        saveFont(Math.min(98, readingFontSize + 1));
+        return;
+      }
+      if (mod && !e.altKey && (e.code === "Minus" || e.code === "NumpadSubtract")) {
+        e.preventDefault();
+        saveFont(Math.max(14, readingFontSize - 1));
+        return;
+      }
+      if (mod && e.altKey && (e.code === "Equal" || e.code === "NumpadAdd")) {
+        e.preventDefault();
+        saveFont(FONT_SIZE_PRESETS.find((p) => p > readingFontSize) ?? FONT_SIZE_PRESETS[FONT_SIZE_PRESETS.length - 1]);
+        return;
+      }
+      if (mod && e.altKey && (e.code === "Minus" || e.code === "NumpadSubtract")) {
+        e.preventDefault();
+        saveFont([...FONT_SIZE_PRESETS].reverse().find((p) => p < readingFontSize) ?? FONT_SIZE_PRESETS[0]);
+        return;
+      }
+      if (!typing && !mod && !e.altKey && e.key.toLowerCase() === "c") {
         e.preventDefault();
         setLiveBlack(!liveBlack);
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [liveBlack, setLiveBlack, liveEmergency, setLiveEmergency, serviceOrderOpen, setServiceOrderOpen, presentationActive, setDisplayPrefs]);
+  }, [liveBlack, setLiveBlack, liveEmergency, setLiveEmergency, serviceOrderOpen, setServiceOrderOpen, presentationActive, setDisplayPrefs, readingFontSize, setReadingFontSize, setView]);
 
   return (
     <header className="flex items-center h-14 px-content-margin w-full z-50 glass !rounded-none !border-x-0 !border-t-0 shrink-0 gap-6">
