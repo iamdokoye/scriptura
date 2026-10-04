@@ -58,7 +58,7 @@ export default function ServiceOrderPanel() {
   const empty = serviceOrder.length === 0;
 
   return (
-    <aside className="w-full glass rounded-3xl flex flex-col h-full overflow-hidden">
+    <aside className="w-full glass glass-strong rounded-3xl flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <div className="flex items-center gap-2">
@@ -135,7 +135,7 @@ export default function ServiceOrderPanel() {
           </span>
           {!empty && (
             <button
-              className="font-metadata-mono text-[11px] text-secondary hover:text-on-surface-variant transition-colors"
+              className="px-1.5 py-1 -my-1 rounded-md font-metadata-mono text-[11px] text-secondary ghost"
               onClick={() => {
                 const text = serviceOrder
                   .map((it) => `${it.book} ${it.chapter}:${it.verse}  ${it.text}`)
@@ -203,7 +203,7 @@ function ServiceCard({
     <li
       ref={dragNodeRef as React.RefObject<HTMLLIElement> | undefined}
       onPointerEnter={onPointerEnter}
-      className={`group relative mx-2 mb-1 rounded-DEFAULT border transition-all ${
+      className={`group relative mx-2 mb-1 rounded-md border border-transparent transition-all ${
         isDragging
           ? "opacity-40 row-selected"
           : isOver

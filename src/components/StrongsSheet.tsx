@@ -404,7 +404,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
 
       {/* Sheet */}
       <div
-        className={`fixed bottom-3 left-1/2 -translate-x-1/2 z-50 w-full flex flex-col transition-all duration-300 ease-out glass rounded-3xl ${
+        className={`fixed bottom-3 left-1/2 -translate-x-1/2 z-50 w-full flex flex-col transition-all duration-300 ease-out glass glass-strong rounded-3xl ${
           visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
         style={{ maxWidth: isFullscreen ? "90%" : "56rem", height: drag.height }}
@@ -494,7 +494,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
             <button
               key={pill.id}
               type="button"
-              className={`px-3 py-1 rounded-full font-body-ui text-[12px] font-medium transition-colors ${
+              className={`px-3 py-1 rounded-md font-body-ui text-[12px] font-medium transition-colors ${
                 source === pill.id
                   ? "btn-primary"
                   : "ctl text-on-surface-variant"

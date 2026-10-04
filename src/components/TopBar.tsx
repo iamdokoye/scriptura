@@ -124,8 +124,8 @@ export default function TopBar() {
           <button
             aria-label="Service queue"
             onClick={() => setServiceOrderOpen(!serviceOrderOpen)}
-            className={`relative p-2 rounded-lg ${
-              serviceOrderOpen ? "ctl-active" : "ctl text-secondary"
+            className={`relative p-2 rounded-md ${
+              serviceOrderOpen ? "ctl-active" : "ghost text-secondary"
             }`}
             title="Service queue (Ctrl+Q)"
           >
@@ -140,7 +140,7 @@ export default function TopBar() {
         <button
           aria-label="Toggle parallel view"
           onClick={() => setParallelMode(!parallelMode)}
-          className={`p-2 rounded-lg ${parallelMode ? "ctl-active" : "ctl text-secondary"}`}
+          className={`p-2 rounded-md ${parallelMode ? "ctl-active" : "ghost text-secondary"}`}
         >
           <span className="material-symbols-outlined text-[20px]">splitscreen</span>
         </button>
@@ -160,7 +160,7 @@ export default function TopBar() {
         <button
           aria-label="Settings"
           onClick={() => setSettingsOpen(true)}
-          className={`p-2 rounded-lg ${settingsOpen ? "ctl-active" : "ctl text-secondary"}`}
+          className={`p-2 rounded-md ${settingsOpen ? "ctl-active" : "ghost text-secondary"}`}
         >
           <span className="material-symbols-outlined text-[20px]">settings</span>
         </button>

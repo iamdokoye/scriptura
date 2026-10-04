@@ -31,6 +31,7 @@
   --blob-1: rgba(91, 91, 240, 0.14);
   --blob-2: rgba(46, 184, 134, 0.12);
   --blob-3: rgba(184, 137, 43, 0.10);
+  --glass-strong-bg: rgba(255, 255, 255, 0.97);
   --live-gradient: linear-gradient(135deg, #e5484d, #c43a3f);
 
   /* Surfaces: background = window canvas, surface = elevated flat layer */
@@ -102,6 +103,7 @@
   --glass-bg:     rgba(21, 26, 34, 0.72);
   --glass-border: rgba(255, 255, 255, 0.10);
   --glass-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.36);
+  --glass-strong-bg: rgba(21, 26, 34, 0.97);
   --blob-1: rgba(91, 91, 240, 0.16);
   --blob-2: rgba(46, 184, 134, 0.12);
   --blob-3: rgba(184, 137, 43, 0.10);
@@ -245,6 +247,9 @@
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
   }
+
+  /* Drawers and sheets that sit over busy content: same glass, firmer fill */
+  .glass-strong { background: var(--glass-strong-bg); }
 
   /* Soft indigo / jade / gold blooms behind the glass. Peripheral only:
      scripture is always on a solid surface, never on this. */

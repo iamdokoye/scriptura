@@ -132,7 +132,7 @@ export default function BookNavigator() {
             open={group.books.includes(currentRef.book)}
             className="group"
           >
-            <summary className="flex items-center py-1.5 px-2 hover:bg-surface-container cursor-pointer rounded-DEFAULT select-none text-on-surface-variant font-medium">
+            <summary className="flex items-center py-1.5 px-2 hover:bg-surface-container cursor-pointer rounded-md select-none text-on-surface-variant font-medium">
               <span className="material-symbols-outlined text-[16px] mr-2 transition-transform group-open:rotate-90">
                 chevron_right
               </span>
@@ -143,7 +143,7 @@ export default function BookNavigator() {
                 <button
                   key={book}
                   onClick={() => setCurrentRef({ book, chapter: 1, verse: 1 })}
-                  className={`w-full text-left py-1 px-2 rounded-DEFAULT transition-colors ${
+                  className={`w-full text-left py-1 px-2 rounded-md transition-colors ${
                     currentRef.book === book
                       ? "ctl-active font-medium"
                       : "text-secondary hover:text-on-surface"

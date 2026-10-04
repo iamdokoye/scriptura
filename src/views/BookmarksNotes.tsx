@@ -47,7 +47,7 @@ export default function BookmarksNotes() {
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`px-4 py-1.5 rounded-DEFAULT font-body-ui text-body-ui capitalize transition-colors ${
+                className={`px-4 py-1.5 rounded-md font-body-ui text-body-ui capitalize transition-colors ${
                   tab === t
                     ? "btn-primary"
                     : "text-secondary hover:bg-surface-container-low"
@@ -138,7 +138,7 @@ function EmptyState({ icon, message, cta, onCta }: { icon: string; message: stri
       <p className="font-body-ui text-body-ui text-on-surface-variant max-w-xs mb-6">{message}</p>
       <button
         onClick={onCta}
-        className="px-6 py-2 btn-primary font-body-ui text-body-ui rounded-DEFAULT hover:bg-primary-container transition-colors"
+        className="px-6 py-2 btn-primary font-body-ui text-body-ui rounded-md hover:bg-primary-container transition-colors"
       >
         {cta}
       </button>

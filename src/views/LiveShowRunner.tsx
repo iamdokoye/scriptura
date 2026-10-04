@@ -317,7 +317,7 @@ export default function LiveShowRunner() {
                 {serviceOrder.length > 0 && (
                   <button
                     onClick={clearServiceOrder}
-                    className="font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-error transition-colors"
+                    className="px-1.5 py-1 -my-1 rounded-md font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-error ghost"
                   >
                     Clear all
                   </button>
@@ -340,7 +340,7 @@ export default function LiveShowRunner() {
                       <li key={item.id}>
                         <button
                           onClick={() => selectQueueItem(item)}
-                          className={`w-full text-left px-3 py-2 mx-2 mb-1 rounded-DEFAULT border transition-colors ${
+                          className={`w-full text-left px-3 py-2 mx-2 mb-1 rounded-md border border-transparent transition-colors ${
                             isPreview ? "row-selected" : "border-transparent hover:bg-surface-container-low"
                           }`}
                           style={{ width: "calc(100% - 1rem)" }}
@@ -371,7 +371,7 @@ export default function LiveShowRunner() {
           <span className="font-body-ui text-[12px] text-on-surface-variant truncate">{nextItem.text}</span>
           <button
             onClick={() => selectQueueItem(nextItem)}
-            className="ml-auto font-body-ui text-[12px] text-primary hover:underline shrink-0"
+            className="ml-auto px-2 py-1 rounded-md font-body-ui text-[12px] text-primary ghost shrink-0"
           >
             Preview this
           </button>
@@ -433,7 +433,7 @@ export default function LiveShowRunner() {
                           tabIndex={0}
                           onClick={() => { setPreviewRef({ ...previewRef, verse: v.verse }); setPreviewPart(i); }}
                           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPreviewRef({ ...previewRef, verse: v.verse }); setPreviewPart(i); } }}
-                          className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-DEFAULT border transition-colors cursor-pointer ${
+                          className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-md border border-transparent transition-colors cursor-pointer ${
                             active
                               ? "row-selected"
                               : i === 0
@@ -493,7 +493,7 @@ export default function LiveShowRunner() {
               <button
                 onClick={goLive}
                 disabled={sameRef(previewRef, currentRef) && previewPart === versePart}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-DEFAULT btn-primary font-body-ui text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md btn-primary font-body-ui text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
                 title="Send the previewed verse live (Enter)"
               >
                 <span className="material-symbols-outlined text-[18px]">play_arrow</span>

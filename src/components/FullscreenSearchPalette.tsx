@@ -107,7 +107,7 @@ export default function FullscreenSearchPalette({ isOpen, onClose }: Props) {
 
       {/* Palette */}
       <div
-        className={`relative w-full max-w-2xl mx-4 flex flex-col overflow-hidden transition-all duration-200 glass rounded-3xl ${
+        className={`relative w-full max-w-2xl mx-4 flex flex-col overflow-hidden transition-all duration-200 glass glass-strong rounded-3xl ${
           visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"
         }`}
         onClick={(e) => e.stopPropagation()}

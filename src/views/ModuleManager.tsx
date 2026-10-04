@@ -115,7 +115,7 @@ export default function ModuleManager() {
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`px-4 py-1.5 rounded-DEFAULT font-body-ui text-body-ui capitalize transition-colors ${
+                className={`px-4 py-1.5 rounded-md font-body-ui text-body-ui capitalize transition-colors ${
                   tab === t
                     ? "btn-primary"
                     : "text-secondary hover:bg-surface-container-low"
@@ -130,7 +130,7 @@ export default function ModuleManager() {
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
-                className={`px-3 py-1 rounded-DEFAULT font-metadata-mono text-metadata-mono text-[11px] transition-colors ${
+                className={`px-3 py-1 rounded-md font-metadata-mono text-metadata-mono text-[11px] transition-colors ${
                   category === cat
                     ? "bg-secondary-container text-on-secondary-container"
                     : "ctl text-on-surface-variant"
@@ -173,12 +173,12 @@ export default function ModuleManager() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-body-ui text-body-ui font-semibold text-on-surface">{m.name}</h3>
-                        <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-surface-container text-on-surface-variant rounded-DEFAULT">{m.category}</span>
+                        <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-surface-container text-on-surface-variant rounded-md">{m.category}</span>
                         {m.source && (
                           <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 text-on-surface-variant/70 field rounded-md">{m.source}</span>
                         )}
                         {m.requires_key && (
-                          <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-error-container text-on-error-container rounded-DEFAULT">Requires key</span>
+                          <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-error-container text-on-error-container rounded-md">Requires key</span>
                         )}
                       </div>
                       <p className="font-body-ui text-[13px] text-on-surface-variant leading-relaxed">{m.description}</p>
@@ -200,7 +200,7 @@ export default function ModuleManager() {
                     <button
                       disabled={isDone || isInstalling}
                       onClick={() => install(m.id, m.requires_key, m.name)}
-                      className={`shrink-0 px-4 py-1.5 rounded-DEFAULT font-body-ui text-body-ui text-sm transition-colors ${
+                      className={`shrink-0 px-4 py-1.5 rounded-md font-body-ui text-body-ui text-sm transition-colors ${
                         isDone
                           ? "bg-surface-container text-on-surface-variant cursor-default"
                           : isInstalling
@@ -234,10 +234,10 @@ export default function ModuleManager() {
               autoFocus
             />
             <div className="flex gap-3 justify-end">
-              <button onClick={() => { setCipherModal(null); setCipherKey(""); }} className="px-4 py-2 text-secondary font-body-ui text-body-ui hover:bg-surface-container-low rounded-DEFAULT">
+              <button onClick={() => { setCipherModal(null); setCipherKey(""); }} className="px-4 py-2 text-secondary font-body-ui text-body-ui hover:bg-surface-container-low rounded-md">
                 Cancel
               </button>
-              <button onClick={installWithKey} disabled={!cipherKey.trim()} className="px-4 py-2 btn-primary font-body-ui text-body-ui rounded-DEFAULT hover:bg-primary-container disabled:opacity-50">
+              <button onClick={installWithKey} disabled={!cipherKey.trim()} className="px-4 py-2 btn-primary font-body-ui text-body-ui rounded-md hover:bg-primary-container disabled:opacity-50">
                 Install
               </button>
             </div>

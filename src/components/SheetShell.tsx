@@ -41,7 +41,7 @@ export default function SheetShell({
   return (
     <div className="fixed inset-0 z-50" onClick={onClose}>
       <div
-        className={`absolute bottom-3 left-3 right-3 glass rounded-3xl transition-all duration-300 ease-out ${
+        className={`absolute bottom-3 left-3 right-3 glass glass-strong rounded-3xl transition-all duration-300 ease-out ${
           visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
         onClick={(e) => e.stopPropagation()}

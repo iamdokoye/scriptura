@@ -50,7 +50,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       if (this.props.compact) {
         return (
-          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 py-2.5 rounded-DEFAULT bg-error-container text-on-error-container shadow-lg max-w-sm">
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 py-2.5 rounded-md bg-error-container text-on-error-container shadow-lg max-w-sm">
             <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
             <p className="font-body-ui text-[13px]">
               {this.props.label ? `${this.props.label} failed to load.` : "This didn't load."} Try again.
@@ -72,7 +72,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           </div>
           <button
             onClick={scoped ? this.props.onReset : () => window.location.reload()}
-            className="px-4 py-2 rounded-DEFAULT font-body-ui text-sm btn-primary"
+            className="px-4 py-2 rounded-md font-body-ui text-sm btn-primary"
           >
             {scoped ? this.props.resetLabel ?? "Go back" : "Reload"}
           </button>

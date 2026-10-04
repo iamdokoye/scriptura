@@ -61,7 +61,7 @@ export default function SearchHistory() {
             <h1 className="font-display-lg text-display-lg text-on-surface">Search History</h1>
             {searchHistory.length > 0 && (
               <button
-                className="px-3 py-1.5 text-[13px] font-body-ui text-error hover:bg-error/10 rounded-DEFAULT transition-colors border border-error/30"
+                className="px-3 py-1.5 text-[13px] font-body-ui text-error hover:bg-error/10 rounded-md transition-colors border border-error/30"
                 onClick={clearSearchHistory}
               >
                 Clear all
@@ -75,7 +75,7 @@ export default function SearchHistory() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-4 py-1.5 rounded-full text-[13px] font-body-ui capitalize transition-colors ${
+                className={`px-4 py-1.5 rounded-md text-[13px] font-body-ui capitalize transition-colors ${
                   filter === f
                     ? "btn-primary"
                     : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
@@ -117,7 +117,7 @@ export default function SearchHistory() {
                 <button
                   key={i}
                   onClick={() => selectQuery(entry.query)}
-                  className="w-full flex items-center justify-between gap-4 px-4 py-3 rounded-DEFAULT hover:bg-surface-container-low transition-colors text-left border border-transparent hover:border-outline-variant group"
+                  className="w-full flex items-center justify-between gap-4 px-4 py-3 rounded-md hover:bg-surface-container-low transition-colors text-left border border-transparent hover:border-outline-variant group"
                 >
                   <div className="flex items-start gap-3 min-w-0">
                     <span className="material-symbols-outlined text-[18px] text-on-surface-variant shrink-0 mt-0.5">

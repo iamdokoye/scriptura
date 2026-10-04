@@ -65,7 +65,7 @@ export default function NotesSheet({ isOpen, book, chapter, verse, onClose }: Pr
         <button
           onClick={save}
           disabled={!draft.trim() || saving}
-          className="px-4 py-1.5 btn-primary font-body-ui text-[13px] font-medium rounded-full hover:opacity-90 transition-opacity disabled:opacity-40"
+          className="px-4 py-1.5 btn-primary font-body-ui text-[13px] font-medium rounded-md hover:opacity-90 transition-opacity disabled:opacity-40"
         >
           {saving ? "Saving…" : "Save note"}
         </button>

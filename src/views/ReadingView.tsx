@@ -409,7 +409,7 @@ export default function ReadingView() {
                     normally never hides that the actual output is overridden. */}
                 {presentationActive && (liveEmergency || liveBlack) && (
                   <span
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-DEFAULT bg-error text-on-error font-metadata-mono text-[10px] uppercase tracking-widest font-bold"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-error text-on-error font-metadata-mono text-[10px] uppercase tracking-widest font-bold"
                     title={liveEmergency ? "The output window is showing the emergency standby screen" : "The output window is blacked out"}
                   >
                     <span className="material-symbols-outlined text-[14px]">{liveEmergency ? "emergency" : "brightness_1"}</span>
@@ -433,7 +433,7 @@ export default function ReadingView() {
                       }
                     }}
                     title={presentationActive ? "Stop presentation" : "Go live — open presentation window"}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-DEFAULT text-[13px] font-body-ui font-semibold transition-colors ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-body-ui font-semibold transition-colors ${
                       presentationActive
                         ? "bg-error text-on-error hover:bg-error/90"
                         : "btn-primary hover:bg-primary/90"
@@ -593,7 +593,7 @@ export default function ReadingView() {
                 <button
                   title={syncScroll ? "Unsync scroll" : "Sync scroll between panes"}
                   onClick={() => setSyncScroll((v) => !v)}
-                  className={`p-1.5 rounded-lg ${syncScroll ? "ctl-active" : "ctl text-secondary"}`}
+                  className={`p-1.5 rounded-md ${syncScroll ? "ctl-active" : "ghost text-secondary"}`}
                 >
                   <span className="material-symbols-outlined text-[18px]">sync</span>
                 </button>

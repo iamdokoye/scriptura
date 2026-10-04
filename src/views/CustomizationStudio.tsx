@@ -185,7 +185,7 @@ export default function CustomizationStudio() {
     return (
       <button
         onClick={() => setShowGrid((v) => !v)}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-DEFAULT font-body-ui text-[12px] border transition-colors ${showGrid ? "bg-primary/10 border-primary/40 text-primary" : "border-outline-variant text-on-surface-variant hover:bg-surface-container-low"}`}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md font-body-ui text-[12px] border transition-colors ${showGrid ? "bg-primary/10 border-primary/40 text-primary" : "border-outline-variant text-on-surface-variant hover:bg-surface-container-low"}`}
         title="Toggle alignment grid"
       >
         <span className="material-symbols-outlined text-[15px]">grid_4x4</span>
@@ -205,7 +205,7 @@ export default function CustomizationStudio() {
               Design once, then apply a readable Scripture layout live or make it the default for every service.
             </p>
           </div>
-          <button onClick={beginNewTheme} className="shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-DEFAULT btn-primary font-body-ui text-[13px] hover:opacity-90">
+          <button onClick={beginNewTheme} className="shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-md btn-primary font-body-ui text-[13px] hover:opacity-90">
             <span className="material-symbols-outlined text-[18px]">add</span>
             New theme
           </button>
@@ -266,7 +266,7 @@ export default function CustomizationStudio() {
                   <label className="block">
                     <span className="field-label">Text alignment</span>
                     <div className="flex gap-1">
-                      {(["left", "center", "right"] as const).map((text_align) => <button key={text_align} onClick={() => setDraft({ ...draft, text_align })} className={`flex-1 py-1.5 rounded-DEFAULT text-[12px] capitalize ${draft.text_align === text_align ? "btn-primary" : "ctl text-on-surface-variant"}`}>{text_align}</button>)}
+                      {(["left", "center", "right"] as const).map((text_align) => <button key={text_align} onClick={() => setDraft({ ...draft, text_align })} className={`flex-1 py-1.5 rounded-md text-[12px] capitalize ${draft.text_align === text_align ? "btn-primary" : "ctl text-on-surface-variant"}`}>{text_align}</button>)}
                     </div>
                   </label>
                   <label className="flex items-end gap-2 pb-1.5 cursor-pointer">
@@ -287,7 +287,7 @@ export default function CustomizationStudio() {
                           const vertical = draft.reference_position.split("-")[0] ?? "bottom";
                           return (
                             <button key={align} onClick={() => setDraft({ ...draft, reference_position: `${vertical}-${align}` as PresentationThemeInput["reference_position"] })}
-                              className={`flex-1 py-1.5 rounded-DEFAULT text-[12px] capitalize ${active ? "btn-primary" : "ctl text-on-surface-variant"}`}>
+                              className={`flex-1 py-1.5 rounded-md text-[12px] capitalize ${active ? "btn-primary" : "ctl text-on-surface-variant"}`}>
                               {align}
                             </button>
                           );
@@ -303,7 +303,7 @@ export default function CustomizationStudio() {
                           const horizontal = draft.reference_position.split("-")[1] ?? "center";
                           return (
                             <button key={vert} onClick={() => setDraft({ ...draft, reference_position: `${vert}-${horizontal}` as PresentationThemeInput["reference_position"] })}
-                              className={`flex-1 py-1.5 rounded-DEFAULT text-[12px] capitalize ${active ? "btn-primary" : "ctl text-on-surface-variant"}`}>
+                              className={`flex-1 py-1.5 rounded-md text-[12px] capitalize ${active ? "btn-primary" : "ctl text-on-surface-variant"}`}>
                               {vert}
                             </button>
                           );
@@ -330,11 +330,11 @@ export default function CustomizationStudio() {
                   <RangeField label="Transition duration" value={draft.transition_duration} min={0} max={1200} step={50} format={(value) => value === 0 ? "Instant" : `${value}ms`} onChange={(transition_duration) => setDraft({ ...draft, transition_duration })} />
                 </div>
 
-                {message && <p className="rounded-DEFAULT px-3 py-2 bg-surface-container-low text-on-surface-variant font-body-ui text-[12px]">{message}</p>}
+                {message && <p className="rounded-md px-3 py-2 bg-surface-container-low text-on-surface-variant font-body-ui text-[12px]">{message}</p>}
 
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <button onClick={save} disabled={saving} className="px-3.5 py-2 rounded-DEFAULT btn-primary font-body-ui text-[13px] disabled:opacity-60">{saving ? "Saving…" : "Save theme"}</button>
-                  {!newTheme && <button onClick={() => setActivePresentationTheme(selectedTheme)} className="px-3.5 py-2 rounded-DEFAULT bg-secondary-container text-on-secondary-container font-body-ui text-[13px]">Use live</button>}
+                  <button onClick={save} disabled={saving} className="px-3.5 py-2 rounded-md btn-primary font-body-ui text-[13px] disabled:opacity-60">{saving ? "Saving…" : "Save theme"}</button>
+                  {!newTheme && <button onClick={() => setActivePresentationTheme(selectedTheme)} className="px-3.5 py-2 rounded-md bg-secondary-container text-on-secondary-container font-body-ui text-[13px]">Use live</button>}
                   {!newTheme && !selectedTheme?.is_default && <button onClick={makeDefault} disabled={saving} className="px-3.5 py-2 text-on-surface font-body-ui text-[13px] ctl rounded-lg">Make default</button>}
                   {/* Delete stays available even for the active/default theme —
                       only the built-in Midnight theme is permanently protected.
@@ -344,11 +344,11 @@ export default function CustomizationStudio() {
                     confirmingDelete ? (
                       <div className="flex items-center gap-1.5">
                         <span className="font-body-ui text-[12px] text-on-surface-variant">Delete this theme?</span>
-                        <button onClick={remove} disabled={saving} className="px-2.5 py-1.5 rounded-DEFAULT bg-error text-on-error font-body-ui text-[12px] disabled:opacity-60">{saving ? "Deleting…" : "Yes, delete"}</button>
+                        <button onClick={remove} disabled={saving} className="px-2.5 py-1.5 rounded-md bg-error text-on-error font-body-ui text-[12px] disabled:opacity-60">{saving ? "Deleting…" : "Yes, delete"}</button>
                         <button onClick={() => setConfirmingDelete(false)} disabled={saving} className="px-2.5 py-1.5 text-on-surface font-body-ui text-[12px] ctl rounded-lg">Cancel</button>
                       </div>
                     ) : (
-                      <button onClick={remove} disabled={saving} className="px-2.5 py-2 rounded-DEFAULT text-error hover:bg-error-container/30" title="Delete theme"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                      <button onClick={remove} disabled={saving} className="px-2.5 py-2 rounded-md text-error hover:bg-error-container/30" title="Delete theme"><span className="material-symbols-outlined text-[18px]">delete</span></button>
                     )
                   )}
                 </div>
@@ -494,7 +494,7 @@ function AccessibilityChecker({ theme }: { theme: PresentationThemeInput }) {
   if (boxesOverlap(theme)) warnings.push("Verse and reference text boxes overlap.");
   if (theme.auto_layout && theme.min_font_scale < 0.6) warnings.push("Auto-layout can shrink below 60%, which may be hard to read from the back of a room.");
   if (theme.transition_duration > 800) warnings.push("A transition over 800ms may make fast verse changes feel sluggish.");
-  return <div className={`mt-4 p-4 rounded-DEFAULT border ${warnings.length ? "bg-tertiary-container/15 border-tertiary/30" : "bg-secondary-container/15 border-secondary/30"}`}>
+  return <div className={`mt-4 p-4 rounded-md border ${warnings.length ? "bg-tertiary-container/15 border-tertiary/30" : "bg-secondary-container/15 border-secondary/30"}`}>
     <p className="font-body-ui text-[13px] font-medium text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-[18px]">{warnings.length ? "warning" : "accessibility_new"}</span>{warnings.length ? "Readability checks" : "Readability checks passed"}</p>
     {warnings.length ? <ul className="mt-2 space-y-1 list-disc pl-4 font-body-ui text-[12px] leading-relaxed text-on-surface-variant">{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : <p className="font-body-ui text-[12px] leading-relaxed text-on-surface-variant mt-1.5">Contrast, safe margins, box collisions, auto-fit, and transition speed look ready for projection.</p>}
   </div>;

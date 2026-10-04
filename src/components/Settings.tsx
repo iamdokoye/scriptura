@@ -109,7 +109,7 @@ export default function Settings() {
   return createPortal(
     <div className="fixed inset-0 z-[60]" onClick={() => setSettingsOpen(false)}>
       <div
-        className={`absolute bottom-3 left-3 right-3 glass rounded-3xl transition-all duration-300 ease-out flex flex-col ${
+        className={`absolute bottom-3 left-3 right-3 glass glass-strong rounded-3xl transition-all duration-300 ease-out flex flex-col ${
           visible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
         }`}
         style={{ maxHeight: "52vh" }}
@@ -185,14 +185,14 @@ export default function Settings() {
                   <button
                     onClick={() => setDisplayPrefs({ textAlign: "left" })}
                     title="Left align"
-                    className={`p-1.5 rounded-DEFAULT transition-colors ${displayPrefs.textAlign === "left" ? "btn-primary" : "ctl text-on-surface-variant"}`}
+                    className={`p-1.5 rounded-md transition-colors ${displayPrefs.textAlign === "left" ? "btn-primary" : "ctl text-on-surface-variant"}`}
                   >
                     <span className="material-symbols-outlined text-[18px]">format_align_left</span>
                   </button>
                   <button
                     onClick={() => setDisplayPrefs({ textAlign: "justify" })}
                     title="Justify"
-                    className={`p-1.5 rounded-DEFAULT transition-colors ${displayPrefs.textAlign === "justify" ? "btn-primary" : "ctl text-on-surface-variant"}`}
+                    className={`p-1.5 rounded-md transition-colors ${displayPrefs.textAlign === "justify" ? "btn-primary" : "ctl text-on-surface-variant"}`}
                   >
                     <span className="material-symbols-outlined text-[18px]">format_align_justify</span>
                   </button>
@@ -204,12 +204,12 @@ export default function Settings() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => save({ font_size_reading: Math.max(14, prefs.font_size_reading - 1) })}
-                    className="w-7 h-7 rounded-DEFAULT ctl flex items-center justify-center font-bold text-on-surface text-sm"
+                    className="w-7 h-7 rounded-md ctl flex items-center justify-center font-bold text-on-surface text-sm"
                   >−</button>
                   <span className="font-metadata-mono text-on-surface w-10 text-center text-sm">{prefs.font_size_reading}px</span>
                   <button
                     onClick={() => save({ font_size_reading: Math.min(98, prefs.font_size_reading + 1) })}
-                    className="w-7 h-7 rounded-DEFAULT ctl flex items-center justify-center font-bold text-on-surface text-sm"
+                    className="w-7 h-7 rounded-md ctl flex items-center justify-center font-bold text-on-surface text-sm"
                   >+</button>
                   <div className="flex gap-1 ml-1 flex-wrap">
                     {FONT_SIZE_PRESETS.map((s) => (
@@ -375,7 +375,7 @@ export default function Settings() {
             <SubRow label="Tutorial" description="Onboarding walkthrough — coming soon.">
               <button
                 onClick={() => setShortcutsOpen(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-DEFAULT text-[12px] font-body-ui ctl text-on-surface-variant transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-body-ui ctl text-on-surface-variant transition-colors"
               >
                 <span className="material-symbols-outlined text-[14px]">keyboard</span>
                 View shortcuts
@@ -418,7 +418,7 @@ export default function Settings() {
                   );
                   shellOpen(`mailto:okkodann@gmail.com?subject=${subject}&body=${body}`).catch(() => {});
                 }}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-DEFAULT text-[12px] font-body-ui ctl text-on-surface-variant transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-body-ui ctl text-on-surface-variant transition-colors"
               >
                 <span className="material-symbols-outlined text-[14px]">mail</span>
                 Email us
@@ -565,7 +565,7 @@ function SheetUpdateChecker() {
       {state.phase === "idle" && (
         <button
           onClick={handleCheck}
-          className="px-2.5 py-1 rounded-DEFAULT text-[12px] font-body-ui ctl text-on-surface-variant transition-colors"
+          className="px-2.5 py-1 rounded-md text-[12px] font-body-ui ctl text-on-surface-variant transition-colors"
         >
           Check for updates
         </button>
@@ -579,7 +579,7 @@ function SheetUpdateChecker() {
       {state.phase === "available" && (
         <button
           onClick={() => handleInstall(state.update)}
-          className="px-2.5 py-1 rounded-DEFAULT text-[12px] font-body-ui btn-primary"
+          className="px-2.5 py-1 rounded-md text-[12px] font-body-ui btn-primary"
         >
           Download &amp; install v{state.update.version}
         </button>
@@ -616,7 +616,7 @@ function ChipButton({ active, onClick, children, mono }: { active: boolean; onCl
   return (
     <button
       onClick={onClick}
-      className={`px-2.5 py-1 rounded-DEFAULT text-[12px] transition-colors ${mono ? "font-metadata-mono" : "font-body-ui"} ${
+      className={`px-2.5 py-1 rounded-md text-[12px] transition-colors ${mono ? "font-metadata-mono" : "font-body-ui"} ${
         active
           ? "btn-primary"
           : "ctl text-on-surface-variant"
@@ -714,7 +714,7 @@ export function ShortcutsOverlay({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg max-h-[80vh] flex flex-col glass rounded-3xl"
+        className="w-full max-w-lg max-h-[80vh] flex flex-col glass glass-strong rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

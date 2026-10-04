@@ -143,7 +143,7 @@ export default function CrossRefSheet({ isOpen, book, chapter, verse, onClose }:
           </div>
           <button
             onClick={startInstall}
-            className="mt-1 px-4 py-2 rounded-full btn-primary font-body-ui text-[13px] font-medium hover:opacity-90 transition-opacity"
+            className="mt-1 px-4 py-2 rounded-md btn-primary font-body-ui text-[13px] font-medium hover:opacity-90 transition-opacity"
           >
             Install TSK (~2 MB)
           </button>
