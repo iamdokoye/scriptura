@@ -19,13 +19,22 @@ export default function PresentationTopBar() {
   const {
     view, setView, settingsOpen, setSettingsOpen, liveBlack, setLiveBlack, liveEmergency, setLiveEmergency,
     serviceOrderOpen, setServiceOrderOpen, setDisplayPrefs, presentationActive,
-    readingFontSize, setReadingFontSize,
+    readingFontSize, setReadingFontSize, theme, setTheme,
   } = useAppStore();
   const output = usePresentationOutput();
   const [outputsOpen, setOutputsOpen] = useState(false);
 
   const activeTab: PresentationTab = "scriptures";
   const cleared = !liveBlack && !liveEmergency;
+
+  // "System" resolves to whatever the OS is currently using, so the button
+  // always flips to the opposite of what's on screen.
+  const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  function toggleTheme() {
+    const next = isDark ? "light" : "dark";
+    setTheme(next);
+    api.setPreferences({ theme: next }).catch(() => {});
+  }
 
   function clearOverrides() {
     setLiveBlack(false);
@@ -172,6 +181,11 @@ export default function PresentationTopBar() {
         <IconButton icon="movie" label="Studio" disabled title="Coming soon" />
         <IconButton icon="notifications" label="Alerts" disabled title="Coming soon" />
         <IconButton icon="help" label="Get help" onClick={() => openExternal("https://github.com/iamdokoye/scriptura/issues")} />
+        <IconButton
+          icon={isDark ? "light_mode" : "dark_mode"}
+          label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          onClick={toggleTheme}
+        />
         <IconButton icon="settings" label="Settings" active={settingsOpen} onClick={() => setSettingsOpen(true)} />
       </div>
 
