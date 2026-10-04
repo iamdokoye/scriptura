@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore, type VerseRef, type ServiceItem } from "../store/app";
-import { api, type MonitorInfo, type TextSpan } from "../lib/tauri";
+import { api, type TextSpan } from "../lib/tauri";
 import { useChapterData } from "../hooks/useChapterData";
 import { usePresentationSync } from "../hooks/usePresentationSync";
 import { measureVersePartsDOM } from "../lib/verseSplit";
 import { FONT_FAMILY_CSS } from "../components/VersePanes";
 import StrongsSheet from "../components/StrongsSheet";
+import OutputPreview from "../components/OutputPreview";
+import { usePresentationStage } from "../hooks/usePresentationStage";
+import type { PresentState } from "../lib/presentation";
 import PresentationSearchBar, { type PresentationSearchBarHandle } from "../components/PresentationSearchBar";
 import { ResizeHandle, useResizable } from "../hooks/useResizable";
 
@@ -64,7 +67,7 @@ export default function LiveShowRunner() {
   });
   const outputH = useResizable({
     storageKey: "scriptura.live.outputHeight", initial: 186, min: 80, axis: "y",
-    max: () => Math.round((asideW.size - 32) * (9 / 16)) + 24,
+    max: () => Math.round((asideW.size - 32) * (stage.h / stage.w)) + 24,
   });
   const bottomH = useResizable({
     storageKey: "scriptura.live.bottomHeight", initial: Math.round(window.innerHeight * 0.38), min: 200, axis: "y", invert: true,
@@ -75,10 +78,10 @@ export default function LiveShowRunner() {
     max: () => Math.round(window.innerWidth * 0.5),
   });
 
-  const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
-  useEffect(() => {
-    api.listMonitors().then(setMonitors).catch(() => {});
-  }, []);
+  // The real output screen's size in CSS px — splits are measured against it
+  // and the Main Output preview is laid out at it, so the console always
+  // agrees with what the output window shows.
+  const stage = usePresentationStage(presentationActive);
 
   usePresentationSync({
     presentationActive, primaryModule, currentRef, parallelModule, parallelMode,
@@ -89,7 +92,7 @@ export default function LiveShowRunner() {
   });
 
   const { chapter: previewChapter } = useChapterData(primaryModule, previewRef.book, previewRef.chapter, false, null);
-  const { chapter: liveChapter } = useChapterData(primaryModule, currentRef.book, currentRef.chapter, false, null);
+  const { chapter: liveChapter, parallelChapter: liveParallelChapter } = useChapterData(primaryModule, currentRef.book, currentRef.chapter, parallelMode, parallelModule);
 
   // Splits verse text into presentation-sized parts by measuring against the
   // actual presentation box dimensions — same approach as ReadingView.tsx, so
@@ -98,8 +101,8 @@ export default function LiveShowRunner() {
     const ctx = displayPrefs.presentationContext ?? 1;
     const theme = activePresentationTheme;
     const hPadPct = theme?.safe_margin ?? (5 + displayPrefs.margins / 2);
-    const screenW = monitors.find((m) => m.is_primary)?.width ?? monitors[0]?.width ?? 1920;
-    const screenH = monitors.find((m) => m.is_primary)?.height ?? monitors[0]?.height ?? 1080;
+    const screenW = stage.w;
+    const screenH = stage.h;
 
     let boxW: number;
     let boxH: number;
@@ -127,7 +130,7 @@ export default function LiveShowRunner() {
     };
   }, [
     displayPrefs.presentationContext, displayPrefs.margins, displayPrefs.fontFamily,
-    displayPrefs.lineSpacing, displayPrefs.textAlign, activePresentationTheme, readingFontSize, monitors,
+    displayPrefs.lineSpacing, displayPrefs.textAlign, activePresentationTheme, readingFontSize, stage.w, stage.h,
   ]);
 
   const splitParts = useCallback((text: string) => measureVersePartsDOM(text.trim(), splitBox.boxW, splitBox.boxH, splitBox.style), [splitBox]);
@@ -296,6 +299,25 @@ export default function LiveShowRunner() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [stepQueue, stepVerse, stepChapter, goLive, goBack, addPreviewToQueue]);
 
+  // Exactly what usePresentationSync sends the output window.
+  const outputState: PresentState = useMemo(() => ({
+    book: currentRef.book,
+    chapter: currentRef.chapter,
+    verse: currentRef.verse,
+    primaryModule: primaryModule ?? "",
+    parallelModule,
+    parallelMode,
+    selectedStrongs: null,
+    strongsGroup: null,
+    strongsSource: null,
+    displayPrefs,
+    readingFontSize,
+    presentationTheme: activePresentationTheme,
+    black: liveBlack,
+    emergency: liveEmergency,
+    versePart: displayPrefs.splitLongVerses ? versePart : undefined,
+  }), [currentRef, primaryModule, parallelModule, parallelMode, displayPrefs, readingFontSize, activePresentationTheme, liveBlack, liveEmergency, versePart]);
+
   const liveText = verseText(liveChapter?.verses, currentRef.verse);
   const liveParts = displayPrefs.splitLongVerses ? splitParts(liveText) : [liveText];
   const liveActiveText = liveParts[versePart] ?? liveParts[0] ?? liveText;
@@ -342,23 +364,8 @@ export default function LiveShowRunner() {
         <aside style={{ width: asideW.size }} className="shrink-0 flex flex-col overflow-hidden glass rounded-3xl">
           <div className="shrink min-h-0 flex flex-col p-4">
             <PanelHeader icon="monitor" label="Main Output" compact />
-            <div className="mt-2 flex justify-center min-h-0" style={{ height: Math.min(outputH.size, Math.round((asideW.size - 32) * (9 / 16)) + 24) }}>
-            <div className="h-full aspect-video max-w-full rounded-xl bg-black overflow-hidden flex items-center justify-center p-3">
-              {!presentationActive ? (
-                <span className="font-body-ui text-[11px] text-white/30">Output closed</span>
-              ) : overridden ? (
-                <span className="font-body-ui text-[11px] text-white/30">
-                  {liveEmergency ? "Standby" : "Black"}
-                </span>
-              ) : (
-                <div className="w-full">
-                  <p className="font-metadata-mono text-[8px] text-white/40 mb-1 truncate">
-                    {refLabel(currentRef)}{liveSplit ? ` · ${versePart + 1}/${liveParts.length}` : ""}
-                  </p>
-                  <p className="font-body-reading text-[9px] leading-tight text-white line-clamp-3">{liveActiveText || "—"}</p>
-                </div>
-              )}
-            </div>
+            <div className="mt-2 min-h-0" style={{ height: Math.min(outputH.size, Math.round((asideW.size - 32) * (stage.h / stage.w)) + 24) }}>
+              <OutputPreview state={outputState} chapter={liveChapter} parallelChapter={liveParallelChapter} stage={stage} outputOpen={presentationActive} />
             </div>
           </div>
           <div className="px-4">

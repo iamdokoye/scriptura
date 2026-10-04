@@ -157,6 +157,7 @@ pub fn run() {
             commands::delete_presentation_theme,
             commands::set_default_presentation_theme,
             commands::list_monitors,
+            commands::get_presentation_window_size,
             commands::open_presentation_window,
             commands::close_presentation_window,
             commands::list_search_history,

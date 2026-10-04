@@ -92,6 +92,8 @@ export interface MonitorInfo {
   y: number;
   width: number;
   height: number;
+  /** Physical px per CSS px — width/height above are physical. */
+  scale_factor: number;
   is_primary: boolean;
 }
 
@@ -297,6 +299,10 @@ export const api = {
       query: strongs_number,
       options: { modules, strongs_filter: strongs_number },
     }),
+
+  /** The output window's content size in CSS px, or null when it isn't open. */
+  getPresentationWindowSize: () =>
+    invoke<[number, number] | null>("get_presentation_window_size"),
 
   getCommentary: (module_id: string, book: string, chapter: number, verse: number) =>
     invoke<string>("get_commentary", { moduleId: module_id, book, chapter, verse }),

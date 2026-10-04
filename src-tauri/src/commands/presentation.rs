@@ -65,6 +65,8 @@ pub struct MonitorInfo {
     pub y: i32,
     pub width: u32,
     pub height: u32,
+    /// Physical px per CSS px — `width`/`height` are physical, the page lays out in CSS px.
+    pub scale_factor: f64,
     pub is_primary: bool,
 }
 
@@ -90,10 +92,24 @@ pub async fn list_monitors(app: AppHandle) -> std::result::Result<Vec<MonitorInf
                 y: pos.y,
                 width: size.width,
                 height: size.height,
+                scale_factor: m.scale_factor(),
                 is_primary: primary_pos == Some(pos),
             }
         })
         .collect())
+}
+
+/// The output window's real content size in CSS px (None when it isn't open),
+/// so the console can size its split measurements and Main Output preview to
+/// exactly what the output screen lays out against.
+#[tauri::command]
+pub async fn get_presentation_window_size(app: AppHandle) -> std::result::Result<Option<(f64, f64)>, String> {
+    let Some(window) = app.get_webview_window("presentation") else {
+        return Ok(None);
+    };
+    let size = window.inner_size().map_err(|e| e.to_string())?;
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    Ok(Some((size.width as f64 / scale, size.height as f64 / scale)))
 }
 
 #[tauri::command]

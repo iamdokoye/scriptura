@@ -21,6 +21,7 @@ import { usePresentationSync } from "../hooks/usePresentationSync";
 import { usePresentationCloseSync } from "../hooks/usePresentationCloseSync";
 import { useReadingPositionPersistence } from "../hooks/useReadingPositionPersistence";
 import { measureVersePartsDOM } from "../lib/verseSplit";
+import { usePresentationStage } from "../hooks/usePresentationStage";
 
 export default function ReadingView() {
   const {
@@ -60,10 +61,9 @@ export default function ReadingView() {
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   const [showMonitorPicker, setShowMonitorPicker] = useState(false);
   const monitorPickerRef = useRef<HTMLDivElement>(null);
-  // Which monitor the presentation window actually opened on — the split
-  // calculation below must size against this display, not just monitors[0],
-  // since the operator can pick any monitor from the picker.
-  const [presentationMonitorIndex, setPresentationMonitorIndex] = useState<number | null>(null);
+  // The output window's real CSS-pixel size (or the primary monitor's logical
+  // size while it's closed) — what verse splits must be measured against.
+  const stage = usePresentationStage(presentationActive);
 
   const openCrossRef = useCallback((verse: number) => {
     setCrossRefVerse({ book: currentRef.book, chapter: currentRef.chapter, verse });
@@ -142,14 +142,8 @@ export default function ReadingView() {
     const theme = effectivePresentationTheme;
     const hPadPct = theme?.safe_margin ?? (5 + displayPrefs.margins / 2);
 
-    // Use the presentation monitor's real pixel dimensions so the operator
-    // console and the presentation window always agree on where to split —
-    // this must be the monitor actually chosen via the picker, not just
-    // monitors[0], since the console's own screen can differ in size from
-    // the projector the presentation is actually running on.
-    const presMonitor = monitors.find((m) => m.index === presentationMonitorIndex) ?? monitors[0];
-    const screenW = presMonitor?.width ?? 1920;
-    const screenH = presMonitor?.height ?? 1080;
+    const screenW = stage.w;
+    const screenH = stage.h;
 
     let boxW: number;
     let boxH: number;
@@ -176,8 +170,7 @@ export default function ReadingView() {
   }, [
     displayPrefs.splitLongVerses, displayPrefs.margins, displayPrefs.presentationContext,
     displayPrefs.lineSpacing, displayPrefs.fontFamily, displayPrefs.textAlign,
-    chapter, currentRef.verse, readingFontSize, effectivePresentationTheme, monitors,
-    presentationMonitorIndex,
+    chapter, currentRef.verse, readingFontSize, effectivePresentationTheme, stage.w, stage.h,
   ]);
 
   // black/emergency are set from the Live Show console, but broadcast from
@@ -427,7 +420,6 @@ export default function ReadingView() {
                       } else if (monitors.length > 1) {
                         setShowMonitorPicker((v) => !v);
                       } else {
-                        setPresentationMonitorIndex(monitors[0]?.index ?? null);
                         await api.openPresentationWindow(monitors[0]?.index).catch(() => {});
                         setPresentationActive(true);
                       }
@@ -459,7 +451,6 @@ export default function ReadingView() {
                           key={m.index}
                           onClick={async () => {
                             setShowMonitorPicker(false);
-                            setPresentationMonitorIndex(m.index);
                             await api.openPresentationWindow(m.index).catch(() => {});
                             setPresentationActive(true);
                           }}

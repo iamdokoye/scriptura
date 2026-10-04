@@ -26,6 +26,17 @@ interface TextStyle {
 
 const PresentationThemeContext = createContext<PresentationTheme | null>(null);
 
+/**
+ * The size, in CSS pixels, of the screen this output is laid out for. In the
+ * real output window it follows the window; the console's Main Output preview
+ * supplies the real window's size instead so the miniature wraps text and
+ * splits verses exactly like the live feed. Everything that used to read
+ * window.innerWidth/innerHeight or vh units goes through this.
+ */
+export interface StageSize { w: number; h: number }
+export const StageSizeContext = createContext<StageSize>({ w: window.innerWidth, h: window.innerHeight });
+function useStage() { return useContext(StageSizeContext); }
+
 function makeTextStyle(prefs: DisplayPrefs, fontSize: number, theme: PresentationTheme | null): TextStyle {
   return {
     fontSize: `${fontSize * (theme?.font_scale ?? 1)}px`,
@@ -121,13 +132,40 @@ export default function PresentationView() {
       .catch(() => setParallelChapter(null));
   }, [state?.parallelMode, state?.parallelModule, state?.book, state?.chapter]);
 
+  const [stageSize, setStageSize] = useState<StageSize>({ w: window.innerWidth, h: window.innerHeight });
+  useEffect(() => {
+    const onResize = () => setStageSize({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  return (
+    <StageSizeContext.Provider value={stageSize}>
+      <div className="h-screen w-screen overflow-hidden">
+        <PresentationStage state={state} chapter={chapter} parallelChapter={parallelChapter} withStrongsSheet />
+      </div>
+    </StageSizeContext.Provider>
+  );
+}
+
+/**
+ * Renders what the output screen shows for `state` — used by the real output
+ * window and, scaled down inside a StageSizeContext, by the console's Main
+ * Output preview. Fills its parent (no viewport units).
+ */
+export function PresentationStage({ state, chapter, parallelChapter, withStrongsSheet }: {
+  state: PresentState | null;
+  chapter: ChapterText | null;
+  parallelChapter: ChapterText | null;
+  withStrongsSheet?: boolean;
+}) {
   // Emergency overrides everything (including black) — a fixed, theme-independent
   // screen so it stays reliable even if a theme or chapter fetch is broken. Checked
   // before the "waiting for state" fallback too: an operator hitting emergency
   // before the window has ever received a real state should still see it.
   if (state?.emergency) {
     return (
-      <div className="h-screen bg-black flex flex-col items-center justify-center gap-3">
+      <div className="h-full bg-black flex flex-col items-center justify-center gap-3">
         <span className="material-symbols-outlined text-[40px] text-white/25">pause_circle</span>
         <p className="font-body-ui text-[15px] text-white/35 tracking-wide">One moment please</p>
       </div>
@@ -136,7 +174,7 @@ export default function PresentationView() {
 
   if (!state || !chapter) {
     return (
-      <div className="h-screen bg-black flex flex-col items-center justify-center gap-4">
+      <div className="h-full bg-black flex flex-col items-center justify-center gap-4">
         <span className="material-symbols-outlined text-[48px] text-white/20">slideshow</span>
         <p className="font-body-ui text-[15px] text-white/30 tracking-wide">
           Waiting for operator console…
@@ -146,7 +184,7 @@ export default function PresentationView() {
   }
 
   if (state.black) {
-    return <div className="h-screen bg-black" />;
+    return <div className="h-full bg-black" />;
   }
 
   const ctx = state.displayPrefs.presentationContext ?? 1;
@@ -175,7 +213,7 @@ export default function PresentationView() {
 
   return (
     <PresentationThemeContext.Provider value={presentationTheme}>
-      <div className="presentation-output h-screen flex flex-col overflow-hidden select-none" style={themeStyle}>
+      <div className="presentation-output h-full flex flex-col overflow-hidden select-none" style={themeStyle}>
         <div key={layoutKey} className={`flex-1 overflow-hidden presentation-transition presentation-transition-${presentationTheme?.transition_type ?? "none"}`}>
           {ctx === 4 ? (
             <ScrollLayout
@@ -200,7 +238,7 @@ export default function PresentationView() {
             />
           )}
         </div>
-        <StrongsSheet immediate />
+        {withStrongsSheet && <StrongsSheet immediate />}
       </div>
     </PresentationThemeContext.Provider>
   );
@@ -219,6 +257,7 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
   hPadPct: number;
 }) {
   const presentationTheme = useContext(PresentationThemeContext);
+  const stage = useStage();
   const idx = chapter.verses.findIndex((v) => v.verse === state.verse);
   const prev = ctx === 3 && idx > 0 ? chapter.verses[idx - 1] : null;
   const active = chapter.verses[idx] ?? null;
@@ -240,18 +279,18 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
     const style = measureStyle(prefs, fontSize, presentationTheme);
     if (ctx === 1 && presentationTheme) {
       // Freeform layout: box is absolutely positioned at the theme percentages.
-      const w = (presentationTheme.verse_box_width / 100) * window.innerWidth;
-      const h = (presentationTheme.verse_box_height / 100) * window.innerHeight;
+      const w = (presentationTheme.verse_box_width / 100) * stage.w;
+      const h = (presentationTheme.verse_box_height / 100) * stage.h;
       return measureVersePartsDOM(rawActiveText.trim(), w, h, style);
     }
     // ctx 1 no-theme, ctx 2, ctx 3 — centred column or stacked rows.
     // Active row takes 60vh (ctx 2) or 50vh (ctx 3); no-theme ctx 1 = full height.
     const activeVh = ctx === 3 ? 50 : ctx === 2 ? 60 : 100;
-    const w = window.innerWidth * (100 - 2 * hPadPct) / 100;
-    const h = window.innerHeight * activeVh / 100;
+    const w = stage.w * (100 - 2 * hPadPct) / 100;
+    const h = stage.h * activeVh / 100;
     return measureVersePartsDOM(rawActiveText.trim(), w, h, style);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawActiveText, ctx, presentationTheme, fontSize, prefs.lineSpacing, prefs.fontFamily, prefs.textAlign, hPadPct, state.displayPrefs.splitLongVerses]);
+  }, [rawActiveText, ctx, presentationTheme, fontSize, prefs.lineSpacing, prefs.fontFamily, prefs.textAlign, hPadPct, state.displayPrefs.splitLongVerses, stage.w, stage.h]);
   const isSplitVerse = activeParts.length > 1;
   const partIdx = state.versePart ?? 0;
   const activeDisplayText = isSplitVerse ? (activeParts[partIdx] ?? activeParts[0]) : rawActiveText;
@@ -294,7 +333,7 @@ function ContextLayout({ ctx, state, chapter, parallelChapter, fontSize, prefs, 
   // The active row gets a definite (vh, not %) height budget to shrink text
   // against — prev/next stay at their fixed context size since they're already
   // small and typically short.
-  const activeRowHeight = ctx === 3 ? "50vh" : "60vh";
+  const activeRowHeight = `${stage.h * (ctx === 3 ? 0.5 : 0.6)}px`;
 
   return (
     <div className="h-full flex flex-col justify-center gap-0 py-10" style={{ paddingLeft: hPad, paddingRight: hPad }}>
@@ -381,6 +420,7 @@ function ShrinkingVerseText({ text, maxFontSize, prefs, centered, widen, maxHeig
   noShrink?: boolean;
 }) {
   const presentationTheme = useContext(PresentationThemeContext);
+  const stage = useStage();
   const minSize = noShrink
     ? maxFontSize
     : presentationTheme
@@ -395,7 +435,7 @@ function ShrinkingVerseText({ text, maxFontSize, prefs, centered, widen, maxHeig
   const style = makeTextStyle(prefs, fontSize, presentationTheme);
   const containerStyle: React.CSSProperties = {
     ...(widen ? { width: `${widthPct}%` } : undefined),
-    ...(maxHeightVh ? { maxHeight: `${maxHeightVh}vh` } : undefined),
+    ...(maxHeightVh ? { maxHeight: `${(stage.h * maxHeightVh) / 100}px` } : undefined),
   };
 
   return (
@@ -460,14 +500,15 @@ function ScrollLayout({ state, chapter, parallelChapter, fontSize, prefs, hPad, 
   hPadPct: number;
 }) {
   const presentationTheme = useContext(PresentationThemeContext);
+  const stage = useStage();
   const activeRef = useRef<HTMLDivElement | null>(null);
   // Small fixed deduction for the verse-number gutter column so the split
   // capacity box isn't overestimated relative to the text's real width.
   const SCROLL_GUTTER_PCT = 6;
   // Reusable style for DOM measurement; gutter deducted from width.
   const scrollMeasureStyle = measureStyle(prefs, fontSize, presentationTheme);
-  const scrollBoxW = window.innerWidth * (100 - 2 * hPadPct - SCROLL_GUTTER_PCT) / 100;
-  const scrollBoxH = window.innerHeight * 0.75; // matches ACTIVE_VERSE_MAX_HEIGHT_VH
+  const scrollBoxW = stage.w * (100 - 2 * hPadPct - SCROLL_GUTTER_PCT) / 100;
+  const scrollBoxH = stage.h * 0.75; // matches ACTIVE_VERSE_MAX_HEIGHT_VH
 
   useEffect(() => {
     activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
