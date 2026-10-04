@@ -2,6 +2,22 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
+## [0.1.27] - 2026-10-04
+
+### Added
+- Live Show reference bar: one button cycles between verse jump and word search. Word search shows highlighted matches as you type. `Ctrl+L` and `Ctrl+K` focus the two modes.
+- A separate Strong's button turns Strong's concordance on or off. It uses the same saved setting as Settings.
+- Resizable panels in the Live Show console: the Main Output and Queue column, the Main Output preview, the verse panel and the Preview column. The Ctrl+Q queue drawer can also be resized. Sizes are remembered, and double-clicking a divider resets it.
+- Split verses show as one folded row with a `1/N` chip. Click it to unfold the parts. They fold again when you move to another verse.
+- Presentation-mode shortcuts that only worked in the reading view: `Ctrl+P` / `Ctrl+N` (chapter), `Ctrl+Up` / `Ctrl+Down` (verse), `Ctrl +/-` and `Ctrl+Alt +/-` (font size), and `Alt+H` (history).
+
+### Changed
+- The Main Output panel now shows the real output screen, scaled down, instead of a rough thumbnail. Wrapping, text shrinking and verse parts match the live feed.
+
+### Fixed
+- Presentation-mode shortcuts did nothing while a text field had focus, and ignored Cmd on Mac. Ctrl and Cmd shortcuts now work from inside inputs.
+- Verse splits in the console disagreed with the output screen. They were measured in physical monitor pixels, so on Retina displays long verses looked like they fit. The console now uses the output window's real size.
+
 ## [0.1.26] - 2026-10-04
 
 ### Added
