@@ -6,7 +6,8 @@ import { usePresentationSync } from "../hooks/usePresentationSync";
 import { measureVersePartsDOM } from "../lib/verseSplit";
 import { FONT_FAMILY_CSS } from "../components/VersePanes";
 import StrongsSheet from "../components/StrongsSheet";
-import ScriptureNav from "../components/ScriptureNav";
+import PresentationSearchBar, { type PresentationSearchBarHandle } from "../components/PresentationSearchBar";
+import { ResizeHandle, useResizable } from "../hooks/useResizable";
 
 function verseText(chapterVerses: { verse: number; spans: { text: string }[] }[] | undefined, verse: number): string {
   return chapterVerses?.find((v) => v.verse === verse)?.spans.map((s) => s.text).join("") ?? "";
@@ -53,7 +54,26 @@ export default function LiveShowRunner() {
   const [previewPart, setPreviewPart] = useState(0);
   useEffect(() => setPreviewPart(0), [previewRef.book, previewRef.chapter, previewRef.verse]);
 
-  const scriptureNavRef = useRef<HTMLInputElement>(null);
+  const searchBarRef = useRef<PresentationSearchBarHandle>(null);
+
+  // Every major panel is user-resizable; sizes persist across restarts and
+  // double-clicking a divider restores its default.
+  const asideW = useResizable({
+    storageKey: "scriptura.live.asideWidth", initial: 320, min: 240, axis: "x", invert: true,
+    max: () => Math.round(window.innerWidth * 0.6),
+  });
+  const outputH = useResizable({
+    storageKey: "scriptura.live.outputHeight", initial: 186, min: 80, axis: "y",
+    max: () => Math.round((asideW.size - 32) * (9 / 16)) + 24,
+  });
+  const bottomH = useResizable({
+    storageKey: "scriptura.live.bottomHeight", initial: Math.round(window.innerHeight * 0.38), min: 200, axis: "y", invert: true,
+    max: () => window.innerHeight - 260,
+  });
+  const previewW = useResizable({
+    storageKey: "scriptura.live.previewWidth", initial: 300, min: 220, axis: "x", invert: true,
+    max: () => Math.round(window.innerWidth * 0.5),
+  });
 
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   useEffect(() => {
@@ -205,7 +225,12 @@ export default function LiveShowRunner() {
       }
       if (e.ctrlKey && !e.altKey && e.code === "KeyL") {
         e.preventDefault();
-        scriptureNavRef.current?.focus();
+        searchBarRef.current?.focus("scripture");
+        return;
+      }
+      if (e.ctrlKey && !e.altKey && e.code === "KeyK") {
+        e.preventDefault();
+        searchBarRef.current?.focus("word");
         return;
       }
 
@@ -281,10 +306,13 @@ export default function LiveShowRunner() {
           </div>
         </section>
 
-        <aside className="w-[320px] shrink-0 flex flex-col overflow-hidden glass rounded-3xl">
-          <div className="shrink-0 p-4">
+        <ResizeHandle axis="x" label="main output and queue" dragging={asideW.dragging} handleProps={asideW.handleProps} />
+
+        <aside style={{ width: asideW.size }} className="shrink-0 flex flex-col overflow-hidden glass rounded-3xl">
+          <div className="shrink min-h-0 flex flex-col p-4">
             <PanelHeader icon="monitor" label="Main Output" compact />
-            <div className="mt-2 aspect-video rounded-xl bg-black overflow-hidden flex items-center justify-center p-3">
+            <div className="mt-2 flex justify-center min-h-0" style={{ height: Math.min(outputH.size, Math.round((asideW.size - 32) * (9 / 16)) + 24) }}>
+            <div className="h-full aspect-video max-w-full rounded-xl bg-black overflow-hidden flex items-center justify-center p-3">
               {!presentationActive ? (
                 <span className="font-body-ui text-[11px] text-white/30">Output closed</span>
               ) : overridden ? (
@@ -300,9 +328,13 @@ export default function LiveShowRunner() {
                 </div>
               )}
             </div>
+            </div>
+          </div>
+          <div className="px-4">
+            <ResizeHandle axis="y" label="main output preview" dragging={outputH.dragging} handleProps={outputH.handleProps} />
           </div>
 
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-[120px] flex flex-col overflow-hidden">
             <div className="shrink-0 flex items-center justify-between px-4 py-2">
               <span className="font-body-ui text-[13px] font-bold text-on-surface">Queue</span>
               <div className="flex items-center gap-3">
@@ -378,8 +410,10 @@ export default function LiveShowRunner() {
         </div>
       )}
 
+      <ResizeHandle axis="y" label="verse picker" dragging={bottomH.dragging} handleProps={bottomH.handleProps} />
+
       {/* Reference picker + verse list + preview */}
-      <div className="h-[42%] min-h-[240px] shrink-0 panel rounded-3xl flex flex-col overflow-hidden">
+      <div style={{ height: bottomH.size }} className="shrink-0 panel rounded-3xl flex flex-col overflow-hidden">
         <div className="shrink-0 flex items-center gap-3 px-4 py-2.5">
           {primaryModule && (
             <span className="font-metadata-mono text-[11px] font-bold text-on-surface-variant field px-2.5 py-1 rounded-lg shrink-0">
@@ -396,12 +430,12 @@ export default function LiveShowRunner() {
             </button>
           </div>
           <div className="w-px h-4 bg-outline-variant shrink-0" />
-          <div className="max-w-xs">
-            <ScriptureNav
-              inputRef={scriptureNavRef}
+          <div className="flex-1 min-w-0 max-w-xl">
+            <PresentationSearchBar
+              ref={searchBarRef}
               baseRef={previewRef}
-              placeholder="Jump to… jn 3:16 or v5  (Ctrl+L)"
               onNavigate={(ref) => setPreviewRef(ref)}
+              onStrongs={(number) => handleStrongsClick([number])}
             />
           </div>
         </div>
@@ -463,7 +497,8 @@ export default function LiveShowRunner() {
             })}
           </div>
 
-          <div className="w-[300px] shrink-0 flex flex-col overflow-hidden">
+          <ResizeHandle axis="x" label="preview" dragging={previewW.dragging} handleProps={previewW.handleProps} />
+          <div style={{ width: previewW.size }} className="shrink-0 flex flex-col overflow-hidden">
             <div className="shrink-0 flex items-center justify-between px-4 pt-3">
               <PanelHeader icon="visibility" label="Preview" compact />
               <button

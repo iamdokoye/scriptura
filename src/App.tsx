@@ -14,6 +14,7 @@ import ServiceOrderPanel from "./components/ServiceOrderPanel";
 import ErrorBoundary from "./components/ErrorBoundary";
 import CustomizationStudio from "./views/CustomizationStudio";
 import LiveShowRunner from "./views/LiveShowRunner";
+import { ResizeHandle, useResizable } from "./hooks/useResizable";
 
 export default function App() {
   const {
@@ -23,6 +24,10 @@ export default function App() {
     hydrateWorkspace, workspace,
   } = useAppStore();
   const presenting = workspace === "presentation";
+  const queueDrawerW = useResizable({
+    storageKey: "scriptura.queueDrawerWidth", initial: 324, min: 280, axis: "x", invert: true,
+    max: () => Math.round(window.innerWidth * 0.7),
+  });
 
   // Presentation-only views can't be *reached* in Study mode any more (no nav
   // entry, no Present button to get there), but if the workspace toggle
@@ -177,9 +182,13 @@ export default function App() {
             onClick={() => setServiceOrderOpen(false)}
           >
             <div
-              className={`w-[324px] p-3 h-full transition-transform duration-200 ease-in-out ${serviceOrderOpen ? "translate-x-0" : "translate-x-full"}`}
+              style={{ width: queueDrawerW.size }}
+              className={`relative p-3 h-full ${queueDrawerW.dragging ? "" : "transition-transform duration-200 ease-in-out"} ${serviceOrderOpen ? "translate-x-0" : "translate-x-full"}`}
               onClick={(e) => e.stopPropagation()}
             >
+              <div className="absolute left-0 top-0 bottom-0 z-10 flex items-center">
+                <ResizeHandle axis="x" label="service queue" dragging={queueDrawerW.dragging} handleProps={queueDrawerW.handleProps} />
+              </div>
               <ServiceOrderPanel />
             </div>
           </div>
