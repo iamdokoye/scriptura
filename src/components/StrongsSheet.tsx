@@ -398,7 +398,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/15 backdrop-blur-[2px]"
+        className="fixed inset-0 z-40 bg-black/10"
         onClick={close}
       />
 

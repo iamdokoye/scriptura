@@ -27,7 +27,7 @@
   --shadow-light: #ffffff;
   --shadow-dark:  #b8c0cf;
   --neu-edge:     rgba(255, 255, 255, 0.4);
-  --glass-bg:     rgba(255, 255, 255, 0.45);
+  --glass-bg:     rgba(255, 255, 255, 0.62);
   --glass-border: rgba(255, 255, 255, 0.35);
   --glass-shadow: 0 20px 50px rgba(31, 38, 51, 0.12);
   --blob-1: rgba(79, 91, 213, 0.28);
@@ -107,7 +107,7 @@
   --shadow-light: #262b38;
   --shadow-dark:  #11141b;
   --neu-edge:     rgba(255, 255, 255, 0.05);
-  --glass-bg:     rgba(30, 34, 44, 0.45);
+  --glass-bg:     rgba(30, 34, 44, 0.62);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
   --blob-1: rgba(79, 91, 213, 0.25);
