@@ -55,7 +55,7 @@ export default function SheetShell({
           </div>
           <div className="flex items-center gap-3">
             {actionsExtra}
-            <button onClick={onClose} className="neu-sm rounded-lg p-1.5 text-secondary hover:text-primary">
+            <button onClick={onClose} className="ctl rounded-lg p-1.5 text-secondary hover:text-primary">
               <span className="material-symbols-outlined text-[20px]">close</span>
             </button>
           </div>

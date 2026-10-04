@@ -37,7 +37,7 @@ export default function BookmarksNotes() {
     <div className="flex flex-1 overflow-hidden">
       <SideNav variant="full" />
 
-      <main className="flex-1 flex flex-col overflow-hidden neu rounded-3xl m-3">
+      <main className="flex-1 flex flex-col overflow-hidden panel rounded-3xl m-3">
         <div className="p-6 shrink-0">
           <h1 className="font-display-lg text-display-lg text-on-surface mb-4">
             {view === "bookmarks" ? "Bookmarks" : "Notes"}
@@ -49,7 +49,7 @@ export default function BookmarksNotes() {
                 onClick={() => setTab(t)}
                 className={`px-4 py-1.5 rounded-DEFAULT font-body-ui text-body-ui capitalize transition-colors ${
                   tab === t
-                    ? "accent-raised"
+                    ? "btn-primary"
                     : "text-secondary hover:bg-surface-container-low"
                 }`}
               >
@@ -75,7 +75,7 @@ export default function BookmarksNotes() {
                 {bookmarks.map((b) => (
                   <div
                     key={b.id}
-                    className="p-4 flex items-start gap-3 transition-colors group neu-sm rounded-xl"
+                    className="p-4 flex items-start gap-3 transition-colors group ctl rounded-xl"
                   >
                     <div className="flex-1 cursor-pointer" onClick={() => goTo(b.book, b.chapter, b.verse)}>
                       <span className="font-metadata-mono text-metadata-mono text-secondary font-bold block mb-1">
@@ -106,7 +106,7 @@ export default function BookmarksNotes() {
             ) : (
               <div className="space-y-3">
                 {notes.map((n) => (
-                  <div key={n.id} className="p-4 group neu-sm rounded-xl">
+                  <div key={n.id} className="p-4 group ctl rounded-xl">
                     <div className="flex items-start justify-between mb-2">
                       <span className="font-metadata-mono text-metadata-mono text-secondary font-bold">
                         {n.book} {n.chapter}{n.verse != null ? `:${n.verse}` : ""}
@@ -138,7 +138,7 @@ function EmptyState({ icon, message, cta, onCta }: { icon: string; message: stri
       <p className="font-body-ui text-body-ui text-on-surface-variant max-w-xs mb-6">{message}</p>
       <button
         onClick={onCta}
-        className="px-6 py-2 accent-raised font-body-ui text-body-ui rounded-DEFAULT hover:bg-primary-container transition-colors"
+        className="px-6 py-2 btn-primary font-body-ui text-body-ui rounded-DEFAULT hover:bg-primary-container transition-colors"
       >
         {cta}
       </button>

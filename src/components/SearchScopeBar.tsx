@@ -61,7 +61,7 @@ export default function SearchScopeBar({ compact }: Props) {
     ? "px-2.5 py-0.5 rounded-full font-body-ui text-[11px] font-medium transition-colors"
     : "px-3 py-1 rounded-full font-body-ui text-[12px] font-medium transition-colors";
 
-  const pillActive = "accent-raised";
+  const pillActive = "btn-primary";
   const pillInactive = "text-on-surface-variant hover:bg-surface-container-high";
 
   const otGroups = BOOK_GROUPS.filter((g) => g.testament === "OT");

@@ -392,11 +392,11 @@ export default function ReadingView() {
             <button
               onClick={() => setFsSearchOpen(true)}
               title="Word search (Ctrl+K)"
-              className="flex items-center gap-1.5 px-3 py-1.5 transition-colors text-on-surface-variant neu-sm rounded-xl"
+              className="flex items-center gap-1.5 px-3 py-1.5 transition-colors text-on-surface-variant ctl rounded-xl"
             >
               <span className="material-symbols-outlined text-[16px]">search</span>
               <span className="font-body-ui text-[13px]">Search</span>
-              <kbd className="font-metadata-mono text-[10px] px-1 py-0.5 ml-1 neu-inset-sm rounded-md">⌘K</kbd>
+              <kbd className="font-metadata-mono text-[10px] px-1 py-0.5 ml-1 field rounded-md">⌘K</kbd>
             </button>
 
             {/* All presenting UI is Presentation-workspace only — see
@@ -436,7 +436,7 @@ export default function ReadingView() {
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-DEFAULT text-[13px] font-body-ui font-semibold transition-colors ${
                       presentationActive
                         ? "bg-error text-on-error hover:bg-error/90"
-                        : "accent-raised hover:bg-primary/90"
+                        : "btn-primary hover:bg-primary/90"
                     }`}
                   >
                     <span className="material-symbols-outlined text-[16px]">
@@ -568,7 +568,7 @@ export default function ReadingView() {
         <BookNavigator />
 
         {/* Center reading pane(s) */}
-        <section className="flex-1 neu rounded-3xl flex flex-col h-full overflow-hidden">
+        <section className="flex-1 panel rounded-3xl flex flex-col h-full overflow-hidden">
           {/* Reading toolbar */}
           <div className="sticky top-0 px-content-margin pt-4 pb-2 flex items-center justify-between z-10 shrink-0">
             <h1 className="font-display-lg text-display-lg text-on-surface">
@@ -578,14 +578,14 @@ export default function ReadingView() {
               <button
                 title="Previous chapter (Ctrl+P)"
                 onClick={() => currentRef.chapter > 1 && setCurrentRef({ ...currentRef, chapter: currentRef.chapter - 1, verse: 1 })}
-                className="p-1.5 rounded-lg neu-sm text-secondary"
+                className="p-1.5 rounded-md ghost text-secondary"
               >
                 <span className="material-symbols-outlined text-[18px]">chevron_left</span>
               </button>
               <button
                 title="Next chapter (Ctrl+N)"
                 onClick={() => setCurrentRef({ ...currentRef, chapter: currentRef.chapter + 1, verse: 1 })}
-                className="p-1.5 rounded-lg neu-sm text-secondary"
+                className="p-1.5 rounded-md ghost text-secondary"
               >
                 <span className="material-symbols-outlined text-[18px]">chevron_right</span>
               </button>
@@ -593,7 +593,7 @@ export default function ReadingView() {
                 <button
                   title={syncScroll ? "Unsync scroll" : "Sync scroll between panes"}
                   onClick={() => setSyncScroll((v) => !v)}
-                  className={`p-1.5 rounded-lg ${syncScroll ? "neu-active" : "neu-sm text-secondary"}`}
+                  className={`p-1.5 rounded-lg ${syncScroll ? "ctl-active" : "ctl text-secondary"}`}
                 >
                   <span className="material-symbols-outlined text-[18px]">sync</span>
                 </button>
@@ -601,7 +601,7 @@ export default function ReadingView() {
               <button
                 title="Focus mode (Ctrl+F)"
                 onClick={() => setIsFullscreen(true)}
-                className="p-1.5 rounded-lg neu-sm text-secondary"
+                className="p-1.5 rounded-md ghost text-secondary"
               >
                 <span className="material-symbols-outlined text-[18px]">fullscreen</span>
               </button>

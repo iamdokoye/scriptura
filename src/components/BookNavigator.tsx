@@ -47,7 +47,7 @@ export default function BookNavigator() {
   }, []);
 
   return (
-    <aside className="w-[220px] neu rounded-3xl flex flex-col h-full overflow-y-auto shrink-0">
+    <aside className="w-[220px] panel rounded-3xl flex flex-col h-full overflow-y-auto shrink-0">
       <div className="p-5 pb-3">
         <h2 className="font-headline-md text-headline-md font-bold text-on-surface">Study Library</h2>
 
@@ -145,7 +145,7 @@ export default function BookNavigator() {
                   onClick={() => setCurrentRef({ book, chapter: 1, verse: 1 })}
                   className={`w-full text-left py-1 px-2 rounded-DEFAULT transition-colors ${
                     currentRef.book === book
-                      ? "neu-active font-medium"
+                      ? "ctl-active font-medium"
                       : "text-secondary hover:text-on-surface"
                   }`}
                 >

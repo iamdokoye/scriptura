@@ -157,7 +157,7 @@ export default function ScriptureNav({ inputRef, baseRef, onNavigate, placeholde
       </span>
       <input
         ref={inputRef}
-        className="w-full pl-8 pr-3 py-1 focus:outline-none text-body-ui font-body-ui transition-colors placeholder:text-on-surface-variant neu-inset-sm rounded-lg focus:ring-2 focus:ring-primary/50"
+        className="w-full pl-8 pr-3 py-1 focus:outline-none text-body-ui font-body-ui transition-colors placeholder:text-on-surface-variant field rounded-lg"
         placeholder={placeholder ?? "Go to… jn 3:16 or v5  (Ctrl+L)"}
         value={value}
         onChange={(e) => { setValue(e.target.value); setOpen(true); }}

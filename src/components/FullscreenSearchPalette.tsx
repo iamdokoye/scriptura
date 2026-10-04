@@ -126,7 +126,7 @@ export default function FullscreenSearchPalette({ isOpen, onClose }: Props) {
           {loading && (
             <span className="material-symbols-outlined text-[18px] text-secondary animate-spin shrink-0">progress_activity</span>
           )}
-          <kbd className="text-[10px] font-metadata-mono text-on-surface-variant px-1.5 py-0.5 shrink-0 neu-inset-sm rounded-md">Esc</kbd>
+          <kbd className="text-[10px] font-metadata-mono text-on-surface-variant px-1.5 py-0.5 shrink-0 field rounded-md">Esc</kbd>
         </div>
 
         {/* Scope bar */}

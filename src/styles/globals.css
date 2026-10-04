@@ -1,5 +1,5 @@
 /* Bundled fonts — no CDN, works offline */
-@import '@fontsource-variable/hanken-grotesk/wght.css';
+@import '@fontsource-variable/inter/wght.css';
 @import '@fontsource-variable/source-serif-4/wght.css';
 @import '@fontsource-variable/jetbrains-mono/wght.css';
 
@@ -22,155 +22,146 @@
    ──────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Neumorphic base — every raised/inset surface shares the page tone and
-     differs only by its dual shadow (see .neu / .neu-inset below). */
-  --shadow-light: #ffffff;
-  --shadow-dark:  #b8c0cf;
-  --neu-edge:     rgba(255, 255, 255, 0.4);
-  --glass-bg:     rgba(255, 255, 255, 0.62);
-  --glass-border: rgba(255, 255, 255, 0.35);
-  --glass-shadow: 0 20px 50px rgba(31, 38, 51, 0.12);
-  --blob-1: rgba(79, 91, 213, 0.28);
-  --blob-2: rgba(123, 92, 224, 0.22);
-  --blob-3: rgba(201, 162, 75, 0.2);
-  --gradient-accent: linear-gradient(135deg, #4f5bd5, #7b5ce0);
-  --accent-glow: rgba(79, 91, 213, 0.35);
+  /* Calm Editorial Precision (see docs/DESIGN.md) — flat surfaces with hairline
+     borders; translucent glass only for floating chrome. */
+  --hairline:     rgba(20, 24, 31, 0.08);
+  --glass-bg:     rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.8);
+  --glass-shadow: 0 8px 32px -4px rgba(15, 20, 40, 0.12);
+  --blob-1: rgba(91, 91, 240, 0.14);
+  --blob-2: rgba(46, 184, 134, 0.12);
+  --blob-3: rgba(184, 137, 43, 0.10);
+  --live-gradient: linear-gradient(135deg, #e5484d, #c43a3f);
 
-  /* Surfaces */
-  --col-background:                230 234 241;  /* #e6eaf1 */
-  --col-surface:                   230 234 241;
-  --col-surface-variant:           212 217 228;
-  --col-surface-dim:               208 214 225;
-  --col-surface-bright:            236 239 246;
-  --col-surface-container-lowest:  238 241 247;
-  --col-surface-container-low:     233 237 244;
-  --col-surface-container:         226 230 238;
-  --col-surface-container-high:    219 224 233;
-  --col-surface-container-highest: 212 217 228;
-  --col-surface-tint:              79 91 213;
+  /* Surfaces: background = window canvas, surface = elevated flat layer */
+  --col-background:                246 247 249;  /* #f6f7f9 */
+  --col-surface:                   255 255 255;
+  --col-surface-variant:           229 232 237;
+  --col-surface-dim:               238 240 244;
+  --col-surface-bright:            255 255 255;
+  --col-surface-container-lowest:  255 255 255;
+  --col-surface-container-low:     250 251 252;
+  --col-surface-container:         243 244 247;
+  --col-surface-container-high:    236 238 242;
+  --col-surface-container-highest: 229 232 237;
+  --col-surface-tint:              91 91 240;
 
-  /* On-surface */
-  --col-on-surface:                31 38 51;     /* #1f2633 */
-  --col-on-surface-variant:        91 101 119;   /* #5b6577 */
-  --col-on-background:             31 38 51;
+  --col-on-surface:                20 24 31;     /* #14181f */
+  --col-on-surface-variant:        93 102 117;   /* #5d6675 */
+  --col-on-background:             20 24 31;
 
-  /* Borders — hairlines only; depth comes from shadows */
-  --col-outline:                   130 139 156;
-  --col-outline-variant:           205 211 223;
+  --col-outline:                   150 158 172;
+  --col-outline-variant:           230 232 236;  /* hairline */
 
-  /* Inverse */
-  --col-inverse-surface:           40 46 62;
-  --col-inverse-on-surface:        236 239 246;
-  --col-inverse-primary:           170 178 255;
+  --col-inverse-surface:           20 24 31;
+  --col-inverse-on-surface:        236 239 244;
+  --col-inverse-primary:           139 140 255;
 
-  /* Primary (sapphire) */
-  --col-primary:                   79 91 213;    /* #4f5bd5 */
+  /* Primary (indigo) */
+  --col-primary:                   91 91 240;    /* #5b5bf0 */
   --col-on-primary:                255 255 255;
-  --col-primary-container:         123 92 224;   /* violet end of the accent gradient */
-  --col-on-primary-container:      255 255 255;
-  --col-primary-fixed:             224 227 250;
-  --col-primary-fixed-dim:         190 196 245;
-  --col-on-primary-fixed:          28 34 110;
-  --col-on-primary-fixed-variant:  60 70 180;
+  --col-primary-container:         238 238 254;
+  --col-on-primary-container:      55 54 167;
+  --col-primary-fixed:             226 223 255;
+  --col-primary-fixed-dim:         193 193 255;
+  --col-on-primary-fixed:          10 0 107;
+  --col-on-primary-fixed-variant:  55 54 167;
 
-  /* Secondary (slate text / accent-tinted selected state) */
-  --col-secondary:                 91 101 119;
+  /* Secondary = muted ink; container = accent-tinted selected state */
+  --col-secondary:                 93 102 117;
   --col-on-secondary:              255 255 255;
-  --col-secondary-container:       218 222 246;
-  --col-on-secondary-container:    60 70 180;
-  --col-secondary-fixed:           222 226 240;
-  --col-secondary-fixed-dim:       190 197 214;
-  --col-on-secondary-fixed:        31 38 51;
-  --col-on-secondary-fixed-variant: 70 80 98;
+  --col-secondary-container:       236 236 254;
+  --col-on-secondary-container:    55 54 167;
+  --col-secondary-fixed:           236 238 242;
+  --col-secondary-fixed-dim:       210 214 222;
+  --col-on-secondary-fixed:        20 24 31;
+  --col-on-secondary-fixed-variant: 70 78 92;
 
-  /* Tertiary */
-  --col-tertiary:                  40 46 62;
+  /* Tertiary = soft jade (installed / synced) */
+  --col-tertiary:                  46 184 134;
   --col-on-tertiary:               255 255 255;
-  --col-tertiary-container:        62 70 92;
-  --col-on-tertiary-container:     200 207 224;
-  --col-tertiary-fixed:            222 226 240;
-  --col-tertiary-fixed-dim:        190 197 214;
-  --col-on-tertiary-fixed:         31 38 51;
-  --col-on-tertiary-fixed-variant: 70 80 98;
+  --col-tertiary-container:        214 245 232;
+  --col-on-tertiary-container:     0 81 56;
+  --col-tertiary-fixed:            122 250 195;
+  --col-tertiary-fixed-dim:        92 221 168;
+  --col-on-tertiary-fixed:         0 33 20;
+  --col-on-tertiary-fixed-variant: 0 81 56;
 
-  /* Error / live */
+  /* Error / live = crimson */
   --col-error:                     229 72 77;    /* #e5484d */
   --col-on-error:                  255 255 255;
-  --col-error-container:           252 228 229;
-  --col-on-error-container:        160 30 36;
+  --col-error-container:           253 232 233;
+  --col-on-error-container:        150 25 30;
 
-  /* Warm secondary accent — bookmarks, Strong's numbers */
-  --col-gold:                      160 124 37;
+  /* Exegesis & tags = warm gold */
+  --col-gold:                      184 137 43;   /* #b8892b */
 }
 
 .dark {
-  --shadow-light: #262b38;
-  --shadow-dark:  #11141b;
-  --neu-edge:     rgba(255, 255, 255, 0.05);
-  --glass-bg:     rgba(30, 34, 44, 0.62);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-  --blob-1: rgba(79, 91, 213, 0.25);
-  --blob-2: rgba(123, 92, 224, 0.18);
-  --blob-3: rgba(201, 162, 75, 0.1);
-  --accent-glow: rgba(123, 130, 240, 0.4);
+  --hairline:     rgba(255, 255, 255, 0.07);
+  --glass-bg:     rgba(21, 26, 34, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.36);
+  --blob-1: rgba(91, 91, 240, 0.16);
+  --blob-2: rgba(46, 184, 134, 0.12);
+  --blob-3: rgba(184, 137, 43, 0.10);
 
-  --col-background:                27 31 42;     /* #1b1f2a */
-  --col-surface:                   27 31 42;
-  --col-surface-variant:           48 54 71;
-  --col-surface-dim:               17 20 27;
-  --col-surface-bright:            41 46 62;
-  --col-surface-container-lowest:  22 25 34;
-  --col-surface-container-low:     30 34 46;
-  --col-surface-container:         35 40 54;
-  --col-surface-container-high:    41 46 62;
-  --col-surface-container-highest: 48 54 71;
-  --col-surface-tint:              140 150 255;
+  --col-background:                14 17 22;     /* #0e1116 */
+  --col-surface:                   21 26 34;     /* #151a22 */
+  --col-surface-variant:           50 53 58;
+  --col-surface-dim:               14 17 22;
+  --col-surface-bright:            54 57 63;
+  --col-surface-container-lowest:  11 14 19;
+  --col-surface-container-low:     25 28 33;
+  --col-surface-container:         29 32 37;
+  --col-surface-container-high:    39 42 48;
+  --col-surface-container-highest: 50 53 58;
+  --col-surface-tint:              193 193 255;
 
-  --col-on-surface:                232 235 242;  /* #e8ebf2 */
-  --col-on-surface-variant:        154 163 181;  /* #9aa3b5 */
-  --col-on-background:             232 235 242;
+  --col-on-surface:                236 239 244;  /* #eceff4 */
+  --col-on-surface-variant:        143 153 170;  /* #8f99aa */
+  --col-on-background:             236 239 244;
 
-  --col-outline:                   110 120 140;
-  --col-outline-variant:           50 56 74;
+  --col-outline:                   145 143 158;
+  --col-outline-variant:           35 41 50;     /* hairline */
 
-  --col-inverse-surface:           232 235 242;
-  --col-inverse-on-surface:        27 31 42;
-  --col-inverse-primary:           79 91 213;
+  --col-inverse-surface:           236 239 244;
+  --col-inverse-on-surface:        14 17 22;
+  --col-inverse-primary:           80 80 192;
 
-  --col-primary:                   140 150 255;
-  --col-on-primary:                15 18 60;
-  --col-primary-container:         123 92 224;
-  --col-on-primary-container:      255 255 255;
-  --col-primary-fixed:             48 54 100;
-  --col-primary-fixed-dim:         70 78 150;
-  --col-on-primary-fixed:          224 227 250;
-  --col-on-primary-fixed-variant:  190 196 245;
+  --col-primary:                   139 140 255; /* #8b8cff */
+  --col-on-primary:                14 17 22;
+  --col-primary-container:         139 140 255;
+  --col-on-primary-container:      30 25 145;
+  --col-primary-fixed:             55 54 167;
+  --col-primary-fixed-dim:         80 80 192;
+  --col-on-primary-fixed:          226 223 255;
+  --col-on-primary-fixed-variant:  193 193 255;
 
-  --col-secondary:                 154 163 181;
-  --col-on-secondary:              15 18 30;
-  --col-secondary-container:       49 54 92;
-  --col-on-secondary-container:    190 197 255;
-  --col-secondary-fixed:           48 54 71;
-  --col-secondary-fixed-dim:       70 78 100;
-  --col-on-secondary-fixed:        232 235 242;
-  --col-on-secondary-fixed-variant: 190 197 214;
+  --col-secondary:                 143 153 170;
+  --col-on-secondary:              14 17 22;
+  --col-secondary-container:       38 40 79;
+  --col-on-secondary-container:    193 193 255;
+  --col-secondary-fixed:           50 53 58;
+  --col-secondary-fixed-dim:       70 75 85;
+  --col-on-secondary-fixed:        236 239 244;
+  --col-on-secondary-fixed-variant: 199 197 213;
 
-  --col-tertiary:                  190 197 214;
-  --col-on-tertiary:               15 18 30;
-  --col-tertiary-container:        48 54 71;
-  --col-on-tertiary-container:     232 235 242;
-  --col-tertiary-fixed:            48 54 71;
-  --col-tertiary-fixed-dim:        70 78 100;
-  --col-on-tertiary-fixed:         232 235 242;
-  --col-on-tertiary-fixed-variant: 190 197 214;
+  --col-tertiary:                  92 221 168;
+  --col-on-tertiary:               0 56 37;
+  --col-tertiary-container:        17 70 52;
+  --col-on-tertiary-container:     122 250 195;
+  --col-tertiary-fixed:            17 70 52;
+  --col-tertiary-fixed-dim:        26 173 124;
+  --col-on-tertiary-fixed:         122 250 195;
+  --col-on-tertiary-fixed-variant: 92 221 168;
 
   --col-error:                     255 130 135;
   --col-on-error:                  60 0 5;
-  --col-error-container:           110 28 34;
+  --col-error-container:           93 28 33;
   --col-on-error-container:        255 218 214;
 
-  --col-gold:                      201 162 75;
+  --col-gold:                      200 154 60;
 }
 
 /* ── Scrollbar ─────────────────────────────────────────────────────────── */
@@ -180,73 +171,94 @@
 ::-webkit-scrollbar-thumb:hover { background: rgb(var(--col-outline)); }
 
 @layer components {
-  /* ── Neumorphism: things you press ─────────────────────────────────────── */
-  .neu {
-    background: rgb(var(--col-background));
-    box-shadow: 8px 8px 16px var(--shadow-dark), -8px -8px 16px var(--shadow-light);
-    border-top: 1px solid var(--neu-edge);
-    transition: box-shadow 180ms ease, color 180ms ease;
+  /* ── Flat: things that sit in the page ─────────────────────────────────── */
+  /* Elevated content layer: solid surface, hairline border, no shadow */
+  .panel {
+    background: rgb(var(--col-surface));
+    border: 1px solid rgb(var(--col-outline-variant));
   }
-  .neu-sm {
-    background: rgb(var(--col-background));
-    box-shadow: 4px 4px 9px var(--shadow-dark), -4px -4px 9px var(--shadow-light);
-    transition: box-shadow 180ms ease, color 180ms ease;
+  /* Secondary control: faint fill + hairline, brightens on hover */
+  .ctl {
+    background: rgb(var(--col-on-surface) / 0.04);
+    border: 1px solid rgb(var(--col-outline-variant));
+    transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
   }
-  .neu-sm:hover { box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light); }
-  .neu-sm:active { box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light); }
-  .neu-inset {
-    background: rgb(var(--col-background));
-    box-shadow: inset 6px 6px 12px var(--shadow-dark), inset -6px -6px 12px var(--shadow-light);
+  .ctl:hover { background: rgb(var(--col-on-surface) / 0.08); }
+  .ctl:active { transform: scale(0.97); }
+  /* Ghost: icon/text only, soft tint on hover */
+  .ghost {
+    transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
   }
-  .neu-inset-sm {
-    background: rgb(var(--col-background));
-    box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
-  }
-  /* Selected / pressed state for a nav or toolbar button */
-  .neu-active {
-    background: rgb(var(--col-background));
-    box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
+  .ghost:hover { background: rgb(var(--col-on-surface) / 0.06); color: rgb(var(--col-on-surface)); }
+  .ghost:active { transform: scale(0.97); }
+  /* Selected / active control: accent-tinted */
+  .ctl-active {
+    background: rgb(var(--col-primary) / 0.12);
     color: rgb(var(--col-primary));
+    border: 1px solid rgb(var(--col-primary) / 0.18);
   }
-  .neu-active .material-symbols-outlined { filter: drop-shadow(0 0 6px var(--accent-glow)); }
-
-  /* Selected list row / card — pressed in, with an accent hairline */
-  .neu-selected {
-    background: rgb(var(--col-background));
-    box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light), 0 0 0 1px rgb(var(--col-primary) / 0.35);
+  /* Selected list row / card: faint accent wash with a left accent bar */
+  .row-selected {
+    background: rgb(var(--col-primary) / 0.07);
+    box-shadow: inset 2px 0 0 rgb(var(--col-primary));
+  }
+  /* Text field: tinted fill, hairline, soft accent focus ring */
+  .field {
+    background: rgb(var(--col-on-surface) / 0.04);
+    border: 1px solid rgb(var(--col-outline-variant));
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .field:focus-within, .field:focus {
+    border-color: rgb(var(--col-primary) / 0.5);
+    box-shadow: 0 0 0 2px rgb(var(--col-primary) / 0.2);
+  }
+  /* Primary action: solid accent */
+  .btn-primary {
+    background: rgb(var(--col-primary));
+    color: rgb(var(--col-on-primary));
+    transition: filter 150ms ease, transform 150ms ease;
+  }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-primary:active { transform: scale(0.97); }
+  /* Live broadcast: crimson gradient */
+  .btn-live {
+    background: var(--live-gradient);
+    color: #fff;
+    box-shadow: 0 0 18px rgb(var(--col-error) / 0.35);
+  }
+  /* Keycap-style hint (⌘K, shortcuts) */
+  .kbd {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgb(var(--col-on-surface) / 0.06);
+    border: 1px solid rgb(var(--col-outline-variant));
+    color: rgb(var(--col-on-surface-variant));
   }
 
-  /* ── Glassmorphism: things that float ──────────────────────────────────── */
+  /* ── Glass: things that float ──────────────────────────────────────────── */
   .glass {
     background: var(--glass-bg);
-    -webkit-backdrop-filter: blur(20px) saturate(160%);
-    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    backdrop-filter: blur(24px) saturate(150%);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
   }
 
-  /* ── Accent ────────────────────────────────────────────────────────────── */
-  .accent-raised {
-    background: var(--gradient-accent);
-    color: #fff;
-    box-shadow: 5px 5px 12px var(--shadow-dark), -5px -5px 12px var(--shadow-light), 0 0 16px var(--accent-glow);
-    transition: filter 180ms ease;
-  }
-  .accent-raised:hover { filter: brightness(1.08); }
-
-  /* Ambient blobs behind the glass so the blur has something to show. Kept
-     quiet: scripture is always printed on a calm solid surface, never on this. */
+  /* Soft indigo / jade / gold blooms behind the glass. Peripheral only:
+     scripture is always on a solid surface, never on this. */
   .ambient {
     background:
-      radial-gradient(40% 50% at 15% 10%, var(--blob-1), transparent 70%),
-      radial-gradient(35% 45% at 90% 20%, var(--blob-2), transparent 70%),
-      radial-gradient(40% 40% at 70% 95%, var(--blob-3), transparent 70%),
+      radial-gradient(45% 55% at 18% 0%, var(--blob-1), transparent 70%),
+      radial-gradient(40% 50% at 92% 30%, var(--blob-2), transparent 70%),
+      radial-gradient(45% 50% at 45% 105%, var(--blob-3), transparent 70%),
       rgb(var(--col-background));
   }
 
   .field-label { @apply block mb-1.5 font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant; }
   .field-input {
-    @apply w-full h-9 px-3 rounded-lg text-on-surface font-body-ui text-[13px] outline-none neu-inset-sm focus:ring-2 focus:ring-primary/50;
+    @apply w-full h-9 px-3 rounded-md text-on-surface font-body-ui text-[13px] outline-none field;
   }
 }
 

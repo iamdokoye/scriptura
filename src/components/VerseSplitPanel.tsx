@@ -108,7 +108,7 @@ export default function VerseSplitPanel({
                 <span
                   className={`shrink-0 mt-0.5 w-5 h-5 rounded flex items-center justify-center font-metadata-mono text-[11px] font-bold ${
                     isActive
-                      ? "accent-raised"
+                      ? "btn-primary"
                       : "bg-surface-container text-secondary"
                   }`}
                 >

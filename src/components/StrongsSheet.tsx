@@ -496,8 +496,8 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
               type="button"
               className={`px-3 py-1 rounded-full font-body-ui text-[12px] font-medium transition-colors ${
                 source === pill.id
-                  ? "accent-raised"
-                  : "neu-sm text-on-surface-variant"
+                  ? "btn-primary"
+                  : "ctl text-on-surface-variant"
               }`}
               onClick={() => setSource(pill.id)}
             >
@@ -560,7 +560,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                   below already behaves. */}
               <button
                 type="button"
-                className="w-full flex items-center justify-between px-3 py-2 rounded neu-sm text-on-surface-variant font-metadata-mono text-[11px] uppercase tracking-widest transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 rounded ctl text-on-surface-variant font-metadata-mono text-[11px] uppercase tracking-widest transition-colors"
                 onClick={() => setShowUsage((v) => !v)}
               >
                 <span>{entry.usage_count > 0 ? `Occurs ${entry.usage_count}× in the Bible` : "Usage"}</span>
@@ -569,7 +569,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                 </span>
               </button>
               {showUsage && (
-                <div className="p-4 neu-sm rounded-xl">
+                <div className="p-4 ctl rounded-xl">
                   {entry.usage_count > 0 ? (
                     <>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5">

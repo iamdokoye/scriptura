@@ -154,8 +154,8 @@ export default function ServiceOrderPanel() {
           title="Open the Live Show console with this queue"
           className={`w-full py-2.5 rounded-lg font-body-ui text-[13px] font-semibold transition-colors flex items-center justify-center gap-2 ${
             empty
-              ? "neu-inset-sm text-on-surface-variant cursor-not-allowed"
-              : "accent-raised"
+              ? "field text-on-surface-variant cursor-not-allowed"
+              : "btn-primary"
           }`}
         >
           <span className="material-symbols-outlined text-[18px]">slideshow</span>
@@ -205,11 +205,11 @@ function ServiceCard({
       onPointerEnter={onPointerEnter}
       className={`group relative mx-2 mb-1 rounded-DEFAULT border transition-all ${
         isDragging
-          ? "opacity-40 neu-selected"
+          ? "opacity-40 row-selected"
           : isOver
-          ? "neu-selected"
+          ? "row-selected"
           : active
-          ? "neu-selected"
+          ? "row-selected"
           : "border-transparent bg-surface hover:bg-surface-container-low border-outline-variant/0 hover:border-outline-variant/50"
       }`}
     >

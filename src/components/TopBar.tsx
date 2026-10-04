@@ -75,7 +75,7 @@ export default function TopBar() {
           Scriptura
         </span>
         <button
-          className="neu-sm rounded-lg px-3 py-1.5 text-on-surface font-semibold font-body-ui text-body-ui"
+          className="ctl rounded-lg px-3 py-1.5 text-on-surface font-semibold font-body-ui text-body-ui"
           onClick={() => setView("reading")}
         >
           {refLabel}
@@ -90,7 +90,7 @@ export default function TopBar() {
           <button
             onClick={toggleMode}
             title={modeLabel}
-            className="neu-sm rounded-lg p-1.5 text-secondary hover:text-primary shrink-0"
+            className="ctl rounded-lg p-1.5 text-secondary hover:text-primary shrink-0"
           >
             <span className="material-symbols-outlined text-[18px]">{modeIcon}</span>
           </button>
@@ -103,7 +103,7 @@ export default function TopBar() {
               </span>
               <input
                 ref={wordInputRef}
-                className="w-full pl-9 pr-3 py-1.5 neu-inset-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-body-ui font-body-ui transition-colors placeholder:text-on-surface-variant"
+                className="w-full pl-9 pr-3 py-1.5 field rounded-lg focus:outline-none text-body-ui font-body-ui transition-colors placeholder:text-on-surface-variant"
                 placeholder="Search (Ctrl+K)"
                 onFocus={() => setView("search")}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -125,13 +125,13 @@ export default function TopBar() {
             aria-label="Service queue"
             onClick={() => setServiceOrderOpen(!serviceOrderOpen)}
             className={`relative p-2 rounded-lg ${
-              serviceOrderOpen ? "neu-active" : "neu-sm text-secondary"
+              serviceOrderOpen ? "ctl-active" : "ctl text-secondary"
             }`}
             title="Service queue (Ctrl+Q)"
           >
             <span className="material-symbols-outlined text-[20px]">queue_play_next</span>
             {serviceOrder.length > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full accent-raised text-on-primary font-metadata-mono text-[9px] flex items-center justify-center px-0.5 leading-none">
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full btn-primary text-on-primary font-metadata-mono text-[9px] flex items-center justify-center px-0.5 leading-none">
                 {serviceOrder.length}
               </span>
             )}
@@ -140,27 +140,27 @@ export default function TopBar() {
         <button
           aria-label="Toggle parallel view"
           onClick={() => setParallelMode(!parallelMode)}
-          className={`p-2 rounded-lg ${parallelMode ? "neu-active" : "neu-sm text-secondary"}`}
+          className={`p-2 rounded-lg ${parallelMode ? "ctl-active" : "ctl text-secondary"}`}
         >
           <span className="material-symbols-outlined text-[20px]">splitscreen</span>
         </button>
         <button
           aria-label="Font size"
-          className="p-2 rounded-lg neu-sm text-secondary"
+          className="p-2 rounded-md ghost text-secondary"
         >
           <span className="material-symbols-outlined text-[20px]">format_size</span>
         </button>
         <button
           aria-label="Toggle theme"
           onClick={cycleTheme}
-          className="p-2 rounded-lg neu-sm text-secondary"
+          className="p-2 rounded-md ghost text-secondary"
         >
           <span className="material-symbols-outlined text-[20px]">{themeIcon}</span>
         </button>
         <button
           aria-label="Settings"
           onClick={() => setSettingsOpen(true)}
-          className={`p-2 rounded-lg ${settingsOpen ? "neu-active" : "neu-sm text-secondary"}`}
+          className={`p-2 rounded-lg ${settingsOpen ? "ctl-active" : "ctl text-secondary"}`}
         >
           <span className="material-symbols-outlined text-[20px]">settings</span>
         </button>

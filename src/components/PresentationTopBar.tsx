@@ -90,7 +90,7 @@ export default function PresentationTopBar() {
         <button
           onClick={output.toggle}
           className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-body-ui text-[13px] font-bold transition-colors ${
-            output.presentationActive ? "bg-error text-on-error shadow-[0_0_16px_rgb(var(--col-error)/0.5)]" : "neu-sm text-on-surface"
+            output.presentationActive ? "btn-live" : "ctl text-on-surface"
           }`}
           title={output.presentationActive ? "Stop the presentation output" : "Send output live"}
         >
@@ -100,7 +100,7 @@ export default function PresentationTopBar() {
         <button
           onClick={() => setLiveBlack(!liveBlack)}
           className={`px-4 py-1.5 rounded-lg font-body-ui text-[13px] font-bold transition-colors ${
-            liveBlack ? "bg-on-surface text-surface" : "neu-sm text-on-surface"
+            liveBlack ? "bg-on-surface text-surface" : "ctl text-on-surface"
           }`}
           title="Cut the live output to black (C)"
         >
@@ -110,7 +110,7 @@ export default function PresentationTopBar() {
           onClick={clearOverrides}
           disabled={cleared}
           className={`px-4 py-1.5 rounded-lg font-body-ui text-[13px] font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-            cleared ? "neu-inset-sm text-on-surface-variant" : "neu-sm text-primary"
+            cleared ? "field text-on-surface-variant" : "ctl text-primary"
           }`}
           title="Clear black/emergency overrides and resume normal output"
         >
@@ -147,7 +147,7 @@ function TabButton({ label, active, disabled, onClick }: { label: string; active
       disabled={disabled}
       title={disabled ? "Coming soon" : undefined}
       className={`px-3.5 py-1.5 rounded-lg font-body-ui text-[14px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-        active ? "accent-raised" : "text-on-surface hover:text-primary"
+        active ? "btn-primary" : "text-on-surface hover:text-primary"
       }`}
     >
       {label}
@@ -170,7 +170,7 @@ function IconButton({ icon, label, active, disabled, title, onClick }: {
       onClick={onClick}
       disabled={disabled}
       className={`p-2 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed ${
-        active ? "neu-active" : "neu-sm text-secondary"
+        active ? "ctl-active" : "ghost text-secondary"
       }`}
     >
       <span className="material-symbols-outlined text-[20px]">{icon}</span>

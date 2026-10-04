@@ -187,13 +187,13 @@ export const VerseRow = memo(function VerseRow({
       data-verse={verse}
       className={`verse-container relative group flex gap-3 p-verse-padding rounded-lg transition-colors cursor-pointer ${
         active
-          ? "neu-inset-sm bg-primary/5 ring-1 ring-primary/25"
+          ? "row-selected"
           : "hover:bg-on-surface/[0.03]"
       }`}
       onClick={onVerseClick}
     >
       <span
-        className={`font-verse-number text-verse-number mt-1.5 h-6 w-6 grid place-items-center rounded-full neu-inset-sm select-none shrink-0 ${
+        className={`font-verse-number text-verse-number mt-2 w-6 text-right select-none shrink-0 ${
           active ? "text-primary font-bold" : "text-secondary"
         }`}
       >

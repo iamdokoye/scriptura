@@ -256,17 +256,17 @@ export default function LiveShowRunner() {
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-3 gap-3">
       {/* Live display + Main Output / Queue */}
       <div className="flex-1 min-h-0 flex gap-3 overflow-hidden">
-        <section className="flex-1 min-w-0 flex flex-col overflow-hidden neu rounded-3xl">
+        <section className="flex-1 min-w-0 flex flex-col overflow-hidden panel rounded-3xl">
           <PanelHeader icon="tv" label="Live display" />
           <div className="flex-1 min-h-0 overflow-y-auto p-6 flex items-start">
             {overridden ? (
-              <div className="w-full px-5 py-8 text-center neu-sm rounded-xl">
+              <div className="w-full px-5 py-8 text-center ctl rounded-xl">
                 <p className="font-body-ui text-[13px] text-on-surface-variant">
                   {liveEmergency ? "Standby screen is showing on the output." : "Output is cut to black."}
                 </p>
               </div>
             ) : (
-              <div className="w-full rounded-2xl neu-inset-sm ring-1 ring-primary/30 bg-primary/5 px-6 py-5">
+              <div className="w-full rounded-xl row-selected panel px-6 py-5">
                 <p className="font-metadata-mono text-[11px] uppercase tracking-widest text-primary mb-1.5 flex items-center gap-2">
                   {refLabel(currentRef)} {primaryModule ? `(${primaryModule})` : ""}
                   {liveSplit && (
@@ -341,7 +341,7 @@ export default function LiveShowRunner() {
                         <button
                           onClick={() => selectQueueItem(item)}
                           className={`w-full text-left px-3 py-2 mx-2 mb-1 rounded-DEFAULT border transition-colors ${
-                            isPreview ? "neu-selected" : "border-transparent hover:bg-surface-container-low"
+                            isPreview ? "row-selected" : "border-transparent hover:bg-surface-container-low"
                           }`}
                           style={{ width: "calc(100% - 1rem)" }}
                         >
@@ -379,19 +379,19 @@ export default function LiveShowRunner() {
       )}
 
       {/* Reference picker + verse list + preview */}
-      <div className="h-[42%] min-h-[240px] shrink-0 neu rounded-3xl flex flex-col overflow-hidden">
+      <div className="h-[42%] min-h-[240px] shrink-0 panel rounded-3xl flex flex-col overflow-hidden">
         <div className="shrink-0 flex items-center gap-3 px-4 py-2.5">
           {primaryModule && (
-            <span className="font-metadata-mono text-[11px] font-bold text-on-surface-variant neu-inset-sm px-2.5 py-1 rounded-lg shrink-0">
+            <span className="font-metadata-mono text-[11px] font-bold text-on-surface-variant field px-2.5 py-1 rounded-lg shrink-0">
               {primaryModule}
             </span>
           )}
           <span className="font-body-ui text-[13px] font-semibold text-on-surface shrink-0">{refLabel(previewRef)}</span>
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => stepVerse(-1)} className="p-1 rounded-lg neu-sm text-on-surface-variant" title="Previous verse (←)">
+            <button onClick={() => stepVerse(-1)} className="p-1 rounded-md ctl text-on-surface-variant" title="Previous verse (←)">
               <span className="material-symbols-outlined text-[16px]">chevron_left</span>
             </button>
-            <button onClick={() => stepVerse(1)} className="p-1 rounded-lg neu-sm text-on-surface-variant" title="Next verse (→)">
+            <button onClick={() => stepVerse(1)} className="p-1 rounded-md ctl text-on-surface-variant" title="Next verse (→)">
               <span className="material-symbols-outlined text-[16px]">chevron_right</span>
             </button>
           </div>
@@ -435,7 +435,7 @@ export default function LiveShowRunner() {
                           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPreviewRef({ ...previewRef, verse: v.verse }); setPreviewPart(i); } }}
                           className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-DEFAULT border transition-colors cursor-pointer ${
                             active
-                              ? "neu-selected"
+                              ? "row-selected"
                               : i === 0
                               ? "border-transparent hover:bg-surface-container-low"
                               : "border-outline-variant/50 hover:bg-surface-container-low"
@@ -480,7 +480,7 @@ export default function LiveShowRunner() {
               <p className="font-metadata-mono text-[11px] text-on-surface-variant mb-1.5 flex items-center gap-2">
                 {refLabel(previewRef)}
                 {previewSplit && (
-                  <span className="px-1.5 text-on-surface-variant neu-sm rounded-lg">
+                  <span className="px-1.5 text-on-surface-variant ctl rounded-lg">
                     {previewPart + 1}/{previewParts.length}
                   </span>
                 )}
@@ -493,7 +493,7 @@ export default function LiveShowRunner() {
               <button
                 onClick={goLive}
                 disabled={sameRef(previewRef, currentRef) && previewPart === versePart}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-DEFAULT accent-raised font-body-ui text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-DEFAULT btn-primary font-body-ui text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
                 title="Send the previewed verse live (Enter)"
               >
                 <span className="material-symbols-outlined text-[18px]">play_arrow</span>
@@ -502,7 +502,7 @@ export default function LiveShowRunner() {
               <button
                 onClick={goBack}
                 disabled={liveHistory.length === 0}
-                className="flex items-center gap-1.5 px-3 py-2.5 text-on-surface font-body-ui text-[13px] disabled:opacity-40 disabled:cursor-not-allowed transition-opacity neu-sm rounded-lg"
+                className="flex items-center gap-1.5 px-3 py-2.5 text-on-surface font-body-ui text-[13px] disabled:opacity-40 disabled:cursor-not-allowed transition-opacity ctl rounded-lg"
                 title="Return to the previously-live verse (Backspace)"
               >
                 <span className="material-symbols-outlined text-[18px]">undo</span>

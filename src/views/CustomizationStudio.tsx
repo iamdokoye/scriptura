@@ -205,19 +205,19 @@ export default function CustomizationStudio() {
               Design once, then apply a readable Scripture layout live or make it the default for every service.
             </p>
           </div>
-          <button onClick={beginNewTheme} className="shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-DEFAULT accent-raised font-body-ui text-[13px] hover:opacity-90">
+          <button onClick={beginNewTheme} className="shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-DEFAULT btn-primary font-body-ui text-[13px] hover:opacity-90">
             <span className="material-symbols-outlined text-[18px]">add</span>
             New theme
           </button>
         </header>
 
         <div className="flex-1 min-h-0 grid grid-cols-[250px_minmax(0,1fr)] gap-3 overflow-hidden">
-          <aside className="neu rounded-3xl overflow-y-auto p-4 space-y-3">
+          <aside className="panel rounded-3xl overflow-y-auto p-4 space-y-3">
             <p className="px-2 pt-1 font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant">Theme library</p>
             {presentationThemes.map((theme) => {
               const active = theme.id === selectedId;
               return (
-                <button key={theme.id} onClick={() => chooseTheme(theme)} className={`w-full text-left p-2.5 rounded-xl transition-colors ${active ? "neu-selected" : "neu-sm"}`}>
+                <button key={theme.id} onClick={() => chooseTheme(theme)} className={`w-full text-left p-2.5 rounded-xl transition-colors ${active ? "row-selected" : "ctl"}`}>
                   <div className="h-9 rounded mb-2 border border-white/10" style={{ background: theme.background_gradient || theme.background_color }} />
                   <div className="flex items-center gap-1.5">
                     <span className="font-body-ui text-[13px] font-medium text-on-surface truncate">{theme.name}</span>
@@ -229,7 +229,7 @@ export default function CustomizationStudio() {
             })}
           </aside>
 
-          <div className="min-w-0 overflow-y-auto p-6 lg:p-8 neu rounded-3xl">
+          <div className="min-w-0 overflow-y-auto p-6 lg:p-8 panel rounded-3xl">
             <div className="grid xl:grid-cols-[minmax(300px,440px)_minmax(360px,1fr)] gap-8 max-w-6xl">
               <section className="space-y-5">
                 <div className="flex items-center justify-between gap-3">
@@ -266,7 +266,7 @@ export default function CustomizationStudio() {
                   <label className="block">
                     <span className="field-label">Text alignment</span>
                     <div className="flex gap-1">
-                      {(["left", "center", "right"] as const).map((text_align) => <button key={text_align} onClick={() => setDraft({ ...draft, text_align })} className={`flex-1 py-1.5 rounded-DEFAULT text-[12px] capitalize ${draft.text_align === text_align ? "accent-raised" : "neu-sm text-on-surface-variant"}`}>{text_align}</button>)}
+                      {(["left", "center", "right"] as const).map((text_align) => <button key={text_align} onClick={() => setDraft({ ...draft, text_align })} className={`flex-1 py-1.5 rounded-DEFAULT text-[12px] capitalize ${draft.text_align === text_align ? "btn-primary" : "ctl text-on-surface-variant"}`}>{text_align}</button>)}
                     </div>
                   </label>
                   <label className="flex items-end gap-2 pb-1.5 cursor-pointer">
@@ -287,7 +287,7 @@ export default function CustomizationStudio() {
                           const vertical = draft.reference_position.split("-")[0] ?? "bottom";
                           return (
                             <button key={align} onClick={() => setDraft({ ...draft, reference_position: `${vertical}-${align}` as PresentationThemeInput["reference_position"] })}
-                              className={`flex-1 py-1.5 rounded-DEFAULT text-[12px] capitalize ${active ? "accent-raised" : "neu-sm text-on-surface-variant"}`}>
+                              className={`flex-1 py-1.5 rounded-DEFAULT text-[12px] capitalize ${active ? "btn-primary" : "ctl text-on-surface-variant"}`}>
                               {align}
                             </button>
                           );
@@ -303,7 +303,7 @@ export default function CustomizationStudio() {
                           const horizontal = draft.reference_position.split("-")[1] ?? "center";
                           return (
                             <button key={vert} onClick={() => setDraft({ ...draft, reference_position: `${vert}-${horizontal}` as PresentationThemeInput["reference_position"] })}
-                              className={`flex-1 py-1.5 rounded-DEFAULT text-[12px] capitalize ${active ? "accent-raised" : "neu-sm text-on-surface-variant"}`}>
+                              className={`flex-1 py-1.5 rounded-DEFAULT text-[12px] capitalize ${active ? "btn-primary" : "ctl text-on-surface-variant"}`}>
                               {vert}
                             </button>
                           );
@@ -333,9 +333,9 @@ export default function CustomizationStudio() {
                 {message && <p className="rounded-DEFAULT px-3 py-2 bg-surface-container-low text-on-surface-variant font-body-ui text-[12px]">{message}</p>}
 
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <button onClick={save} disabled={saving} className="px-3.5 py-2 rounded-DEFAULT accent-raised font-body-ui text-[13px] disabled:opacity-60">{saving ? "Saving…" : "Save theme"}</button>
+                  <button onClick={save} disabled={saving} className="px-3.5 py-2 rounded-DEFAULT btn-primary font-body-ui text-[13px] disabled:opacity-60">{saving ? "Saving…" : "Save theme"}</button>
                   {!newTheme && <button onClick={() => setActivePresentationTheme(selectedTheme)} className="px-3.5 py-2 rounded-DEFAULT bg-secondary-container text-on-secondary-container font-body-ui text-[13px]">Use live</button>}
-                  {!newTheme && !selectedTheme?.is_default && <button onClick={makeDefault} disabled={saving} className="px-3.5 py-2 text-on-surface font-body-ui text-[13px] neu-sm rounded-lg">Make default</button>}
+                  {!newTheme && !selectedTheme?.is_default && <button onClick={makeDefault} disabled={saving} className="px-3.5 py-2 text-on-surface font-body-ui text-[13px] ctl rounded-lg">Make default</button>}
                   {/* Delete stays available even for the active/default theme —
                       only the built-in Midnight theme is permanently protected.
                       Deleting the active theme falls back to Midnight (see
@@ -345,7 +345,7 @@ export default function CustomizationStudio() {
                       <div className="flex items-center gap-1.5">
                         <span className="font-body-ui text-[12px] text-on-surface-variant">Delete this theme?</span>
                         <button onClick={remove} disabled={saving} className="px-2.5 py-1.5 rounded-DEFAULT bg-error text-on-error font-body-ui text-[12px] disabled:opacity-60">{saving ? "Deleting…" : "Yes, delete"}</button>
-                        <button onClick={() => setConfirmingDelete(false)} disabled={saving} className="px-2.5 py-1.5 text-on-surface font-body-ui text-[12px] neu-sm rounded-lg">Cancel</button>
+                        <button onClick={() => setConfirmingDelete(false)} disabled={saving} className="px-2.5 py-1.5 text-on-surface font-body-ui text-[12px] ctl rounded-lg">Cancel</button>
                       </div>
                     ) : (
                       <button onClick={remove} disabled={saving} className="px-2.5 py-2 rounded-DEFAULT text-error hover:bg-error-container/30" title="Delete theme"><span className="material-symbols-outlined text-[18px]">delete</span></button>
@@ -361,7 +361,7 @@ export default function CustomizationStudio() {
                 </div>
                 <LayoutPreview preview={preview} background={previewBackground} showGrid={showGrid} onChange={setDraft} />
                 <AccessibilityChecker theme={preview} />
-                <div className="mt-4 p-4 neu-sm rounded-xl">
+                <div className="mt-4 p-4 ctl rounded-xl">
                   <p className="font-body-ui text-[13px] text-on-surface font-medium">How this applies</p>
                   <p className="font-body-ui text-[12px] leading-relaxed text-on-surface-variant mt-1.5">“Use live” applies the selected theme immediately to the presentation window. “Make default” applies it to future sessions too. Current verse context and reading controls remain independent.</p>
                 </div>
@@ -520,7 +520,7 @@ function contrastRatio(a: string, b: string) {
 }
 
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label className="block"><span className="field-label">{label}</span><div className="flex gap-2"><input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="w-10 h-9 p-1 neu-sm rounded-xl" /><input value={value} onChange={(e) => onChange(e.target.value)} className="field-input min-w-0 font-metadata-mono text-[11px]" /></div></label>;
+  return <label className="block"><span className="field-label">{label}</span><div className="flex gap-2"><input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="w-10 h-9 p-1 ctl rounded-xl" /><input value={value} onChange={(e) => onChange(e.target.value)} className="field-input min-w-0 font-metadata-mono text-[11px]" /></div></label>;
 }
 
 function RangeField({ label, value, min, max, step, format, onChange }: { label: string; value: number; min: number; max: number; step: number; format: (value: number) => string; onChange: (value: number) => void }) {

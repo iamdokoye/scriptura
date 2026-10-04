@@ -99,7 +99,7 @@ export default function ModuleManager() {
     <div className="flex flex-1 overflow-hidden">
       <SideNav variant="full" />
 
-      <main className="flex-1 flex flex-col overflow-hidden neu rounded-3xl m-3">
+      <main className="flex-1 flex flex-col overflow-hidden panel rounded-3xl m-3">
         {/* Header */}
         <div className="p-6 shrink-0">
           <h1 className="font-display-lg text-display-lg text-on-surface mb-1">Module Library</h1>
@@ -117,7 +117,7 @@ export default function ModuleManager() {
                 onClick={() => setTab(t)}
                 className={`px-4 py-1.5 rounded-DEFAULT font-body-ui text-body-ui capitalize transition-colors ${
                   tab === t
-                    ? "accent-raised"
+                    ? "btn-primary"
                     : "text-secondary hover:bg-surface-container-low"
                 }`}
               >
@@ -133,7 +133,7 @@ export default function ModuleManager() {
                 className={`px-3 py-1 rounded-DEFAULT font-metadata-mono text-metadata-mono text-[11px] transition-colors ${
                   category === cat
                     ? "bg-secondary-container text-on-secondary-container"
-                    : "neu-sm text-on-surface-variant"
+                    : "ctl text-on-surface-variant"
                 }`}
               >
                 {cat}
@@ -143,7 +143,7 @@ export default function ModuleManager() {
           <div className="relative ml-auto">
             <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
             <input
-              className="pl-8 pr-3 py-1.5 focus:outline-none font-body-ui text-body-ui w-56 transition-colors neu-inset-sm rounded-lg focus:ring-2 focus:ring-primary/50"
+              className="pl-8 pr-3 py-1.5 focus:outline-none font-body-ui text-body-ui w-56 transition-colors field rounded-lg"
               placeholder="Filter modules…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -169,13 +169,13 @@ export default function ModuleManager() {
                 const isInstalling = state?.status === "downloading" || state?.status === "indexing";
                 const isDone = state?.status === "done" || m.installed;
                 return (
-                  <div key={m.id} className="p-4 flex items-start gap-4 neu-sm rounded-xl">
+                  <div key={m.id} className="p-4 flex items-start gap-4 ctl rounded-xl">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-body-ui text-body-ui font-semibold text-on-surface">{m.name}</h3>
                         <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-surface-container text-on-surface-variant rounded-DEFAULT">{m.category}</span>
                         {m.source && (
-                          <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 text-on-surface-variant/70 neu-inset-sm rounded-md">{m.source}</span>
+                          <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 text-on-surface-variant/70 field rounded-md">{m.source}</span>
                         )}
                         {m.requires_key && (
                           <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-error-container text-on-error-container rounded-DEFAULT">Requires key</span>
@@ -205,7 +205,7 @@ export default function ModuleManager() {
                           ? "bg-surface-container text-on-surface-variant cursor-default"
                           : isInstalling
                           ? "bg-surface-container text-on-surface-variant cursor-wait"
-                          : "accent-raised"
+                          : "btn-primary"
                       }`}
                     >
                       {isDone ? "Installed" : isInstalling ? (state.status === "indexing" ? "Indexing…" : "Downloading…") : "Install"}
@@ -227,7 +227,7 @@ export default function ModuleManager() {
               <strong>{cipherModal.name}</strong> requires a license key to install.
             </p>
             <input
-              className="w-full px-3 py-2 font-metadata-mono text-body-ui focus:outline-none mb-4 neu-inset-sm rounded-lg focus:ring-2 focus:ring-primary/50"
+              className="w-full px-3 py-2 font-metadata-mono text-body-ui focus:outline-none mb-4 field rounded-lg"
               placeholder="Cipher key"
               value={cipherKey}
               onChange={(e) => setCipherKey(e.target.value)}
@@ -237,7 +237,7 @@ export default function ModuleManager() {
               <button onClick={() => { setCipherModal(null); setCipherKey(""); }} className="px-4 py-2 text-secondary font-body-ui text-body-ui hover:bg-surface-container-low rounded-DEFAULT">
                 Cancel
               </button>
-              <button onClick={installWithKey} disabled={!cipherKey.trim()} className="px-4 py-2 accent-raised font-body-ui text-body-ui rounded-DEFAULT hover:bg-primary-container disabled:opacity-50">
+              <button onClick={installWithKey} disabled={!cipherKey.trim()} className="px-4 py-2 btn-primary font-body-ui text-body-ui rounded-DEFAULT hover:bg-primary-container disabled:opacity-50">
                 Install
               </button>
             </div>
