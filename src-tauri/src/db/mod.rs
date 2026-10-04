@@ -434,16 +434,19 @@ impl Database {
 
         // Resolve which books to restrict to, if any.
         // Explicit book_filter takes priority; testament is a shorthand for the full list.
-        let effective_books: Option<Vec<String>> =
-            if let Some(ref bf) = options.book_filter {
-                if bf.is_empty() { None } else { Some(bf.clone()) }
+        let effective_books: Option<Vec<String>> = if let Some(ref bf) = options.book_filter {
+            if bf.is_empty() {
+                None
             } else {
-                match options.testament.as_deref() {
-                    Some("OT") => Some(BOOK_NAMES[..39].iter().map(|s| s.to_string()).collect()),
-                    Some("NT") => Some(BOOK_NAMES[39..].iter().map(|s| s.to_string()).collect()),
-                    _ => None,
-                }
-            };
+                Some(bf.clone())
+            }
+        } else {
+            match options.testament.as_deref() {
+                Some("OT") => Some(BOOK_NAMES[..39].iter().map(|s| s.to_string()).collect()),
+                Some("NT") => Some(BOOK_NAMES[39..].iter().map(|s| s.to_string()).collect()),
+                _ => None,
+            }
+        };
 
         let book_clause = if let Some(ref books) = effective_books {
             let base = options.modules.len() + 2; // ?1=query, ?2..?{n+1}=modules
