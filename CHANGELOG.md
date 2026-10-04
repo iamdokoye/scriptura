@@ -2,6 +2,15 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
+## [0.1.29] - 2026-10-04
+
+### Added
+- The Live Show verse list now scrolls to the verse you select, whether you typed a reference, picked a word-search result, used the arrow keys or chose a queue item. It eases into place instead of jumping, and unfolding a split verse brings its parts into view.
+
+### Fixed
+- Text looked cramped with Strong's on. Line height now grows while Strong's is shown, and the dashed underlines sit lower and are softer.
+- A Live Show panel could start collapsed if its saved size came from a window that hadn't been laid out yet. Panel sizes are now kept within their limits.
+
 ## [0.1.28] - 2026-10-04
 
 ### Added
