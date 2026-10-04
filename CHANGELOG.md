@@ -2,6 +2,15 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
+## [0.1.28] - 2026-10-04
+
+### Added
+- Light/dark mode toggle in the presentation top bar, next to Settings. It uses the same saved theme setting as Settings.
+
+### Fixed
+- Word search returned nothing for words with an apostrophe, such as "king's". Searches now split words the way the index does, and symbols like `-` or `:` in a search can no longer break it. Hyphenated words now match too.
+- Split verses lost their Strong's tagging in the Live Show verse list and Preview. Each part now keeps the Strong's numbers, italics and headings of the words it covers.
+
 ## [0.1.27] - 2026-10-04
 
 ### Added
