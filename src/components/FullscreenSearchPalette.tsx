@@ -103,18 +103,18 @@ export default function FullscreenSearchPalette({ isOpen, onClose }: Props) {
       onClick={onClose}
     >
       {/* Backdrop */}
-      <div className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-200 ${visible ? "opacity-100" : "opacity-0"}`} />
+      <div className={`absolute inset-0 bg-black/25 backdrop-blur-sm transition-opacity duration-200 ${visible ? "opacity-100" : "opacity-0"}`} />
 
       {/* Palette */}
       <div
-        className={`relative w-full max-w-2xl mx-4 bg-surface rounded-2xl shadow-2xl border border-outline-variant flex flex-col overflow-hidden transition-all duration-200 ${
+        className={`relative w-full max-w-2xl mx-4 flex flex-col overflow-hidden transition-all duration-200 glass rounded-3xl ${
           visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"
         }`}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         {/* Input row */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-outline-variant">
+        <div className="flex items-center gap-3 px-4 py-3.5 ">
           <span className="material-symbols-outlined text-[20px] text-secondary shrink-0">search</span>
           <input
             ref={inputRef}
@@ -126,7 +126,7 @@ export default function FullscreenSearchPalette({ isOpen, onClose }: Props) {
           {loading && (
             <span className="material-symbols-outlined text-[18px] text-secondary animate-spin shrink-0">progress_activity</span>
           )}
-          <kbd className="text-[10px] font-metadata-mono text-on-surface-variant border border-outline-variant rounded px-1.5 py-0.5 shrink-0">Esc</kbd>
+          <kbd className="text-[10px] font-metadata-mono text-on-surface-variant px-1.5 py-0.5 shrink-0 neu-inset-sm rounded-md">Esc</kbd>
         </div>
 
         {/* Scope bar */}

@@ -37,8 +37,8 @@ export default function BookmarksNotes() {
     <div className="flex flex-1 overflow-hidden">
       <SideNav variant="full" />
 
-      <main className="flex-1 flex flex-col overflow-hidden bg-background">
-        <div className="p-6 border-b border-outline-variant bg-surface shrink-0">
+      <main className="flex-1 flex flex-col overflow-hidden neu rounded-3xl m-3">
+        <div className="p-6 shrink-0">
           <h1 className="font-display-lg text-display-lg text-on-surface mb-4">
             {view === "bookmarks" ? "Bookmarks" : "Notes"}
           </h1>
@@ -49,7 +49,7 @@ export default function BookmarksNotes() {
                 onClick={() => setTab(t)}
                 className={`px-4 py-1.5 rounded-DEFAULT font-body-ui text-body-ui capitalize transition-colors ${
                   tab === t
-                    ? "bg-primary text-on-primary"
+                    ? "accent-raised"
                     : "text-secondary hover:bg-surface-container-low"
                 }`}
               >
@@ -75,7 +75,7 @@ export default function BookmarksNotes() {
                 {bookmarks.map((b) => (
                   <div
                     key={b.id}
-                    className="border border-outline-variant rounded-DEFAULT bg-surface p-4 flex items-start gap-3 hover:border-primary transition-colors group"
+                    className="p-4 flex items-start gap-3 transition-colors group neu-sm rounded-xl"
                   >
                     <div className="flex-1 cursor-pointer" onClick={() => goTo(b.book, b.chapter, b.verse)}>
                       <span className="font-metadata-mono text-metadata-mono text-secondary font-bold block mb-1">
@@ -106,7 +106,7 @@ export default function BookmarksNotes() {
             ) : (
               <div className="space-y-3">
                 {notes.map((n) => (
-                  <div key={n.id} className="border border-outline-variant rounded-DEFAULT bg-surface p-4 group">
+                  <div key={n.id} className="p-4 group neu-sm rounded-xl">
                     <div className="flex items-start justify-between mb-2">
                       <span className="font-metadata-mono text-metadata-mono text-secondary font-bold">
                         {n.book} {n.chapter}{n.verse != null ? `:${n.verse}` : ""}
@@ -138,7 +138,7 @@ function EmptyState({ icon, message, cta, onCta }: { icon: string; message: stri
       <p className="font-body-ui text-body-ui text-on-surface-variant max-w-xs mb-6">{message}</p>
       <button
         onClick={onCta}
-        className="px-6 py-2 bg-primary text-on-primary font-body-ui text-body-ui rounded-DEFAULT hover:bg-primary-container transition-colors"
+        className="px-6 py-2 accent-raised font-body-ui text-body-ui rounded-DEFAULT hover:bg-primary-container transition-colors"
       >
         {cta}
       </button>

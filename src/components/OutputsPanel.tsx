@@ -24,7 +24,7 @@ export default function OutputsPanel({ output, onClose }: Props) {
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 z-50 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg min-w-[240px] overflow-hidden"
+      className="absolute right-0 top-full mt-1 z-50 glass rounded-xl min-w-[240px] overflow-hidden"
     >
       <div className="px-3 py-1.5 bg-surface-container-low border-b border-outline-variant">
         <span className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest">Present on…</span>

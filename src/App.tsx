@@ -127,7 +127,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-background text-on-background font-body-ui text-body-ui selection:bg-secondary-container selection:text-on-secondary-container">
+    <div className="h-screen flex flex-col overflow-hidden ambient text-on-background font-body-ui text-body-ui selection:bg-secondary-container selection:text-on-secondary-container">
       {!isFullscreen && (presenting ? <PresentationTopBar /> : <TopBar />)}
 
       <div className="relative flex flex-1 overflow-hidden">
@@ -177,7 +177,7 @@ export default function App() {
             onClick={() => setServiceOrderOpen(false)}
           >
             <div
-              className={`w-[300px] h-full transition-transform duration-200 ease-in-out ${serviceOrderOpen ? "translate-x-0" : "translate-x-full"}`}
+              className={`w-[324px] p-3 h-full transition-transform duration-200 ease-in-out ${serviceOrderOpen ? "translate-x-0" : "translate-x-full"}`}
               onClick={(e) => e.stopPropagation()}
             >
               <ServiceOrderPanel />

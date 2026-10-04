@@ -116,7 +116,7 @@ export function ParallelPane({ chapter, onStrongsClick, showStrongs, readingFont
   return (
     <div ref={scrollContainerRef as React.RefObject<HTMLDivElement>} className="flex-1 overflow-y-auto">
       <div className="max-w-[1100px] mx-auto w-full py-8 space-y-4" style={{ paddingLeft: horizPadding, paddingRight: horizPadding }}>
-        <h2 className="font-headline-md text-headline-md text-primary mb-4 border-b border-outline-variant pb-2">
+        <h2 className="font-headline-md text-headline-md text-primary mb-4 pb-2">
           {chapter.module_id}
         </h2>
         {chapter.verses.map((v) => (
@@ -185,15 +185,15 @@ export const VerseRow = memo(function VerseRow({
   return (
     <div
       data-verse={verse}
-      className={`verse-container relative group flex gap-3 p-verse-padding rounded-DEFAULT transition-colors cursor-pointer ${
+      className={`verse-container relative group flex gap-3 p-verse-padding rounded-lg transition-colors cursor-pointer ${
         active
-          ? "bg-surface-container-lowest border border-outline-variant shadow-[0_2px_8px_rgba(0,0,0,0.02)]"
-          : "hover:bg-surface-container-low"
+          ? "neu-inset-sm bg-primary/5 ring-1 ring-primary/25"
+          : "hover:bg-on-surface/[0.03]"
       }`}
       onClick={onVerseClick}
     >
       <span
-        className={`font-verse-number text-verse-number mt-2 w-6 text-right select-none shrink-0 ${
+        className={`font-verse-number text-verse-number mt-1.5 h-6 w-6 grid place-items-center rounded-full neu-inset-sm select-none shrink-0 ${
           active ? "text-primary font-bold" : "text-secondary"
         }`}
       >
@@ -273,7 +273,7 @@ export const VerseRow = memo(function VerseRow({
         )}
       </div>
 
-      <div className="verse-actions absolute -right-2 top-2 opacity-0 pointer-events-none flex flex-col gap-1 bg-surface border border-outline-variant shadow-sm rounded p-1 transition-opacity z-10">
+      <div className="verse-actions absolute -right-2 top-2 opacity-0 pointer-events-none flex flex-col gap-1 glass rounded-lg p-1 transition-opacity z-10">
         <button className="p-1 text-secondary hover:text-primary hover:bg-secondary-container rounded" title="Copy">
           <span className="material-symbols-outlined text-[16px]">content_copy</span>
         </button>

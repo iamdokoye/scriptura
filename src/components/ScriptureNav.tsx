@@ -157,7 +157,7 @@ export default function ScriptureNav({ inputRef, baseRef, onNavigate, placeholde
       </span>
       <input
         ref={inputRef}
-        className="w-full pl-8 pr-3 py-1 bg-surface-container-low border border-outline-variant rounded-DEFAULT focus:outline-none focus:border-primary text-body-ui font-body-ui transition-colors placeholder:text-on-surface-variant"
+        className="w-full pl-8 pr-3 py-1 focus:outline-none text-body-ui font-body-ui transition-colors placeholder:text-on-surface-variant neu-inset-sm rounded-lg focus:ring-2 focus:ring-primary/50"
         placeholder={placeholder ?? "Go to… jn 3:16 or v5  (Ctrl+L)"}
         value={value}
         onChange={(e) => { setValue(e.target.value); setOpen(true); }}
@@ -170,7 +170,7 @@ export default function ScriptureNav({ inputRef, baseRef, onNavigate, placeholde
 
       {/* Book suggestion dropdown */}
       {showDropdown && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg z-[200] overflow-hidden">
+        <div className="absolute top-full left-0 right-0 mt-1 glass rounded-xl z-[200] overflow-hidden">
           {suggestions.slice(0, 6).map((book, i) => (
             <button
               key={book}
@@ -194,7 +194,7 @@ export default function ScriptureNav({ inputRef, baseRef, onNavigate, placeholde
 
       {/* Resolved reference preview (book confirmed, chapter known) */}
       {previewText && !showDropdown && open && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-outline-variant rounded-DEFAULT shadow-sm z-[200] px-3 py-1.5 flex items-center gap-2">
+        <div className="absolute top-full left-0 right-0 mt-1 z-[200] px-3 py-1.5 flex items-center gap-2 glass rounded-2xl">
           <span className="material-symbols-outlined text-[14px] text-primary">arrow_forward</span>
           <span className="font-body-ui text-body-ui text-primary">{previewText}</span>
           <kbd className="font-metadata-mono text-[10px] text-secondary ml-auto bg-surface-container px-1.5 py-0.5 rounded">

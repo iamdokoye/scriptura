@@ -58,9 +58,9 @@ export default function ServiceOrderPanel() {
   const empty = serviceOrder.length === 0;
 
   return (
-    <aside className="w-[300px] shrink-0 border-l border-outline-variant bg-surface-container-lowest flex flex-col h-full overflow-hidden">
+    <aside className="w-full glass rounded-3xl flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-[18px] text-primary">queue_play_next</span>
           <span className="font-headline-sm text-headline-sm text-on-surface">Service Queue</span>
@@ -128,7 +128,7 @@ export default function ServiceOrderPanel() {
       </div>
 
       {/* Footer */}
-      <div className="shrink-0 px-4 py-3 border-t border-outline-variant space-y-2">
+      <div className="shrink-0 px-4 py-3 space-y-2">
         <div className="flex items-center justify-between">
           <span className="font-metadata-mono text-[11px] text-on-surface-variant">
             {serviceOrder.length} {serviceOrder.length === 1 ? "verse" : "verses"}
@@ -152,10 +152,10 @@ export default function ServiceOrderPanel() {
           disabled={empty}
           onClick={() => { setView("live"); setServiceOrderOpen(false); }}
           title="Open the Live Show console with this queue"
-          className={`w-full py-2.5 rounded-DEFAULT font-body-ui text-[13px] font-semibold transition-colors flex items-center justify-center gap-2 ${
+          className={`w-full py-2.5 rounded-lg font-body-ui text-[13px] font-semibold transition-colors flex items-center justify-center gap-2 ${
             empty
-              ? "bg-surface-container text-on-surface-variant cursor-not-allowed"
-              : "bg-primary text-on-primary hover:opacity-90"
+              ? "neu-inset-sm text-on-surface-variant cursor-not-allowed"
+              : "accent-raised"
           }`}
         >
           <span className="material-symbols-outlined text-[18px]">slideshow</span>
@@ -205,11 +205,11 @@ function ServiceCard({
       onPointerEnter={onPointerEnter}
       className={`group relative mx-2 mb-1 rounded-DEFAULT border transition-all ${
         isDragging
-          ? "opacity-40 border-primary bg-surface-container"
+          ? "opacity-40 neu-selected"
           : isOver
-          ? "border-primary bg-primary/5"
+          ? "neu-selected"
           : active
-          ? "border-primary bg-primary/8"
+          ? "neu-selected"
           : "border-transparent bg-surface hover:bg-surface-container-low border-outline-variant/0 hover:border-outline-variant/50"
       }`}
     >

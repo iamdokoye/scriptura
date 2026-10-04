@@ -22,133 +22,232 @@
    ──────────────────────────────────────────────────────────────────────── */
 
 :root {
+  /* Neumorphic base — every raised/inset surface shares the page tone and
+     differs only by its dual shadow (see .neu / .neu-inset below). */
+  --shadow-light: #ffffff;
+  --shadow-dark:  #b8c0cf;
+  --neu-edge:     rgba(255, 255, 255, 0.4);
+  --glass-bg:     rgba(255, 255, 255, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.35);
+  --glass-shadow: 0 20px 50px rgba(31, 38, 51, 0.12);
+  --blob-1: rgba(79, 91, 213, 0.28);
+  --blob-2: rgba(123, 92, 224, 0.22);
+  --blob-3: rgba(201, 162, 75, 0.2);
+  --gradient-accent: linear-gradient(135deg, #4f5bd5, #7b5ce0);
+  --accent-glow: rgba(79, 91, 213, 0.35);
+
   /* Surfaces */
-  --col-background:                250 248 255;  /* #faf8ff */
-  --col-surface:                   250 248 255;
-  --col-surface-variant:           218 226 253;  /* #dae2fd */
-  --col-surface-dim:               210 217 244;  /* #d2d9f4 */
-  --col-surface-bright:            250 248 255;
-  --col-surface-container-lowest:  255 255 255;  /* #ffffff */
-  --col-surface-container-low:     242 243 255;  /* #f2f3ff */
-  --col-surface-container:         234 237 255;  /* #eaedff */
-  --col-surface-container-high:    226 231 255;  /* #e2e7ff */
-  --col-surface-container-highest: 218 226 253;  /* #dae2fd */
-  --col-surface-tint:              48 104 85;    /* #306855 */
+  --col-background:                230 234 241;  /* #e6eaf1 */
+  --col-surface:                   230 234 241;
+  --col-surface-variant:           212 217 228;
+  --col-surface-dim:               208 214 225;
+  --col-surface-bright:            236 239 246;
+  --col-surface-container-lowest:  238 241 247;
+  --col-surface-container-low:     233 237 244;
+  --col-surface-container:         226 230 238;
+  --col-surface-container-high:    219 224 233;
+  --col-surface-container-highest: 212 217 228;
+  --col-surface-tint:              79 91 213;
 
   /* On-surface */
-  --col-on-surface:                19 27 46;     /* #131b2e */
-  --col-on-surface-variant:        64 73 68;     /* #404944 */
-  --col-on-background:             19 27 46;
+  --col-on-surface:                31 38 51;     /* #1f2633 */
+  --col-on-surface-variant:        91 101 119;   /* #5b6577 */
+  --col-on-background:             31 38 51;
 
-  /* Borders */
-  --col-outline:                   112 121 116;  /* #707974 */
-  --col-outline-variant:           191 201 195;  /* #bfc9c3 */
+  /* Borders — hairlines only; depth comes from shadows */
+  --col-outline:                   130 139 156;
+  --col-outline-variant:           205 211 223;
 
   /* Inverse */
-  --col-inverse-surface:           40 48 68;     /* #283044 */
-  --col-inverse-on-surface:        238 240 255;  /* #eef0ff */
-  --col-inverse-primary:           153 211 186;  /* #99d3ba */
+  --col-inverse-surface:           40 46 62;
+  --col-inverse-on-surface:        236 239 246;
+  --col-inverse-primary:           170 178 255;
 
-  /* Primary (forest green) */
-  --col-primary:                   0 52 38;      /* #003426 */
+  /* Primary (sapphire) */
+  --col-primary:                   79 91 213;    /* #4f5bd5 */
   --col-on-primary:                255 255 255;
-  --col-primary-container:         15 76 58;     /* #0f4c3a */
-  --col-on-primary-container:      130 187 164;  /* #82bba4 */
-  --col-primary-fixed:             180 239 214;  /* #b4efd6 */
-  --col-primary-fixed-dim:         153 211 186;  /* #99d3ba */
-  --col-on-primary-fixed:          0 33 23;      /* #002117 */
-  --col-on-primary-fixed-variant:  21 80 62;     /* #15503e */
+  --col-primary-container:         123 92 224;   /* violet end of the accent gradient */
+  --col-on-primary-container:      255 255 255;
+  --col-primary-fixed:             224 227 250;
+  --col-primary-fixed-dim:         190 196 245;
+  --col-on-primary-fixed:          28 34 110;
+  --col-on-primary-fixed-variant:  60 70 180;
 
-  /* Secondary (slate blue-gray) */
-  --col-secondary:                 82 96 111;    /* #52606f */
+  /* Secondary (slate text / accent-tinted selected state) */
+  --col-secondary:                 91 101 119;
   --col-on-secondary:              255 255 255;
-  --col-secondary-container:       210 225 244;  /* #d2e1f4 */
-  --col-on-secondary-container:    86 100 116;   /* #566474 */
-  --col-secondary-fixed:           213 228 246;  /* #d5e4f6 */
-  --col-secondary-fixed-dim:       185 200 218;  /* #b9c8da */
-  --col-on-secondary-fixed:        14 29 42;     /* #0e1d2a */
-  --col-on-secondary-fixed-variant: 58 72 87;    /* #3a4857 */
+  --col-secondary-container:       218 222 246;
+  --col-on-secondary-container:    60 70 180;
+  --col-secondary-fixed:           222 226 240;
+  --col-secondary-fixed-dim:       190 197 214;
+  --col-on-secondary-fixed:        31 38 51;
+  --col-on-secondary-fixed-variant: 70 80 98;
 
-  /* Tertiary (deep navy) */
-  --col-tertiary:                  30 46 66;     /* #1e2e42 */
+  /* Tertiary */
+  --col-tertiary:                  40 46 62;
   --col-on-tertiary:               255 255 255;
-  --col-tertiary-container:        52 68 89;     /* #344459 */
-  --col-on-tertiary-container:     161 177 202;  /* #a1b1ca */
-  --col-tertiary-fixed:            211 228 254;  /* #d3e4fe */
-  --col-tertiary-fixed-dim:        183 200 225;  /* #b7c8e1 */
-  --col-on-tertiary-fixed:         11 28 48;     /* #0b1c30 */
-  --col-on-tertiary-fixed-variant: 56 72 93;     /* #38485d */
+  --col-tertiary-container:        62 70 92;
+  --col-on-tertiary-container:     200 207 224;
+  --col-tertiary-fixed:            222 226 240;
+  --col-tertiary-fixed-dim:        190 197 214;
+  --col-on-tertiary-fixed:         31 38 51;
+  --col-on-tertiary-fixed-variant: 70 80 98;
 
-  /* Error */
-  --col-error:                     186 26 26;    /* #ba1a1a */
+  /* Error / live */
+  --col-error:                     229 72 77;    /* #e5484d */
   --col-on-error:                  255 255 255;
-  --col-error-container:           255 218 214;  /* #ffdad6 */
-  --col-on-error-container:        147 0 10;     /* #93000a */
+  --col-error-container:           252 228 229;
+  --col-on-error-container:        160 30 36;
+
+  /* Warm secondary accent — bookmarks, Strong's numbers */
+  --col-gold:                      160 124 37;
 }
 
-/* Dark mode — override only the tokens that differ */
 .dark {
-  /* Surfaces */
-  --col-background:                15 20 25;     /* #0f1419 */
-  --col-surface:                   15 20 25;
-  --col-surface-variant:           40 48 68;     /* #283044 */
-  --col-surface-dim:               10 15 20;     /* #0a0f14 */
-  --col-surface-bright:            36 53 72;     /* #243548 */
-  --col-surface-container-lowest:  9 14 18;      /* #090e12 */
-  --col-surface-container-low:     20 28 39;     /* #141c27 */
-  --col-surface-container:         25 36 51;     /* #192433 */
-  --col-surface-container-high:    31 46 63;     /* #1f2e3f */
-  --col-surface-container-highest: 40 48 68;     /* #283044 */
-  --col-surface-tint:              153 211 186;  /* #99d3ba */
+  --shadow-light: #262b38;
+  --shadow-dark:  #11141b;
+  --neu-edge:     rgba(255, 255, 255, 0.05);
+  --glass-bg:     rgba(30, 34, 44, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  --blob-1: rgba(79, 91, 213, 0.25);
+  --blob-2: rgba(123, 92, 224, 0.18);
+  --blob-3: rgba(201, 162, 75, 0.1);
+  --accent-glow: rgba(123, 130, 240, 0.4);
 
-  /* On-surface */
-  --col-on-surface:                211 228 254;  /* #d3e4fe */
-  --col-on-surface-variant:        176 190 197;  /* #b0bec5 */
-  --col-on-background:             211 228 254;
+  --col-background:                27 31 42;     /* #1b1f2a */
+  --col-surface:                   27 31 42;
+  --col-surface-variant:           48 54 71;
+  --col-surface-dim:               17 20 27;
+  --col-surface-bright:            41 46 62;
+  --col-surface-container-lowest:  22 25 34;
+  --col-surface-container-low:     30 34 46;
+  --col-surface-container:         35 40 54;
+  --col-surface-container-high:    41 46 62;
+  --col-surface-container-highest: 48 54 71;
+  --col-surface-tint:              140 150 255;
 
-  /* Borders */
-  --col-outline:                   114 131 148;  /* #728394 */
-  --col-outline-variant:           58 72 87;     /* #3a4857 */
+  --col-on-surface:                232 235 242;  /* #e8ebf2 */
+  --col-on-surface-variant:        154 163 181;  /* #9aa3b5 */
+  --col-on-background:             232 235 242;
 
-  /* Inverse (swapped) */
-  --col-inverse-surface:           250 248 255;  /* #faf8ff */
-  --col-inverse-on-surface:        40 48 68;     /* #283044 */
-  --col-inverse-primary:           0 52 38;      /* #003426 */
+  --col-outline:                   110 120 140;
+  --col-outline-variant:           50 56 74;
 
-  /* Primary — mint green in dark mode */
-  --col-primary:                   153 211 186;  /* #99d3ba */
-  --col-on-primary:                0 33 23;      /* #002117 */
-  --col-primary-container:         21 80 62;     /* #15503e */
-  --col-on-primary-container:      180 239 214;  /* #b4efd6 */
+  --col-inverse-surface:           232 235 242;
+  --col-inverse-on-surface:        27 31 42;
+  --col-inverse-primary:           79 91 213;
 
-  /* Secondary — light steel in dark mode */
-  --col-secondary:                 185 200 218;  /* #b9c8da */
-  --col-on-secondary:              14 29 42;     /* #0e1d2a */
-  --col-secondary-container:       58 72 87;     /* #3a4857 */
-  --col-on-secondary-container:    213 228 246;  /* #d5e4f6 */
+  --col-primary:                   140 150 255;
+  --col-on-primary:                15 18 60;
+  --col-primary-container:         123 92 224;
+  --col-on-primary-container:      255 255 255;
+  --col-primary-fixed:             48 54 100;
+  --col-primary-fixed-dim:         70 78 150;
+  --col-on-primary-fixed:          224 227 250;
+  --col-on-primary-fixed-variant:  190 196 245;
 
-  /* Tertiary — steel blue in dark mode */
-  --col-tertiary:                  183 200 225;  /* #b7c8e1 */
-  --col-on-tertiary:               11 28 48;     /* #0b1c30 */
-  --col-tertiary-container:        30 46 66;     /* #1e2e42 */
-  --col-on-tertiary-container:     211 228 254;  /* #d3e4fe */
+  --col-secondary:                 154 163 181;
+  --col-on-secondary:              15 18 30;
+  --col-secondary-container:       49 54 92;
+  --col-on-secondary-container:    190 197 255;
+  --col-secondary-fixed:           48 54 71;
+  --col-secondary-fixed-dim:       70 78 100;
+  --col-on-secondary-fixed:        232 235 242;
+  --col-on-secondary-fixed-variant: 190 197 214;
 
-  /* Error */
-  --col-error:                     255 180 171;  /* #ffb4ab */
-  --col-on-error:                  105 0 5;      /* #690005 */
-  --col-error-container:           147 0 10;     /* #93000a */
-  --col-on-error-container:        255 218 214;  /* #ffdad6 */
+  --col-tertiary:                  190 197 214;
+  --col-on-tertiary:               15 18 30;
+  --col-tertiary-container:        48 54 71;
+  --col-on-tertiary-container:     232 235 242;
+  --col-tertiary-fixed:            48 54 71;
+  --col-tertiary-fixed-dim:        70 78 100;
+  --col-on-tertiary-fixed:         232 235 242;
+  --col-on-tertiary-fixed-variant: 190 197 214;
+
+  --col-error:                     255 130 135;
+  --col-on-error:                  60 0 5;
+  --col-error-container:           110 28 34;
+  --col-on-error-container:        255 218 214;
+
+  --col-gold:                      201 162 75;
 }
 
 /* ── Scrollbar ─────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgb(var(--col-outline-variant)); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgb(var(--col-outline) / 0.35); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgb(var(--col-outline)); }
 
 @layer components {
+  /* ── Neumorphism: things you press ─────────────────────────────────────── */
+  .neu {
+    background: rgb(var(--col-background));
+    box-shadow: 8px 8px 16px var(--shadow-dark), -8px -8px 16px var(--shadow-light);
+    border-top: 1px solid var(--neu-edge);
+    transition: box-shadow 180ms ease, color 180ms ease;
+  }
+  .neu-sm {
+    background: rgb(var(--col-background));
+    box-shadow: 4px 4px 9px var(--shadow-dark), -4px -4px 9px var(--shadow-light);
+    transition: box-shadow 180ms ease, color 180ms ease;
+  }
+  .neu-sm:hover { box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light); }
+  .neu-sm:active { box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light); }
+  .neu-inset {
+    background: rgb(var(--col-background));
+    box-shadow: inset 6px 6px 12px var(--shadow-dark), inset -6px -6px 12px var(--shadow-light);
+  }
+  .neu-inset-sm {
+    background: rgb(var(--col-background));
+    box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+  }
+  /* Selected / pressed state for a nav or toolbar button */
+  .neu-active {
+    background: rgb(var(--col-background));
+    box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
+    color: rgb(var(--col-primary));
+  }
+  .neu-active .material-symbols-outlined { filter: drop-shadow(0 0 6px var(--accent-glow)); }
+
+  /* Selected list row / card — pressed in, with an accent hairline */
+  .neu-selected {
+    background: rgb(var(--col-background));
+    box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light), 0 0 0 1px rgb(var(--col-primary) / 0.35);
+  }
+
+  /* ── Glassmorphism: things that float ──────────────────────────────────── */
+  .glass {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+  }
+
+  /* ── Accent ────────────────────────────────────────────────────────────── */
+  .accent-raised {
+    background: var(--gradient-accent);
+    color: #fff;
+    box-shadow: 5px 5px 12px var(--shadow-dark), -5px -5px 12px var(--shadow-light), 0 0 16px var(--accent-glow);
+    transition: filter 180ms ease;
+  }
+  .accent-raised:hover { filter: brightness(1.08); }
+
+  /* Ambient blobs behind the glass so the blur has something to show. Kept
+     quiet: scripture is always printed on a calm solid surface, never on this. */
+  .ambient {
+    background:
+      radial-gradient(40% 50% at 15% 10%, var(--blob-1), transparent 70%),
+      radial-gradient(35% 45% at 90% 20%, var(--blob-2), transparent 70%),
+      radial-gradient(40% 40% at 70% 95%, var(--blob-3), transparent 70%),
+      rgb(var(--col-background));
+  }
+
   .field-label { @apply block mb-1.5 font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant; }
-  .field-input { @apply w-full h-9 px-2.5 rounded-DEFAULT border border-outline-variant bg-surface text-on-surface font-body-ui text-[13px] outline-none focus:border-primary; }
+  .field-input {
+    @apply w-full h-9 px-3 rounded-lg text-on-surface font-body-ui text-[13px] outline-none neu-inset-sm focus:ring-2 focus:ring-primary/50;
+  }
 }
 
 /* Live output uses CSS variables so a saved theme updates every Scripture

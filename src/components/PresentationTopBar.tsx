@@ -75,7 +75,7 @@ export default function PresentationTopBar() {
   }, [liveBlack, setLiveBlack, liveEmergency, setLiveEmergency, serviceOrderOpen, setServiceOrderOpen, presentationActive, setDisplayPrefs]);
 
   return (
-    <header className="flex items-center h-14 px-content-margin w-full z-50 bg-surface border-b border-outline-variant shrink-0 gap-6">
+    <header className="flex items-center h-14 px-content-margin w-full z-50 glass !rounded-none !border-x-0 !border-t-0 shrink-0 gap-6">
       <span className="font-headline-md text-headline-md font-bold text-primary select-none shrink-0">
         Scriptura
       </span>
@@ -89,8 +89,8 @@ export default function PresentationTopBar() {
       <div className="flex-1 flex items-center justify-center gap-2">
         <button
           onClick={output.toggle}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-DEFAULT font-body-ui text-[13px] font-bold transition-colors ${
-            output.presentationActive ? "bg-error text-on-error hover:bg-error/90" : "bg-surface-container-high text-on-surface hover:bg-surface-container-highest"
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-body-ui text-[13px] font-bold transition-colors ${
+            output.presentationActive ? "bg-error text-on-error shadow-[0_0_16px_rgb(var(--col-error)/0.5)]" : "neu-sm text-on-surface"
           }`}
           title={output.presentationActive ? "Stop the presentation output" : "Send output live"}
         >
@@ -99,8 +99,8 @@ export default function PresentationTopBar() {
         </button>
         <button
           onClick={() => setLiveBlack(!liveBlack)}
-          className={`px-4 py-1.5 rounded-DEFAULT font-body-ui text-[13px] font-bold transition-colors ${
-            liveBlack ? "bg-on-surface text-surface" : "bg-surface-container-high text-on-surface hover:bg-surface-container-highest"
+          className={`px-4 py-1.5 rounded-lg font-body-ui text-[13px] font-bold transition-colors ${
+            liveBlack ? "bg-on-surface text-surface" : "neu-sm text-on-surface"
           }`}
           title="Cut the live output to black (C)"
         >
@@ -109,8 +109,8 @@ export default function PresentationTopBar() {
         <button
           onClick={clearOverrides}
           disabled={cleared}
-          className={`px-4 py-1.5 rounded-DEFAULT border font-body-ui text-[13px] font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-            cleared ? "border-outline-variant text-on-surface-variant" : "border-primary text-primary hover:bg-primary/10"
+          className={`px-4 py-1.5 rounded-lg font-body-ui text-[13px] font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+            cleared ? "neu-inset-sm text-on-surface-variant" : "neu-sm text-primary"
           }`}
           title="Clear black/emergency overrides and resume normal output"
         >
@@ -118,7 +118,7 @@ export default function PresentationTopBar() {
         </button>
       </div>
 
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center gap-2.5 shrink-0">
         <div className="relative">
           <IconButton
             icon="cast"
@@ -146,8 +146,8 @@ function TabButton({ label, active, disabled, onClick }: { label: string; active
       onClick={onClick}
       disabled={disabled}
       title={disabled ? "Coming soon" : undefined}
-      className={`px-3.5 py-1.5 rounded-DEFAULT font-body-ui text-[14px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-        active ? "bg-primary text-on-primary" : "text-on-surface hover:bg-surface-container-low"
+      className={`px-3.5 py-1.5 rounded-lg font-body-ui text-[14px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+        active ? "accent-raised" : "text-on-surface hover:text-primary"
       }`}
     >
       {label}
@@ -169,8 +169,8 @@ function IconButton({ icon, label, active, disabled, title, onClick }: {
       title={title ?? label}
       onClick={onClick}
       disabled={disabled}
-      className={`p-1.5 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-        active ? "bg-secondary-container text-on-secondary-container" : "text-secondary hover:bg-surface-container-low"
+      className={`p-2 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed ${
+        active ? "neu-active" : "neu-sm text-secondary"
       }`}
     >
       <span className="material-symbols-outlined text-[20px]">{icon}</span>

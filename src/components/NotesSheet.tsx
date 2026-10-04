@@ -54,7 +54,7 @@ export default function NotesSheet({ isOpen, book, chapter, verse, onClose }: Pr
       <div className="space-y-2">
         <textarea
           ref={textareaRef}
-          className="w-full h-24 p-3 text-[14px] font-body-ui bg-surface-container-low border border-outline-variant rounded-DEFAULT focus:outline-none focus:border-primary resize-none text-on-surface placeholder:text-on-surface-variant"
+          className="w-full h-24 p-3 text-[14px] font-body-ui focus:outline-none resize-none text-on-surface placeholder:text-on-surface-variant neu-inset-sm rounded-lg focus:ring-2 focus:ring-primary/50"
           placeholder={`Add a note on ${book} ${chapter}:${verse}…`}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -65,7 +65,7 @@ export default function NotesSheet({ isOpen, book, chapter, verse, onClose }: Pr
         <button
           onClick={save}
           disabled={!draft.trim() || saving}
-          className="px-4 py-1.5 bg-primary text-on-primary font-body-ui text-[13px] font-medium rounded-full hover:opacity-90 transition-opacity disabled:opacity-40"
+          className="px-4 py-1.5 accent-raised font-body-ui text-[13px] font-medium rounded-full hover:opacity-90 transition-opacity disabled:opacity-40"
         >
           {saving ? "Saving…" : "Save note"}
         </button>
@@ -76,7 +76,7 @@ export default function NotesSheet({ isOpen, book, chapter, verse, onClose }: Pr
         <div className="space-y-3 pt-2 border-t border-outline-variant">
           {notes.map((n) => (
             <div key={n.id} className="flex gap-3 group">
-              <div className="flex-1 border border-outline-variant rounded-DEFAULT p-3 bg-surface-container-low">
+              <div className="flex-1 p-3 neu-sm rounded-xl">
                 <p className="font-body-ui text-[13px] text-on-surface leading-relaxed">{n.content}</p>
                 <p className="font-metadata-mono text-[10px] text-secondary mt-1.5">
                   {new Date(n.created_at).toLocaleDateString()}

@@ -72,7 +72,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           </div>
           <button
             onClick={scoped ? this.props.onReset : () => window.location.reload()}
-            className="px-4 py-2 rounded-DEFAULT font-body-ui text-sm bg-primary text-on-primary hover:opacity-90 transition-opacity"
+            className="px-4 py-2 rounded-DEFAULT font-body-ui text-sm accent-raised"
           >
             {scoped ? this.props.resetLabel ?? "Go back" : "Reload"}
           </button>
