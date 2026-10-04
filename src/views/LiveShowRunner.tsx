@@ -3,7 +3,7 @@ import { useAppStore, type VerseRef, type ServiceItem } from "../store/app";
 import { api, type TextSpan } from "../lib/tauri";
 import { useChapterData } from "../hooks/useChapterData";
 import { usePresentationSync } from "../hooks/usePresentationSync";
-import { measureVersePartsDOM } from "../lib/verseSplit";
+import { measureVersePartsDOM, sliceSpansForPart } from "../lib/verseSplit";
 import { FONT_FAMILY_CSS } from "../components/VersePanes";
 import StrongsSheet from "../components/StrongsSheet";
 import OutputPreview from "../components/OutputPreview";
@@ -327,7 +327,8 @@ export default function LiveShowRunner() {
 
   const previewText = verseText(previewChapter?.verses, previewRef.verse);
   const previewParts = previewPartsMap.get(previewRef.verse) ?? [previewText];
-  const previewActiveText = previewParts[previewPart] ?? previewParts[0] ?? previewText;
+  const previewVerseSpans = previewChapter?.verses.find((v) => v.verse === previewRef.verse)?.spans ?? [];
+  const previewSpansForPart = (previewParts.length > 1 ? sliceSpansForPart(previewVerseSpans, previewParts, Math.min(previewPart, previewParts.length - 1)) : previewVerseSpans);
   const previewSplit = previewParts.length > 1;
 
   const overridden = liveBlack || liveEmergency;
@@ -524,9 +525,12 @@ export default function LiveShowRunner() {
                       </span>
                     )}
                     <span className="font-body-reading text-[14px] leading-snug text-on-surface flex-1 min-w-0">
-                      {!split
-                        ? <VerseSpans spans={v.spans} showStrongs={showStrongs} showRedLetter={showRedLetter} onStrongsClick={handleStrongsClick} />
-                        : parts[0]}
+                      <VerseSpans
+                        spans={split ? sliceSpansForPart(v.spans, parts, 0) : v.spans}
+                        showStrongs={showStrongs}
+                        showRedLetter={showRedLetter}
+                        onStrongsClick={handleStrongsClick}
+                      />
                     </span>
                     {split && (
                       <span
@@ -545,7 +549,7 @@ export default function LiveShowRunner() {
                       aria-hidden={!open}
                     >
                       <div className="overflow-hidden min-h-0">
-                        {parts.slice(1).map((part, j) => {
+                        {parts.slice(1).map((_, j) => {
                           const i = j + 1;
                           const active = isPreviewVerse && previewPart === i;
                           return (
@@ -568,7 +572,9 @@ export default function LiveShowRunner() {
                                 <span className={`font-metadata-mono text-[12px] shrink-0 mt-0.5 ${active ? "text-primary font-bold" : "text-on-surface-variant"}`}>
                                   p{i + 1}
                                 </span>
-                                <span className="font-body-reading text-[14px] leading-snug text-on-surface">{part}</span>
+                                <span className="font-body-reading text-[14px] leading-snug text-on-surface">
+                                  <VerseSpans spans={sliceSpansForPart(v.spans, parts, i)} showStrongs={showStrongs} showRedLetter={showRedLetter} onStrongsClick={handleStrongsClick} />
+                                </span>
                               </div>
                             </div>
                           );
@@ -605,7 +611,9 @@ export default function LiveShowRunner() {
                 )}
               </p>
               <p className="font-body-reading text-[15px] leading-relaxed text-on-surface">
-                {previewActiveText || "—"}
+                {previewSpansForPart.length > 0
+                  ? <VerseSpans spans={previewSpansForPart} showStrongs={showStrongs} showRedLetter={showRedLetter} onStrongsClick={handleStrongsClick} />
+                  : "—"}
               </p>
             </div>
             <div className="shrink-0 border-t border-outline-variant p-3 flex items-center gap-2">

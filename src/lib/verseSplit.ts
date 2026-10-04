@@ -16,6 +16,8 @@
  * kept for fallback and for contexts where DOM measurement isn't practical.
  */
 
+import type { TextSpan } from "./tauri";
+
 export type PresentationContext = 1 | 2 | 3 | 4;
 
 export const PART_LABELS = ["a", "b", "c", "d"] as const;
@@ -276,4 +278,33 @@ export function measureVersePartsDOM(
   } finally {
     document.body.removeChild(el);
   }
+}
+
+/**
+ * The slice of a verse's spans that makes up `parts[index]`. Parts are
+ * contiguous substrings of the verse text, so each is located in the joined
+ * span text and the spans are cut to that range — keeping Strong's numbers,
+ * italics and headings on the words inside the part instead of flattening it
+ * to plain text. Falls back to one plain span if the part can't be located.
+ */
+export function sliceSpansForPart(spans: TextSpan[], parts: string[], index: number): TextSpan[] {
+  const full = spans.map((s) => s.text).join("");
+  let cursor = 0;
+  let start = -1;
+  for (let k = 0; k <= index; k++) {
+    const at = full.indexOf(parts[k] ?? "", cursor);
+    if (at < 0) return [{ text: parts[index] ?? "" }];
+    start = at;
+    cursor = at + parts[k].length;
+  }
+  const end = cursor;
+  const out: TextSpan[] = [];
+  let pos = 0;
+  for (const span of spans) {
+    const from = Math.max(pos, start);
+    const to = Math.min(pos + span.text.length, end);
+    if (from < to) out.push({ ...span, text: span.text.slice(from - pos, to - pos) });
+    pos += span.text.length;
+  }
+  return out;
 }
