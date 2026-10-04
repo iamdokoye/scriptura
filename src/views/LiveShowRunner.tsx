@@ -57,9 +57,15 @@ export default function LiveShowRunner() {
   const [previewPart, setPreviewPart] = useState(0);
   // Which split verse (book|chapter|verse) has its parts unfolded in the list.
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const verseListRef = useRef<HTMLDivElement>(null);
   useEffect(() => setPreviewPart(0), [previewRef.book, previewRef.chapter, previewRef.verse]);
 
   const searchBarRef = useRef<PresentationSearchBarHandle>(null);
+
+  // The real output screen's size in CSS px — splits are measured against it
+  // and the Main Output preview is laid out at it, so the console always
+  // agrees with what the output window shows.
+  const stage = usePresentationStage(presentationActive);
 
   // Every major panel is user-resizable; sizes persist across restarts and
   // double-clicking a divider restores its default.
@@ -80,10 +86,6 @@ export default function LiveShowRunner() {
     max: () => Math.round(window.innerWidth * 0.5),
   });
 
-  // The real output screen's size in CSS px — splits are measured against it
-  // and the Main Output preview is laid out at it, so the console always
-  // agrees with what the output window shows.
-  const stage = usePresentationStage(presentationActive);
 
   usePresentationSync({
     presentationActive, primaryModule, currentRef, parallelModule, parallelMode,
@@ -145,6 +147,36 @@ export default function LiveShowRunner() {
     }
     return map;
   }, [displayPrefs.splitLongVerses, previewChapter, splitParts]);
+
+  // Keep the selected verse in view however it was chosen (jump, word search,
+  // arrow keys, queue item). Waits for the right chapter to be loaded, since
+  // the preview ref changes a moment before its chapter's verses arrive.
+  const loadedChapterMatches = previewChapter?.book === previewRef.book && previewChapter?.chapter === previewRef.chapter;
+  useEffect(() => {
+    const list = verseListRef.current;
+    if (!list || !loadedChapterMatches) return;
+    const el = list.querySelector<HTMLElement>(`[data-verse="${previewRef.verse}"]`);
+    if (!el) return;
+    // Instant, not smooth: smooth scrolling needs animation frames, which
+    // macOS withholds from an unfocused WKWebView, and a live operator wants a
+    // predictable jump anyway.
+    const listRect = list.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
+    const delta = rect.top - listRect.top - (list.clientHeight - rect.height) / 2;
+    list.scrollBy({ top: delta, behavior: "auto" });
+  }, [previewRef.book, previewRef.chapter, previewRef.verse, loadedChapterMatches]);
+
+  // Unfolding a split verse can push its parts below the fold.
+  useEffect(() => {
+    if (!expandedKey) return;
+    const timer = setTimeout(() => {
+      verseListRef.current
+        ?.querySelector<HTMLElement>(`[data-verse="${previewRef.verse}"]`)
+        ?.scrollIntoView({ block: "nearest", behavior: "auto" });
+    }, 220);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedKey]);
 
   const previewQueueIndex = serviceOrder.findIndex((item) => sameRef(item, previewRef));
   const liveQueueIndex = serviceOrder.findIndex((item) => sameRef(item, currentRef));
@@ -481,7 +513,7 @@ export default function LiveShowRunner() {
         </div>
 
         <div className="flex-1 min-h-0 flex overflow-hidden">
-          <div className="flex-1 min-w-0 overflow-y-auto px-2 py-2">
+          <div ref={verseListRef} className="flex-1 min-w-0 overflow-y-auto px-2 py-2">
             {(previewChapter?.verses ?? []).map((v) => {
               const text = v.spans.map((s) => s.text).join("");
               const parts = previewPartsMap.get(v.verse) ?? [text];
@@ -495,7 +527,7 @@ export default function LiveShowRunner() {
               const headActive = isPreviewVerse && (open ? previewPart === 0 : true);
               const shownPart = isPreviewVerse ? previewPart : 0;
               return (
-                <div key={v.verse} className="mb-1">
+                <div key={v.verse} data-verse={v.verse} className="mb-1">
                   {/* A plain div, not a button — the unsplit case nests clickable
                       Strong's-number buttons inside, which a <button> can't legally contain. */}
                   <div

@@ -25,7 +25,12 @@ function readStored(key: string, fallback: number): number {
 }
 
 export function useResizable({ storageKey, initial, min, max, axis, invert }: Options) {
-  const [size, setSize] = useState(() => readStored(storageKey, initial));
+  // Clamp on the way in: a stored or initial size from a differently sized
+  // (or not yet laid out) window must never leave a panel collapsed.
+  const [size, setSize] = useState(() => {
+    const upper = typeof max === "function" ? max() : max;
+    return Math.min(Math.max(readStored(storageKey, initial), min), Math.max(min, upper));
+  });
   const sizeRef = useRef(size);
   const drag = useRef<{ start: number; startSize: number } | null>(null);
   const [dragging, setDragging] = useState(false);
