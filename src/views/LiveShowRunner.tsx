@@ -435,7 +435,6 @@ export default function LiveShowRunner() {
               ref={searchBarRef}
               baseRef={previewRef}
               onNavigate={(ref) => setPreviewRef(ref)}
-              onStrongs={(number) => handleStrongsClick([number])}
             />
           </div>
         </div>

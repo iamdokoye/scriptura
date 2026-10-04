@@ -2,10 +2,9 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import { useAppStore, type VerseRef } from "../store/app";
 import { api, type SearchResult } from "../lib/tauri";
 import { sanitizeSnippet } from "../lib/sanitize";
-import { BIBLE_BOOKS } from "../data/books";
 import ScriptureNav from "./ScriptureNav";
 
-export type SearchBarMode = "scripture" | "word" | "strongs";
+export type SearchBarMode = "scripture" | "word";
 
 export interface PresentationSearchBarHandle {
   /** Switch to `mode` (if given) and focus its input. */
@@ -15,24 +14,11 @@ export interface PresentationSearchBarHandle {
 const MODES: { id: SearchBarMode; icon: string; label: string; placeholder: string }[] = [
   { id: "scripture", icon: "auto_stories", label: "Verse", placeholder: "Jump to… jn 3:16 or v5  (Ctrl+L)" },
   { id: "word", icon: "search", label: "Word search", placeholder: "Search the text for a word or phrase  (Ctrl+K)" },
-  { id: "strongs", icon: "tag", label: "Strong's concordance", placeholder: "Strong's number… G25 or H430" },
 ];
-
-const FIRST_NT_INDEX = BIBLE_BOOKS.indexOf("Matthew");
-
-/** "g25", "H0430", or a bare "25" (Greek in the NT, Hebrew otherwise) → "G25" / "H430". */
-function parseStrongs(raw: string, book: string): string | null {
-  const m = /^([gh])?\s*0*(\d{1,5})$/i.exec(raw.trim());
-  if (!m) return null;
-  const prefix = m[1]?.toUpperCase() ?? (BIBLE_BOOKS.indexOf(book) >= FIRST_NT_INDEX ? "G" : "H");
-  return `${prefix}${m[2]}`;
-}
 
 interface Props {
   baseRef: VerseRef;
   onNavigate: (ref: VerseRef) => void;
-  /** Opens the Strong's concordance for a normalized number like "G25". */
-  onStrongs: (number: string) => void;
 }
 
 /**
@@ -41,9 +27,16 @@ interface Props {
  * to the active mode.
  */
 const PresentationSearchBar = forwardRef<PresentationSearchBarHandle, Props>(function PresentationSearchBar(
-  { baseRef, onNavigate, onStrongs }, ref,
+  { baseRef, onNavigate }, ref,
 ) {
-  const { primaryModule } = useAppStore();
+  const { primaryModule, showStrongs, setShowStrongs } = useAppStore();
+
+  // Same persistence path as Settings → "Show Strong's numbers".
+  function toggleStrongs() {
+    const next = !showStrongs;
+    setShowStrongs(next);
+    api.setPreferences({ show_strongs: next }).catch(() => {});
+  }
   const [mode, setMode] = useState<SearchBarMode>("scripture");
   const scriptureInputRef = useRef<HTMLInputElement | null>(null);
   const textInputRef = useRef<HTMLInputElement | null>(null);
@@ -100,18 +93,12 @@ const PresentationSearchBar = forwardRef<PresentationSearchBarHandle, Props>(fun
     setOpen(false);
   }
 
-  const strongsNumber = mode === "strongs" ? parseStrongs(query, baseRef.book) : null;
-
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Escape") { setQuery(""); setOpen(false); return; }
     if (mode === "word") {
       if (e.key === "ArrowDown") { e.preventDefault(); setActive((i) => Math.min(i + 1, results.length - 1)); }
       else if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
       else if (e.key === "Enter" && results[active]) { e.preventDefault(); pick(results[active]); }
-    } else if (mode === "strongs" && e.key === "Enter" && strongsNumber) {
-      e.preventDefault();
-      onStrongs(strongsNumber);
-      setQuery("");
     }
   }
 
@@ -125,6 +112,17 @@ const PresentationSearchBar = forwardRef<PresentationSearchBarHandle, Props>(fun
       >
         <span className="material-symbols-outlined text-[18px]">{current.icon}</span>
         <span className="font-metadata-mono text-[10px] uppercase tracking-widest hidden xl:inline">{current.label}</span>
+      </button>
+
+      <button
+        onClick={toggleStrongs}
+        aria-pressed={showStrongs}
+        className={`rounded-lg px-2 py-1 flex items-center gap-1.5 shrink-0 ${showStrongs ? "ctl-active" : "ctl text-on-surface-variant"}`}
+        title={showStrongs ? "Strong's concordance on — click to turn off" : "Strong's concordance off — click to turn on"}
+        aria-label={`Strong's concordance ${showStrongs ? "on" : "off"}`}
+      >
+        <span className="material-symbols-outlined text-[18px]">tag</span>
+        <span className="font-metadata-mono text-[10px] uppercase tracking-widest hidden xl:inline">Strong's</span>
       </button>
 
       {mode === "scripture" ? (
@@ -180,19 +178,6 @@ const PresentationSearchBar = forwardRef<PresentationSearchBarHandle, Props>(fun
             </div>
           )}
 
-          {mode === "strongs" && open && query.trim() && (
-            <div className="absolute top-full left-0 right-0 mt-1 z-[200] px-3 py-1.5 flex items-center gap-2 glass rounded-2xl">
-              {strongsNumber ? (
-                <>
-                  <span className="material-symbols-outlined text-[14px] text-primary">menu_book</span>
-                  <span className="font-body-ui text-body-ui text-primary">Open {strongsNumber}</span>
-                  <kbd className="font-metadata-mono text-[10px] text-secondary ml-auto bg-surface-container px-1.5 py-0.5 rounded">Enter</kbd>
-                </>
-              ) : (
-                <span className="font-body-ui text-[12px] text-on-surface-variant">Enter a number like G25 or H430</span>
-              )}
-            </div>
-          )}
         </div>
       )}
     </div>
