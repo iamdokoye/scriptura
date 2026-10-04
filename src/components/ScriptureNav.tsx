@@ -1,5 +1,5 @@
 import { useState, KeyboardEvent } from "react";
-import { useAppStore } from "../store/app";
+import { useAppStore, type VerseRef } from "../store/app";
 import { BIBLE_BOOKS, findBooks } from "../data/books";
 
 // Longest-first so "1 Corinthians" is tried before "1 Chronicles"
@@ -57,10 +57,23 @@ function parseInput(raw: string): Parsed {
 
 interface Props {
   inputRef: React.MutableRefObject<HTMLInputElement | null>;
+  /**
+   * The ref "vN" shorthand and the "book confirmed, chapter known" preview
+   * jump from — defaults to the live currentRef (TopBar's usage). Callers
+   * navigating something other than the live ref (e.g. LiveShowRunner's
+   * preview) pass their own so "v5" means "verse 5 of what I'm previewing,"
+   * not of whatever happens to be live.
+   */
+  baseRef?: VerseRef;
+  /** Called with the resolved ref instead of setCurrentRef + setView("reading")
+   *  — callers that navigate a preview rather than the live ref pass this. */
+  onNavigate?: (ref: VerseRef) => void;
+  placeholder?: string;
 }
 
-export default function ScriptureNav({ inputRef }: Props) {
-  const { setCurrentRef, setView, currentRef } = useAppStore();
+export default function ScriptureNav({ inputRef, baseRef, onNavigate, placeholder }: Props) {
+  const { setCurrentRef, setView, currentRef: liveRef } = useAppStore();
+  const currentRef = baseRef ?? liveRef;
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
 
@@ -70,6 +83,15 @@ export default function ScriptureNav({ inputRef }: Props) {
 
   const { matchedBook, suggestions, chapter, verse, refPart } = parseInput(value);
   const showDropdown = open && suggestions.length > 0 && !matchedBook && !verseJumpNumber;
+
+  function goTo(ref: VerseRef) {
+    if (onNavigate) {
+      onNavigate(ref);
+    } else {
+      setCurrentRef(ref);
+      setView("reading");
+    }
+  }
 
   // After selecting / completing a book, put it in the input with a trailing space
   function applyBook(book: string) {
@@ -81,16 +103,14 @@ export default function ScriptureNav({ inputRef }: Props) {
 
   function navigate() {
     if (verseJumpNumber) {
-      setCurrentRef({ book: currentRef.book, chapter: currentRef.chapter, verse: verseJumpNumber });
-      setView("reading");
+      goTo({ book: currentRef.book, chapter: currentRef.chapter, verse: verseJumpNumber });
       setValue("");
       setOpen(false);
       return;
     }
     const book = matchedBook ?? suggestions[0];
     if (!book) return;
-    setCurrentRef({ book, chapter: chapter ?? 1, verse: verse ?? 1 });
-    setView("reading");
+    goTo({ book, chapter: chapter ?? 1, verse: verse ?? 1 });
     setValue("");
     setOpen(false);
   }
@@ -137,8 +157,8 @@ export default function ScriptureNav({ inputRef }: Props) {
       </span>
       <input
         ref={inputRef}
-        className="w-full pl-8 pr-3 py-1 bg-surface-container-low border border-outline-variant rounded-DEFAULT focus:outline-none focus:border-primary text-body-ui font-body-ui transition-colors placeholder:text-on-surface-variant"
-        placeholder="Go to… jn 3:16 or v5  (Ctrl+L)"
+        className="w-full pl-8 pr-3 py-1 focus:outline-none text-body-ui font-body-ui transition-colors placeholder:text-on-surface-variant field rounded-lg"
+        placeholder={placeholder ?? "Go to… jn 3:16 or v5  (Ctrl+L)"}
         value={value}
         onChange={(e) => { setValue(e.target.value); setOpen(true); }}
         onKeyDown={handleKey}
@@ -150,7 +170,7 @@ export default function ScriptureNav({ inputRef }: Props) {
 
       {/* Book suggestion dropdown */}
       {showDropdown && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg z-[200] overflow-hidden">
+        <div className="absolute top-full left-0 right-0 mt-1 glass rounded-xl z-[200] overflow-hidden">
           {suggestions.slice(0, 6).map((book, i) => (
             <button
               key={book}
@@ -174,7 +194,7 @@ export default function ScriptureNav({ inputRef }: Props) {
 
       {/* Resolved reference preview (book confirmed, chapter known) */}
       {previewText && !showDropdown && open && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-outline-variant rounded-DEFAULT shadow-sm z-[200] px-3 py-1.5 flex items-center gap-2">
+        <div className="absolute top-full left-0 right-0 mt-1 z-[200] px-3 py-1.5 flex items-center gap-2 glass rounded-2xl">
           <span className="material-symbols-outlined text-[14px] text-primary">arrow_forward</span>
           <span className="font-body-ui text-body-ui text-primary">{previewText}</span>
           <kbd className="font-metadata-mono text-[10px] text-secondary ml-auto bg-surface-container px-1.5 py-0.5 rounded">

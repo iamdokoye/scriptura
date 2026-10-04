@@ -349,7 +349,7 @@ export default function ReadingView() {
                 </button>
               )}
               {showFsParallelPicker && bibleModules.length > 0 && (
-                <div className="absolute right-0 top-full mt-1 z-50 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg min-w-[160px] max-h-48 overflow-y-auto">
+                <div className="absolute right-0 top-full mt-1 z-50 glass rounded-xl min-w-[160px] max-h-48 overflow-y-auto">
                   {parallelModule && (
                     <button
                       onClick={() => { setParallelModule(null); setShowFsParallelPicker(false); }}
@@ -392,11 +392,11 @@ export default function ReadingView() {
             <button
               onClick={() => setFsSearchOpen(true)}
               title="Word search (Ctrl+K)"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-DEFAULT border border-outline-variant bg-surface-container-low hover:bg-surface-container transition-colors text-on-surface-variant"
+              className="flex items-center gap-1.5 px-3 py-1.5 transition-colors text-on-surface-variant ctl rounded-xl"
             >
               <span className="material-symbols-outlined text-[16px]">search</span>
               <span className="font-body-ui text-[13px]">Search</span>
-              <kbd className="font-metadata-mono text-[10px] border border-outline-variant rounded px-1 py-0.5 ml-1">⌘K</kbd>
+              <kbd className="font-metadata-mono text-[10px] px-1 py-0.5 ml-1 field rounded-md">⌘K</kbd>
             </button>
 
             {/* All presenting UI is Presentation-workspace only — see
@@ -409,7 +409,7 @@ export default function ReadingView() {
                     normally never hides that the actual output is overridden. */}
                 {presentationActive && (liveEmergency || liveBlack) && (
                   <span
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-DEFAULT bg-error text-on-error font-metadata-mono text-[10px] uppercase tracking-widest font-bold"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-error text-on-error font-metadata-mono text-[10px] uppercase tracking-widest font-bold"
                     title={liveEmergency ? "The output window is showing the emergency standby screen" : "The output window is blacked out"}
                   >
                     <span className="material-symbols-outlined text-[14px]">{liveEmergency ? "emergency" : "brightness_1"}</span>
@@ -433,10 +433,10 @@ export default function ReadingView() {
                       }
                     }}
                     title={presentationActive ? "Stop presentation" : "Go live — open presentation window"}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-DEFAULT text-[13px] font-body-ui font-semibold transition-colors ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-body-ui font-semibold transition-colors ${
                       presentationActive
                         ? "bg-error text-on-error hover:bg-error/90"
-                        : "bg-primary text-on-primary hover:bg-primary/90"
+                        : "btn-primary hover:bg-primary/90"
                     }`}
                   >
                     <span className="material-symbols-outlined text-[16px]">
@@ -448,7 +448,7 @@ export default function ReadingView() {
                     )}
                   </button>
                   {showMonitorPicker && monitors.length > 1 && (
-                    <div className="absolute right-0 top-full mt-1 z-50 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg min-w-[220px] overflow-hidden">
+                    <div className="absolute right-0 top-full mt-1 z-50 glass rounded-xl min-w-[220px] overflow-hidden">
                       <div className="px-3 py-1.5 bg-surface-container-low border-b border-outline-variant">
                         <span className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest">
                           Present on…
@@ -536,7 +536,7 @@ export default function ReadingView() {
                 onClick={() => setServiceOrderOpen(false)}
               >
                 <div
-                  className={`w-[300px] h-full transition-transform duration-200 ease-in-out ${serviceOrderOpen ? "translate-x-0" : "translate-x-full"}`}
+                  className={`w-[324px] p-3 h-full transition-transform duration-200 ease-in-out ${serviceOrderOpen ? "translate-x-0" : "translate-x-full"}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <ServiceOrderPanel />
@@ -564,28 +564,28 @@ export default function ReadingView() {
     <div className="flex flex-1 overflow-hidden">
       <SideNav variant="icon-rail" />
 
-      <main className="flex flex-1 overflow-hidden ml-[64px]">
+      <main className="flex flex-1 overflow-hidden ml-16">
         <BookNavigator />
 
         {/* Center reading pane(s) */}
         <section className="flex-1 bg-surface flex flex-col h-full overflow-hidden">
           {/* Reading toolbar */}
-          <div className="sticky top-0 bg-surface/95 backdrop-blur-sm border-b border-outline-variant px-content-margin py-2 flex items-center justify-between z-10 shrink-0">
+          <div className="sticky top-0 px-content-margin pt-4 pb-2 flex items-center justify-between z-10 shrink-0">
             <h1 className="font-display-lg text-display-lg text-on-surface">
               {currentRef.book} {currentRef.chapter}
             </h1>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2.5">
               <button
                 title="Previous chapter (Ctrl+P)"
                 onClick={() => currentRef.chapter > 1 && setCurrentRef({ ...currentRef, chapter: currentRef.chapter - 1, verse: 1 })}
-                className="p-1 rounded text-secondary hover:bg-surface-container-low transition-colors"
+                className="p-1.5 rounded-md ghost text-secondary"
               >
                 <span className="material-symbols-outlined text-[18px]">chevron_left</span>
               </button>
               <button
                 title="Next chapter (Ctrl+N)"
                 onClick={() => setCurrentRef({ ...currentRef, chapter: currentRef.chapter + 1, verse: 1 })}
-                className="p-1 rounded text-secondary hover:bg-surface-container-low transition-colors"
+                className="p-1.5 rounded-md ghost text-secondary"
               >
                 <span className="material-symbols-outlined text-[18px]">chevron_right</span>
               </button>
@@ -593,9 +593,7 @@ export default function ReadingView() {
                 <button
                   title={syncScroll ? "Unsync scroll" : "Sync scroll between panes"}
                   onClick={() => setSyncScroll((v) => !v)}
-                  className={`p-1 rounded transition-colors ${
-                    syncScroll ? "bg-secondary-container text-on-secondary-container" : "text-secondary hover:bg-surface-container-low"
-                  }`}
+                  className={`p-1.5 rounded-md ${syncScroll ? "ctl-active" : "ghost text-secondary"}`}
                 >
                   <span className="material-symbols-outlined text-[18px]">sync</span>
                 </button>
@@ -603,7 +601,7 @@ export default function ReadingView() {
               <button
                 title="Focus mode (Ctrl+F)"
                 onClick={() => setIsFullscreen(true)}
-                className="p-1 rounded text-secondary hover:bg-surface-container-low transition-colors"
+                className="p-1.5 rounded-md ghost text-secondary"
               >
                 <span className="material-symbols-outlined text-[18px]">fullscreen</span>
               </button>
@@ -664,7 +662,7 @@ export default function ReadingView() {
           onPartClick={setVersePart}
           scrollContainerRef={primaryScrollRef}
           verseNumber={currentRef.verse}
-          leftOffset={72}
+          leftOffset={64}
         />
       )}
       {sheets}

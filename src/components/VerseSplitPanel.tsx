@@ -75,7 +75,7 @@ export default function VerseSplitPanel({
       style={{ left: `${leftOffset}px` }}
     >
       <div
-        className={`w-64 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg overflow-hidden transition-all duration-200 ease-out ${
+        className={`w-64 glass rounded-xl overflow-hidden transition-all duration-200 ease-out ${
           isVisible && animateIn
             ? "opacity-100 translate-x-0"
             : "opacity-0 -translate-x-4"
@@ -108,7 +108,7 @@ export default function VerseSplitPanel({
                 <span
                   className={`shrink-0 mt-0.5 w-5 h-5 rounded flex items-center justify-center font-metadata-mono text-[11px] font-bold ${
                     isActive
-                      ? "bg-primary text-on-primary"
+                      ? "btn-primary"
                       : "bg-surface-container text-secondary"
                   }`}
                 >

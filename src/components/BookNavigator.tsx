@@ -48,7 +48,7 @@ export default function BookNavigator() {
 
   return (
     <aside className="w-[220px] bg-surface-container-lowest border-r border-outline-variant flex flex-col h-full overflow-y-auto shrink-0">
-      <div className="p-4 border-b border-outline-variant">
+      <div className="p-5 pb-3">
         <h2 className="font-headline-md text-headline-md font-bold text-on-surface">Study Library</h2>
 
         {/* Primary translation picker */}
@@ -64,7 +64,7 @@ export default function BookNavigator() {
             <span className="material-symbols-outlined text-[14px] shrink-0">expand_more</span>
           </button>
           {showPrimaryPicker && bibleModules.length > 0 && (
-            <div className="absolute left-0 top-full mt-1 z-50 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg min-w-[160px] max-h-48 overflow-y-auto">
+            <div className="absolute left-0 top-full mt-1 z-50 glass rounded-xl min-w-[160px] max-h-48 overflow-y-auto">
               {bibleModules.map((m) => (
                 <button
                   key={m.id}
@@ -97,7 +97,7 @@ export default function BookNavigator() {
               <span className="material-symbols-outlined text-[12px] shrink-0">expand_more</span>
             </button>
             {showParallelPicker && bibleModules.length > 0 && (
-              <div className="absolute left-0 top-full mt-1 z-50 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg min-w-[160px] max-h-48 overflow-y-auto">
+              <div className="absolute left-0 top-full mt-1 z-50 glass rounded-xl min-w-[160px] max-h-48 overflow-y-auto">
                 {parallelModule && (
                   <button
                     onClick={() => { setParallelModule(null); setShowParallelPicker(false); }}
@@ -132,21 +132,21 @@ export default function BookNavigator() {
             open={group.books.includes(currentRef.book)}
             className="group"
           >
-            <summary className="flex items-center py-1.5 px-2 hover:bg-surface-container cursor-pointer rounded-DEFAULT select-none text-on-surface-variant font-medium">
+            <summary className="flex items-center py-1.5 px-2 hover:bg-surface-container cursor-pointer rounded-md select-none text-on-surface-variant font-medium">
               <span className="material-symbols-outlined text-[16px] mr-2 transition-transform group-open:rotate-90">
                 chevron_right
               </span>
               {group.section}
             </summary>
-            <div className="ml-6 mt-1 border-l border-outline-variant pl-2 space-y-0.5">
+            <div className="ml-6 mt-1 border-l-2 border-outline-variant pl-2 space-y-1">
               {group.books.map((book) => (
                 <button
                   key={book}
                   onClick={() => setCurrentRef({ book, chapter: 1, verse: 1 })}
-                  className={`w-full text-left py-1 px-2 rounded-DEFAULT transition-colors ${
+                  className={`w-full text-left py-1 px-2 rounded-md transition-colors ${
                     currentRef.book === book
-                      ? "bg-secondary-container text-on-secondary-container font-medium"
-                      : "text-secondary hover:bg-surface-container"
+                      ? "ctl-active font-medium"
+                      : "text-secondary hover:text-on-surface"
                   }`}
                 >
                   {book}

@@ -56,12 +56,12 @@ export default function SearchHistory() {
 
       <main className="flex-1 flex flex-col overflow-hidden bg-background">
         {/* Header */}
-        <div className="p-6 border-b border-outline-variant bg-surface shrink-0">
+        <div className="p-6 border-b border-outline-variant shrink-0">
           <div className="flex items-center justify-between mb-4">
             <h1 className="font-display-lg text-display-lg text-on-surface">Search History</h1>
             {searchHistory.length > 0 && (
               <button
-                className="px-3 py-1.5 text-[13px] font-body-ui text-error hover:bg-error/10 rounded-DEFAULT transition-colors border border-error/30"
+                className="px-3 py-1.5 text-[13px] font-body-ui text-error hover:bg-error/10 rounded-md transition-colors border border-error/30"
                 onClick={clearSearchHistory}
               >
                 Clear all
@@ -75,9 +75,9 @@ export default function SearchHistory() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-4 py-1.5 rounded-full text-[13px] font-body-ui capitalize transition-colors ${
+                className={`px-4 py-1.5 rounded-md text-[13px] font-body-ui capitalize transition-colors ${
                   filter === f
-                    ? "bg-primary text-on-primary"
+                    ? "btn-primary"
                     : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
                 }`}
               >
@@ -92,7 +92,7 @@ export default function SearchHistory() {
               search
             </span>
             <input
-              className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-DEFAULT focus:outline-none focus:border-primary font-body-ui text-body-ui text-on-surface placeholder:text-on-surface-variant"
+              className="w-full pl-10 pr-4 py-2 focus:outline-none font-body-ui text-body-ui text-on-surface placeholder:text-on-surface-variant field rounded-lg"
               placeholder="Filter history…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -117,7 +117,7 @@ export default function SearchHistory() {
                 <button
                   key={i}
                   onClick={() => selectQuery(entry.query)}
-                  className="w-full flex items-center justify-between gap-4 px-4 py-3 rounded-DEFAULT hover:bg-surface-container-low transition-colors text-left border border-transparent hover:border-outline-variant group"
+                  className="w-full flex items-center justify-between gap-4 px-4 py-3 rounded-md hover:bg-surface-container-low transition-colors text-left border border-transparent hover:border-outline-variant group"
                 >
                   <div className="flex items-start gap-3 min-w-0">
                     <span className="material-symbols-outlined text-[18px] text-on-surface-variant shrink-0 mt-0.5">

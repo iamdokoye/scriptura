@@ -41,13 +41,13 @@ export default function SheetShell({
   return (
     <div className="fixed inset-0 z-50" onClick={onClose}>
       <div
-        className={`absolute bottom-0 left-0 right-0 bg-surface border-t border-outline-variant rounded-t-2xl shadow-xl transition-all duration-300 ease-out ${
+        className={`absolute bottom-3 left-3 right-3 glass glass-strong rounded-3xl transition-all duration-300 ease-out ${
           visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant">
+        <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px] text-secondary">{icon}</span>
             <span className="font-headline-sm text-headline-sm text-on-surface">{title}</span>
@@ -55,7 +55,7 @@ export default function SheetShell({
           </div>
           <div className="flex items-center gap-3">
             {actionsExtra}
-            <button onClick={onClose} className="text-secondary hover:text-primary transition-colors">
+            <button onClick={onClose} className="ctl rounded-lg p-1.5 text-secondary hover:text-primary">
               <span className="material-symbols-outlined text-[20px]">close</span>
             </button>
           </div>

@@ -58,10 +58,10 @@ export default function SearchScopeBar({ compact }: Props) {
   }
 
   const pillBase = compact
-    ? "px-2.5 py-0.5 rounded-full font-body-ui text-[11px] font-medium transition-colors"
-    : "px-3 py-1 rounded-full font-body-ui text-[12px] font-medium transition-colors";
+    ? "px-2.5 py-0.5 rounded-md font-body-ui text-[11px] font-medium transition-colors"
+    : "px-3 py-1 rounded-md font-body-ui text-[12px] font-medium transition-colors";
 
-  const pillActive = "bg-primary text-on-primary";
+  const pillActive = "btn-primary";
   const pillInactive = "text-on-surface-variant hover:bg-surface-container-high";
 
   const otGroups = BOOK_GROUPS.filter((g) => g.testament === "OT");
@@ -114,7 +114,7 @@ export default function SearchScopeBar({ compact }: Props) {
       {popoverOpen && (
         <div
           ref={popoverRef}
-          className="absolute top-full mt-2 left-0 z-50 w-[480px] max-h-[60vh] overflow-y-auto bg-surface border border-outline-variant rounded-xl shadow-2xl p-4 flex gap-6"
+          className="absolute top-full mt-2 left-0 z-50 w-[480px] max-h-[60vh] overflow-y-auto p-4 flex gap-6 glass rounded-2xl"
           style={{ minWidth: 320 }}
         >
           {/* OT column */}

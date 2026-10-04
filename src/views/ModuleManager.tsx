@@ -101,7 +101,7 @@ export default function ModuleManager() {
 
       <main className="flex-1 flex flex-col overflow-hidden bg-background">
         {/* Header */}
-        <div className="p-6 border-b border-outline-variant bg-surface shrink-0">
+        <div className="p-6 border-b border-outline-variant shrink-0">
           <h1 className="font-display-lg text-display-lg text-on-surface mb-1">Module Library</h1>
           <p className="font-body-ui text-body-ui text-on-surface-variant">
             Download and manage Bible texts, commentaries, and lexicons.
@@ -115,9 +115,9 @@ export default function ModuleManager() {
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`px-4 py-1.5 rounded-DEFAULT font-body-ui text-body-ui capitalize transition-colors ${
+                className={`px-4 py-1.5 rounded-md font-body-ui text-body-ui capitalize transition-colors ${
                   tab === t
-                    ? "bg-primary text-on-primary"
+                    ? "btn-primary"
                     : "text-secondary hover:bg-surface-container-low"
                 }`}
               >
@@ -130,10 +130,10 @@ export default function ModuleManager() {
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
-                className={`px-3 py-1 rounded-DEFAULT font-metadata-mono text-metadata-mono text-[11px] transition-colors ${
+                className={`px-3 py-1 rounded-md font-metadata-mono text-metadata-mono text-[11px] transition-colors ${
                   category === cat
                     ? "bg-secondary-container text-on-secondary-container"
-                    : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
+                    : "ctl text-on-surface-variant"
                 }`}
               >
                 {cat}
@@ -143,7 +143,7 @@ export default function ModuleManager() {
           <div className="relative ml-auto">
             <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
             <input
-              className="pl-8 pr-3 py-1.5 bg-surface-container-low border border-outline-variant rounded-DEFAULT focus:outline-none focus:border-primary font-body-ui text-body-ui w-56 transition-colors"
+              className="pl-8 pr-3 py-1.5 focus:outline-none font-body-ui text-body-ui w-56 transition-colors field rounded-lg"
               placeholder="Filter modules…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -169,16 +169,16 @@ export default function ModuleManager() {
                 const isInstalling = state?.status === "downloading" || state?.status === "indexing";
                 const isDone = state?.status === "done" || m.installed;
                 return (
-                  <div key={m.id} className="border border-outline-variant rounded-DEFAULT bg-surface p-4 flex items-start gap-4">
+                  <div key={m.id} className="p-4 flex items-start gap-4 ctl rounded-xl">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-body-ui text-body-ui font-semibold text-on-surface">{m.name}</h3>
-                        <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-surface-container text-on-surface-variant rounded-DEFAULT">{m.category}</span>
+                        <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-surface-container text-on-surface-variant rounded-md">{m.category}</span>
                         {m.source && (
-                          <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-surface-container-low text-on-surface-variant/70 rounded-DEFAULT border border-outline-variant">{m.source}</span>
+                          <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 text-on-surface-variant/70 field rounded-md">{m.source}</span>
                         )}
                         {m.requires_key && (
-                          <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-error-container text-on-error-container rounded-DEFAULT">Requires key</span>
+                          <span className="font-metadata-mono text-[10px] px-1.5 py-0.5 bg-error-container text-on-error-container rounded-md">Requires key</span>
                         )}
                       </div>
                       <p className="font-body-ui text-[13px] text-on-surface-variant leading-relaxed">{m.description}</p>
@@ -200,12 +200,12 @@ export default function ModuleManager() {
                     <button
                       disabled={isDone || isInstalling}
                       onClick={() => install(m.id, m.requires_key, m.name)}
-                      className={`shrink-0 px-4 py-1.5 rounded-DEFAULT font-body-ui text-body-ui text-sm transition-colors ${
+                      className={`shrink-0 px-4 py-1.5 rounded-md font-body-ui text-body-ui text-sm transition-colors ${
                         isDone
                           ? "bg-surface-container text-on-surface-variant cursor-default"
                           : isInstalling
                           ? "bg-surface-container text-on-surface-variant cursor-wait"
-                          : "bg-primary text-on-primary hover:bg-primary-container"
+                          : "btn-primary"
                       }`}
                     >
                       {isDone ? "Installed" : isInstalling ? (state.status === "indexing" ? "Indexing…" : "Downloading…") : "Install"}
@@ -221,23 +221,23 @@ export default function ModuleManager() {
       {/* Cipher key modal */}
       {cipherModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-surface border border-outline-variant rounded-xl p-6 w-96 shadow-xl">
+          <div className="p-6 w-96 glass rounded-3xl">
             <h2 className="font-headline-md text-headline-md font-bold text-on-surface mb-2">Enter cipher key</h2>
             <p className="font-body-ui text-body-ui text-on-surface-variant mb-4">
               <strong>{cipherModal.name}</strong> requires a license key to install.
             </p>
             <input
-              className="w-full px-3 py-2 border border-outline-variant rounded-DEFAULT font-metadata-mono text-body-ui focus:outline-none focus:border-primary mb-4"
+              className="w-full px-3 py-2 font-metadata-mono text-body-ui focus:outline-none mb-4 field rounded-lg"
               placeholder="Cipher key"
               value={cipherKey}
               onChange={(e) => setCipherKey(e.target.value)}
               autoFocus
             />
             <div className="flex gap-3 justify-end">
-              <button onClick={() => { setCipherModal(null); setCipherKey(""); }} className="px-4 py-2 text-secondary font-body-ui text-body-ui hover:bg-surface-container-low rounded-DEFAULT">
+              <button onClick={() => { setCipherModal(null); setCipherKey(""); }} className="px-4 py-2 text-secondary font-body-ui text-body-ui hover:bg-surface-container-low rounded-md">
                 Cancel
               </button>
-              <button onClick={installWithKey} disabled={!cipherKey.trim()} className="px-4 py-2 bg-primary text-on-primary font-body-ui text-body-ui rounded-DEFAULT hover:bg-primary-container disabled:opacity-50">
+              <button onClick={installWithKey} disabled={!cipherKey.trim()} className="px-4 py-2 btn-primary font-body-ui text-body-ui rounded-md hover:bg-primary-container disabled:opacity-50">
                 Install
               </button>
             </div>

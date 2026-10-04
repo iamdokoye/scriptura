@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore, type VerseRef, type ServiceItem } from "../store/app";
-import { api, type MonitorInfo } from "../lib/tauri";
-import SideNav from "../components/SideNav";
+import { api, type MonitorInfo, type TextSpan } from "../lib/tauri";
 import { useChapterData } from "../hooks/useChapterData";
 import { usePresentationSync } from "../hooks/usePresentationSync";
-import { usePresentationCloseSync } from "../hooks/usePresentationCloseSync";
+import { measureVersePartsDOM } from "../lib/verseSplit";
+import { FONT_FAMILY_CSS } from "../components/VersePanes";
+import StrongsSheet from "../components/StrongsSheet";
+import ScriptureNav from "../components/ScriptureNav";
 
 function verseText(chapterVerses: { verse: number; spans: { text: string }[] }[] | undefined, verse: number): string {
   return chapterVerses?.find((v) => v.verse === verse)?.spans.map((s) => s.text).join("") ?? "";
@@ -20,13 +22,24 @@ function refLabel(ref: VerseRef) {
 
 export default function LiveShowRunner() {
   const {
-    serviceOrder, currentRef, setCurrentRef, primaryModule,
-    presentationActive, setPresentationActive,
+    serviceOrder, clearServiceOrder, addToServiceOrder, setServiceOrderOpen, currentRef, setCurrentRef, primaryModule,
+    presentationActive,
     parallelModule, parallelMode, selectedStrongs, strongsGroup, strongsSource, displayPrefs, readingFontSize,
     activePresentationTheme,
-    liveBlack, setLiveBlack, liveEmergency, setLiveEmergency,
+    liveBlack, liveEmergency,
     liveHistory, pushLiveHistory, popLiveHistory,
+    versePart, setVersePart,
+    setSelectedStrongs, setStrongsGroup, showStrongs, showRedLetter,
   } = useAppStore();
+
+  // Same click contract as ReadingView's handleStrongsClick — StrongsSheet
+  // (mounted below) picks up selectedStrongs/strongsGroup itself and, since
+  // that state is already relayed to the output window, also broadcasts the
+  // lookup to the congregation screen.
+  const handleStrongsClick = useCallback((numbers: string[]) => {
+    setSelectedStrongs(numbers[0] ?? null);
+    setStrongsGroup(numbers.length > 1 ? numbers : null);
+  }, [setSelectedStrongs, setStrongsGroup]);
 
   // Defaults to whatever's live/current already, so opening the console never
   // silently changes what's on screen — the operator always previews before
@@ -34,44 +47,91 @@ export default function LiveShowRunner() {
   const [previewRef, setPreviewRef] = useState<VerseRef>(
     () => serviceOrder[0] ?? currentRef,
   );
-  const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
-  const [showMonitorPicker, setShowMonitorPicker] = useState(false);
-  const monitorPickerRef = useRef<HTMLDivElement>(null);
+  // Which split part (0-indexed) of previewRef is selected — mirrors
+  // `versePart` (the live/global equivalent) but stays local until Go
+  // carries it over, same as previewRef itself.
+  const [previewPart, setPreviewPart] = useState(0);
+  useEffect(() => setPreviewPart(0), [previewRef.book, previewRef.chapter, previewRef.verse]);
 
+  const scriptureNavRef = useRef<HTMLInputElement>(null);
+
+  const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   useEffect(() => {
     api.listMonitors().then(setMonitors).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    function onMouseDown(e: MouseEvent) {
-      if (monitorPickerRef.current && !monitorPickerRef.current.contains(e.target as Node)) {
-        setShowMonitorPicker(false);
-      }
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, []);
-
-  usePresentationCloseSync(setPresentationActive);
   usePresentationSync({
     presentationActive, primaryModule, currentRef, parallelModule, parallelMode,
     selectedStrongs, strongsGroup, strongsSource, displayPrefs, readingFontSize,
     presentationTheme: activePresentationTheme,
     black: liveBlack, emergency: liveEmergency,
+    versePart: displayPrefs.splitLongVerses ? versePart : undefined,
   });
 
   const { chapter: previewChapter } = useChapterData(primaryModule, previewRef.book, previewRef.chapter, false, null);
   const { chapter: liveChapter } = useChapterData(primaryModule, currentRef.book, currentRef.chapter, false, null);
+
+  // Splits verse text into presentation-sized parts by measuring against the
+  // actual presentation box dimensions — same approach as ReadingView.tsx, so
+  // this console and the output screen always agree on where a verse splits.
+  const splitBox = useMemo(() => {
+    const ctx = displayPrefs.presentationContext ?? 1;
+    const theme = activePresentationTheme;
+    const hPadPct = theme?.safe_margin ?? (5 + displayPrefs.margins / 2);
+    const screenW = monitors.find((m) => m.is_primary)?.width ?? monitors[0]?.width ?? 1920;
+    const screenH = monitors.find((m) => m.is_primary)?.height ?? monitors[0]?.height ?? 1080;
+
+    let boxW: number;
+    let boxH: number;
+    if (ctx === 1 && theme) {
+      boxW = (theme.verse_box_width / 100) * screenW;
+      boxH = (theme.verse_box_height / 100) * screenH;
+    } else if (ctx === 2 || ctx === 3) {
+      boxW = ((100 - 2 * hPadPct) / 100) * screenW;
+      boxH = screenH * (ctx === 3 ? 0.5 : 0.6);
+    } else {
+      boxW = ((100 - 2 * hPadPct - 6) / 100) * screenW;
+      boxH = screenH * 0.75;
+    }
+
+    const fontFamily = FONT_FAMILY_CSS[theme?.font_family ?? displayPrefs.fontFamily] ?? FONT_FAMILY_CSS.system;
+    return {
+      boxW, boxH,
+      style: {
+        fontFamily,
+        fontSizePx: readingFontSize * (theme?.font_scale ?? 1),
+        lineHeight: 1 + displayPrefs.lineSpacing,
+        fontWeight: theme?.text_font_weight ?? 600,
+        textAlign: theme?.text_align ?? displayPrefs.textAlign,
+      },
+    };
+  }, [
+    displayPrefs.presentationContext, displayPrefs.margins, displayPrefs.fontFamily,
+    displayPrefs.lineSpacing, displayPrefs.textAlign, activePresentationTheme, readingFontSize, monitors,
+  ]);
+
+  const splitParts = useCallback((text: string) => measureVersePartsDOM(text.trim(), splitBox.boxW, splitBox.boxH, splitBox.style), [splitBox]);
+
+  const previewPartsMap = useMemo(() => {
+    const map = new Map<number, string[]>();
+    if (!displayPrefs.splitLongVerses || !previewChapter) return map;
+    for (const v of previewChapter.verses) {
+      map.set(v.verse, splitParts(v.spans.map((s) => s.text).join("")));
+    }
+    return map;
+  }, [displayPrefs.splitLongVerses, previewChapter, splitParts]);
 
   const previewQueueIndex = serviceOrder.findIndex((item) => sameRef(item, previewRef));
   const liveQueueIndex = serviceOrder.findIndex((item) => sameRef(item, currentRef));
   const nextItem: ServiceItem | null = liveQueueIndex >= 0 ? serviceOrder[liveQueueIndex + 1] ?? null : null;
 
   const goLive = useCallback(() => {
-    if (sameRef(previewRef, currentRef)) return;
-    pushLiveHistory(currentRef);
+    const sameVerse = sameRef(previewRef, currentRef);
+    if (sameVerse && previewPart === versePart) return;
+    if (!sameVerse) pushLiveHistory(currentRef);
     setCurrentRef(previewRef);
-  }, [previewRef, currentRef, pushLiveHistory, setCurrentRef]);
+    setVersePart(previewPart);
+  }, [previewRef, currentRef, previewPart, versePart, pushLiveHistory, setCurrentRef, setVersePart]);
 
   const goBack = useCallback(() => {
     const prev = popLiveHistory();
@@ -81,6 +141,22 @@ export default function LiveShowRunner() {
   const selectQueueItem = useCallback((item: ServiceItem) => {
     setPreviewRef({ book: item.book, chapter: item.chapter, verse: item.verse });
   }, []);
+
+  const previewInQueue = previewQueueIndex >= 0;
+
+  // Same Ctrl+Alt+Q binding ReadingView uses to queue the verse it's showing —
+  // here it queues whatever's in Preview instead, since that's this console's
+  // equivalent of "the verse I'm currently looking at".
+  const addPreviewToQueue = useCallback(() => {
+    if (!primaryModule || previewInQueue) return;
+    addToServiceOrder({
+      book: previewRef.book,
+      chapter: previewRef.chapter,
+      verse: previewRef.verse,
+      text: verseText(previewChapter?.verses, previewRef.verse),
+      module: primaryModule,
+    });
+  }, [primaryModule, previewInQueue, previewRef, previewChapter, addToServiceOrder]);
 
   const stepQueue = useCallback((delta: number) => {
     if (serviceOrder.length === 0) return;
@@ -114,21 +190,6 @@ export default function LiveShowRunner() {
     }
   }, [previewChapter, previewRef, primaryModule]);
 
-  async function togglePresentationWindow(monitorIndex?: number) {
-    if (presentationActive) {
-      await api.closePresentationWindow().catch(() => {});
-      setPresentationActive(false);
-      return;
-    }
-    if (monitorIndex === undefined && monitors.length > 1) {
-      setShowMonitorPicker(true);
-      return;
-    }
-    setShowMonitorPicker(false);
-    await api.openPresentationWindow(monitorIndex ?? monitors[0]?.index).catch(() => {});
-    setPresentationActive(true);
-  }
-
   // Keyboard shortcuts, scoped to this console only (not the global reading
   // shortcuts) — an operator running a live show wants Up/Down/Left/Right/
   // Enter to behave predictably without colliding with reading-view bindings.
@@ -137,11 +198,17 @@ export default function LiveShowRunner() {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
 
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "e") {
+      if (e.ctrlKey && e.altKey && e.code === "KeyQ") {
         e.preventDefault();
-        setLiveEmergency(!liveEmergency);
+        addPreviewToQueue();
         return;
       }
+      if (e.ctrlKey && !e.altKey && e.code === "KeyL") {
+        e.preventDefault();
+        scriptureNavRef.current?.focus();
+        return;
+      }
+
       switch (e.key) {
         case "ArrowUp":
           e.preventDefault();
@@ -167,245 +234,349 @@ export default function LiveShowRunner() {
           e.preventDefault();
           goBack();
           break;
-        case "c":
-        case "C":
-          e.preventDefault();
-          setLiveBlack(!liveBlack);
-          break;
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [stepQueue, stepVerse, goLive, goBack, liveBlack, setLiveBlack, liveEmergency, setLiveEmergency]);
+  }, [stepQueue, stepVerse, goLive, goBack, addPreviewToQueue]);
+
+  const liveText = verseText(liveChapter?.verses, currentRef.verse);
+  const liveParts = displayPrefs.splitLongVerses ? splitParts(liveText) : [liveText];
+  const liveActiveText = liveParts[versePart] ?? liveParts[0] ?? liveText;
+  const liveSplit = liveParts.length > 1;
+
+  const previewText = verseText(previewChapter?.verses, previewRef.verse);
+  const previewParts = previewPartsMap.get(previewRef.verse) ?? [previewText];
+  const previewActiveText = previewParts[previewPart] ?? previewParts[0] ?? previewText;
+  const previewSplit = previewParts.length > 1;
+
+  const overridden = liveBlack || liveEmergency;
 
   return (
-    <div className="flex flex-1 overflow-hidden">
-      <SideNav variant="full" />
-      <main className="flex-1 min-w-0 flex flex-col overflow-hidden bg-background">
-        <header className="px-8 py-5 border-b border-outline-variant bg-surface shrink-0 flex items-center justify-between gap-5">
-          <div>
-            <h1 className="font-headline-md text-headline-md font-bold text-on-surface">Live Show</h1>
-            <p className="font-body-ui text-[13px] text-on-surface-variant mt-0.5">
-              Preview what's next, then send it live — browsing here never changes what the room sees until you press Go.
-            </p>
-          </div>
-
-          <div ref={monitorPickerRef} className="relative flex items-center">
-            <button
-              onClick={() => togglePresentationWindow()}
-              title={presentationActive ? "Stop presentation" : "Open the presentation output window"}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-DEFAULT text-[13px] font-body-ui font-semibold transition-colors ${
-                presentationActive ? "bg-error text-on-error hover:bg-error/90" : "bg-primary text-on-primary hover:bg-primary/90"
-              }`}
-            >
-              <span className="material-symbols-outlined text-[16px]">{presentationActive ? "stop_circle" : "slideshow"}</span>
-              {presentationActive ? "● LIVE OUTPUT" : "Open Output"}
-              {!presentationActive && monitors.length > 1 && <span className="material-symbols-outlined text-[14px]">expand_more</span>}
-            </button>
-            {showMonitorPicker && monitors.length > 1 && (
-              <div className="absolute right-0 top-full mt-1 z-50 bg-surface border border-outline-variant rounded-DEFAULT shadow-lg min-w-[220px] overflow-hidden">
-                <div className="px-3 py-1.5 bg-surface-container-low border-b border-outline-variant">
-                  <span className="font-metadata-mono text-[10px] text-on-surface-variant uppercase tracking-widest">Present on…</span>
-                </div>
-                {monitors.map((m) => (
-                  <button
-                    key={m.index}
-                    onClick={() => togglePresentationWindow(m.index)}
-                    className="w-full flex items-center justify-between gap-2 text-left px-3 py-2 font-body-ui text-body-ui text-on-surface hover:bg-surface-container-high transition-colors"
-                  >
-                    <span>{m.name ?? `Display ${m.index + 1}`}</span>
-                    <span className="font-metadata-mono text-[11px] text-on-surface-variant shrink-0">
-                      {m.is_primary ? "Primary · " : ""}{m.width}×{m.height}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </header>
-
-        <div className="flex-1 min-h-0 flex overflow-hidden">
-          {/* Queue */}
-          <aside className="w-[260px] shrink-0 border-r border-outline-variant overflow-y-auto">
-            {serviceOrder.length === 0 ? (
-              <div className="p-5 text-center">
-                <p className="font-body-ui text-[12px] text-on-surface-variant leading-relaxed">
-                  No items in the service queue yet — add verses from the reading view, or just browse with the arrow keys below.
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-3 gap-3">
+      {/* Live display + Main Output / Queue */}
+      <div className="flex-1 min-h-0 flex gap-3 overflow-hidden">
+        <section className="flex-1 min-w-0 flex flex-col overflow-hidden panel rounded-3xl">
+          <PanelHeader icon="tv" label="Live display" />
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 flex items-start">
+            {overridden ? (
+              <div className="w-full px-5 py-8 text-center ctl rounded-xl">
+                <p className="font-body-ui text-[13px] text-on-surface-variant">
+                  {liveEmergency ? "Standby screen is showing on the output." : "Output is cut to black."}
                 </p>
               </div>
             ) : (
-              <ul className="py-2">
-                {serviceOrder.map((item, idx) => {
-                  const isPreview = idx === previewQueueIndex;
-                  const isLive = idx === liveQueueIndex;
-                  return (
-                    <li key={item.id}>
-                      <button
-                        onClick={() => selectQueueItem(item)}
-                        className={`w-full text-left px-3 py-2 mx-2 mb-1 rounded-DEFAULT border transition-colors ${
-                          isPreview
-                            ? "border-primary bg-primary/8"
-                            : "border-transparent hover:bg-surface-container-low"
-                        }`}
-                        style={{ width: "calc(100% - 1rem)" }}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-metadata-mono text-[10px] text-on-surface-variant">{idx + 1}</span>
-                          <span className={`font-body-ui text-[13px] font-semibold ${isPreview ? "text-primary" : "text-on-surface"}`}>
-                            {refLabel(item)}
-                          </span>
-                          {isLive && <span className="font-metadata-mono text-[9px] uppercase tracking-widest text-error ml-auto shrink-0">Live</span>}
-                        </div>
-                        <p className="font-body-ui text-[11px] text-on-surface-variant leading-snug mt-0.5 line-clamp-2">{item.text}</p>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </aside>
-
-          {/* Preview / Live / Next */}
-          <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-            <div className="flex-1 min-h-0 grid grid-cols-2 gap-px bg-outline-variant overflow-hidden">
-              <PreviewPane
-                verseRef={previewRef}
-                text={verseText(previewChapter?.verses, previewRef.verse)}
-                onStepQueue={stepQueue}
-                onStepVerse={stepVerse}
-              />
-              <LivePane
-                verseRef={currentRef}
-                text={verseText(liveChapter?.verses, currentRef.verse)}
-                black={liveBlack}
-                emergency={liveEmergency}
-                presentationActive={presentationActive}
-              />
-            </div>
-            {nextItem && (
-              <div className="shrink-0 border-t border-outline-variant px-6 py-3 flex items-center gap-3 bg-surface-container-lowest">
-                <span className="font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant">Next in queue</span>
-                <span className="font-body-ui text-[13px] font-semibold text-on-surface">{refLabel(nextItem)}</span>
-                <span className="font-body-ui text-[12px] text-on-surface-variant truncate">{nextItem.text}</span>
-                <button
-                  onClick={() => selectQueueItem(nextItem)}
-                  className="ml-auto font-body-ui text-[12px] text-primary hover:underline shrink-0"
-                >
-                  Preview this
-                </button>
+              <div className="w-full rounded-xl row-selected panel px-6 py-5">
+                <p className="font-metadata-mono text-[11px] uppercase tracking-widest text-primary mb-1.5 flex items-center gap-2">
+                  {refLabel(currentRef)} {primaryModule ? `(${primaryModule})` : ""}
+                  {liveSplit && (
+                    <span className="px-1.5 rounded-full border border-primary text-primary normal-case">
+                      {versePart + 1}/{liveParts.length}
+                    </span>
+                  )}
+                </p>
+                <p className="font-body-reading text-[20px] leading-relaxed text-on-surface">{liveActiveText || "—"}</p>
               </div>
             )}
+          </div>
+        </section>
 
-            {/* Controls */}
-            <div className="shrink-0 border-t border-outline-variant px-6 py-4 flex items-center gap-3 bg-surface">
+        <aside className="w-[320px] shrink-0 flex flex-col overflow-hidden glass rounded-3xl">
+          <div className="shrink-0 p-4">
+            <PanelHeader icon="monitor" label="Main Output" compact />
+            <div className="mt-2 aspect-video rounded-xl bg-black overflow-hidden flex items-center justify-center p-3">
+              {!presentationActive ? (
+                <span className="font-body-ui text-[11px] text-white/30">Output closed</span>
+              ) : overridden ? (
+                <span className="font-body-ui text-[11px] text-white/30">
+                  {liveEmergency ? "Standby" : "Black"}
+                </span>
+              ) : (
+                <div className="w-full">
+                  <p className="font-metadata-mono text-[8px] text-white/40 mb-1 truncate">
+                    {refLabel(currentRef)}{liveSplit ? ` · ${versePart + 1}/${liveParts.length}` : ""}
+                  </p>
+                  <p className="font-body-reading text-[9px] leading-tight text-white line-clamp-3">{liveActiveText || "—"}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="shrink-0 flex items-center justify-between px-4 py-2">
+              <span className="font-body-ui text-[13px] font-bold text-on-surface">Queue</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setServiceOrderOpen(true)}
+                  className="flex items-center gap-1 font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors"
+                  title="Reorder or remove queue items (Ctrl+Q)"
+                >
+                  <span className="material-symbols-outlined text-[14px]">reorder</span>
+                  Edit
+                </button>
+                {serviceOrder.length > 0 && (
+                  <button
+                    onClick={clearServiceOrder}
+                    className="px-1.5 py-1 -my-1 rounded-md font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-error ghost"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {serviceOrder.length === 0 ? (
+                <div className="p-5 text-center">
+                  <p className="font-body-ui text-[12px] text-on-surface-variant leading-relaxed">
+                    No items in the service queue yet — add verses from the reading view, or just browse below.
+                  </p>
+                </div>
+              ) : (
+                <ul className="py-2">
+                  {serviceOrder.map((item, idx) => {
+                    const isPreview = idx === previewQueueIndex;
+                    const isLive = idx === liveQueueIndex;
+                    return (
+                      <li key={item.id}>
+                        <button
+                          onClick={() => selectQueueItem(item)}
+                          className={`w-full text-left px-3 py-2 mx-2 mb-1 rounded-md border border-transparent transition-colors ${
+                            isPreview ? "row-selected" : "border-transparent hover:bg-surface-container-low"
+                          }`}
+                          style={{ width: "calc(100% - 1rem)" }}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-metadata-mono text-[10px] text-on-surface-variant">{idx + 1}</span>
+                            <span className={`font-body-ui text-[13px] font-semibold ${isPreview ? "text-primary" : "text-on-surface"}`}>
+                              {refLabel(item)}
+                            </span>
+                            {isLive && <span className="font-metadata-mono text-[9px] uppercase tracking-widest text-error ml-auto shrink-0">Live</span>}
+                          </div>
+                          <p className="font-body-ui text-[11px] text-on-surface-variant leading-snug mt-0.5 line-clamp-2">{item.text}</p>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      {nextItem && (
+        <div className="shrink-0 px-6 py-2.5 flex items-center gap-3 glass rounded-2xl">
+          <span className="font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant">Next in queue</span>
+          <span className="font-body-ui text-[13px] font-semibold text-on-surface">{refLabel(nextItem)}</span>
+          <span className="font-body-ui text-[12px] text-on-surface-variant truncate">{nextItem.text}</span>
+          <button
+            onClick={() => selectQueueItem(nextItem)}
+            className="ml-auto px-2 py-1 rounded-md font-body-ui text-[12px] text-primary ghost shrink-0"
+          >
+            Preview this
+          </button>
+        </div>
+      )}
+
+      {/* Reference picker + verse list + preview */}
+      <div className="h-[42%] min-h-[240px] shrink-0 panel rounded-3xl flex flex-col overflow-hidden">
+        <div className="shrink-0 flex items-center gap-3 px-4 py-2.5">
+          {primaryModule && (
+            <span className="font-metadata-mono text-[11px] font-bold text-on-surface-variant field px-2.5 py-1 rounded-lg shrink-0">
+              {primaryModule}
+            </span>
+          )}
+          <span className="font-body-ui text-[13px] font-semibold text-on-surface shrink-0">{refLabel(previewRef)}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => stepVerse(-1)} className="p-1 rounded-md ctl text-on-surface-variant" title="Previous verse (←)">
+              <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+            </button>
+            <button onClick={() => stepVerse(1)} className="p-1 rounded-md ctl text-on-surface-variant" title="Next verse (→)">
+              <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+            </button>
+          </div>
+          <div className="w-px h-4 bg-outline-variant shrink-0" />
+          <div className="max-w-xs">
+            <ScriptureNav
+              inputRef={scriptureNavRef}
+              baseRef={previewRef}
+              placeholder="Jump to… jn 3:16 or v5  (Ctrl+L)"
+              onNavigate={(ref) => setPreviewRef(ref)}
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0 flex overflow-hidden">
+          <div className="flex-1 min-w-0 overflow-y-auto px-2 py-2">
+            {(previewChapter?.verses ?? []).map((v) => {
+              const text = v.spans.map((s) => s.text).join("");
+              const parts = previewPartsMap.get(v.verse) ?? [text];
+              const split = parts.length > 1;
+              return (
+                <div key={v.verse} className="mb-1">
+                  {parts.map((part, i) => {
+                    const active = v.verse === previewRef.verse && i === previewPart;
+                    return (
+                      <div key={i} className={i > 0 ? "pl-6 relative mt-1" : ""}>
+                        {i > 0 && (
+                          <span
+                            className="material-symbols-outlined absolute left-1 top-1.5 text-[14px] text-on-surface-variant/40 pointer-events-none"
+                            aria-hidden
+                          >
+                            subdirectory_arrow_right
+                          </span>
+                        )}
+                        {/* A plain div, not a button — the unsplit case nests clickable
+                            Strong's-number buttons inside, which a <button> can't legally contain. */}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => { setPreviewRef({ ...previewRef, verse: v.verse }); setPreviewPart(i); }}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPreviewRef({ ...previewRef, verse: v.verse }); setPreviewPart(i); } }}
+                          className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-md border border-transparent transition-colors cursor-pointer ${
+                            active
+                              ? "row-selected"
+                              : i === 0
+                              ? "border-transparent hover:bg-surface-container-low"
+                              : "border-outline-variant/50 hover:bg-surface-container-low"
+                          }`}
+                        >
+                          <span className={`font-metadata-mono text-[12px] shrink-0 mt-0.5 ${active ? "text-primary font-bold" : "text-on-surface-variant"}`}>
+                            {i === 0 ? v.verse : `p${i + 1}`}
+                          </span>
+                          {i === 0 && split && (
+                            <span className={`shrink-0 mt-0.5 px-1.5 rounded-full border font-metadata-mono text-[10px] ${active ? "border-primary text-primary" : "border-outline-variant text-on-surface-variant"}`}>
+                              1/{parts.length}
+                            </span>
+                          )}
+                          <span className="font-body-reading text-[14px] leading-snug text-on-surface">
+                            {i === 0 && !split
+                              ? <VerseSpans spans={v.spans} showStrongs={showStrongs} showRedLetter={showRedLetter} onStrongsClick={handleStrongsClick} />
+                              : part}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="w-[300px] shrink-0 flex flex-col overflow-hidden">
+            <div className="shrink-0 flex items-center justify-between px-4 pt-3">
+              <PanelHeader icon="visibility" label="Preview" compact />
+              <button
+                onClick={addPreviewToQueue}
+                disabled={previewInQueue}
+                className="flex items-center gap-1 font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                title={previewInQueue ? "Already in the queue" : "Add to queue (Ctrl+Alt+Q)"}
+              >
+                <span className="material-symbols-outlined text-[14px]">playlist_add</span>
+                Queue
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto p-4">
+              <p className="font-metadata-mono text-[11px] text-on-surface-variant mb-1.5 flex items-center gap-2">
+                {refLabel(previewRef)}
+                {previewSplit && (
+                  <span className="px-1.5 text-on-surface-variant ctl rounded-lg">
+                    {previewPart + 1}/{previewParts.length}
+                  </span>
+                )}
+              </p>
+              <p className="font-body-reading text-[15px] leading-relaxed text-on-surface">
+                {previewActiveText || "—"}
+              </p>
+            </div>
+            <div className="shrink-0 border-t border-outline-variant p-3 flex items-center gap-2">
               <button
                 onClick={goLive}
-                disabled={sameRef(previewRef, currentRef)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-DEFAULT bg-primary text-on-primary font-body-ui text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                disabled={sameRef(previewRef, currentRef) && previewPart === versePart}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md btn-primary font-body-ui text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
                 title="Send the previewed verse live (Enter)"
               >
                 <span className="material-symbols-outlined text-[18px]">play_arrow</span>
                 GO
-                <kbd className="font-metadata-mono text-[10px] opacity-70 border border-current rounded px-1">⏎</kbd>
               </button>
               <button
                 onClick={goBack}
                 disabled={liveHistory.length === 0}
-                className="flex items-center gap-2 px-3.5 py-2.5 rounded-DEFAULT border border-outline-variant text-on-surface font-body-ui text-[13px] disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                className="flex items-center gap-1.5 px-3 py-2.5 text-on-surface font-body-ui text-[13px] disabled:opacity-40 disabled:cursor-not-allowed transition-opacity ctl rounded-lg"
                 title="Return to the previously-live verse (Backspace)"
               >
                 <span className="material-symbols-outlined text-[18px]">undo</span>
-                Back
-              </button>
-              <button
-                onClick={() => setLiveBlack(!liveBlack)}
-                className={`flex items-center gap-2 px-3.5 py-2.5 rounded-DEFAULT font-body-ui text-[13px] font-semibold transition-colors ${
-                  liveBlack ? "bg-on-surface text-surface" : "border border-outline-variant text-on-surface hover:bg-surface-container-low"
-                }`}
-                title="Cut the live output to black without losing your place (C)"
-              >
-                <span className="material-symbols-outlined text-[18px]">{liveBlack ? "brightness_7" : "brightness_1"}</span>
-                {liveBlack ? "Clear" : "Black"}
-              </button>
-              <button
-                onClick={() => setLiveEmergency(!liveEmergency)}
-                className={`flex items-center gap-2 px-3.5 py-2.5 rounded-DEFAULT font-body-ui text-[13px] font-bold transition-colors ml-auto ${
-                  liveEmergency ? "bg-error text-on-error" : "border-2 border-error text-error hover:bg-error-container/30"
-                }`}
-                title="Override the output with a safe standby screen (Ctrl+Shift+E)"
-              >
-                <span className="material-symbols-outlined text-[18px]">emergency</span>
-                {liveEmergency ? "End emergency" : "Emergency"}
               </button>
             </div>
           </div>
         </div>
-      </main>
+      </div>
+
+      <StrongsSheet />
     </div>
   );
 }
 
-function PreviewPane({ verseRef, text, onStepQueue, onStepVerse }: {
-  verseRef: VerseRef;
-  text: string;
-  onStepQueue: (delta: number) => void;
-  onStepVerse: (delta: number) => void;
-}) {
+function PanelHeader({ icon, label, compact }: { icon: string; label: string; compact?: boolean }) {
   return (
-    <div className="bg-surface flex flex-col overflow-hidden">
-      <div className="shrink-0 px-5 py-2.5 flex items-center justify-between border-b border-outline-variant">
-        <span className="font-metadata-mono text-[10px] uppercase tracking-widest text-secondary">Preview</span>
-        <div className="flex items-center gap-1">
-          <button onClick={() => onStepVerse(-1)} className="p-1 rounded text-on-surface-variant hover:bg-surface-container-low" title="Previous verse (←)">
-            <span className="material-symbols-outlined text-[16px]">chevron_left</span>
-          </button>
-          <button onClick={() => onStepVerse(1)} className="p-1 rounded text-on-surface-variant hover:bg-surface-container-low" title="Next verse (→)">
-            <span className="material-symbols-outlined text-[16px]">chevron_right</span>
-          </button>
-          <button onClick={() => onStepQueue(-1)} className="p-1 rounded text-on-surface-variant hover:bg-surface-container-low ml-1" title="Previous queue item (↑)">
-            <span className="material-symbols-outlined text-[16px]">expand_less</span>
-          </button>
-          <button onClick={() => onStepQueue(1)} className="p-1 rounded text-on-surface-variant hover:bg-surface-container-low" title="Next queue item (↓)">
-            <span className="material-symbols-outlined text-[16px]">expand_more</span>
-          </button>
-        </div>
-      </div>
-      <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col justify-center">
-        <p className="font-metadata-mono text-[11px] text-on-surface-variant mb-2">{refLabel(verseRef)}</p>
-        <p className="font-body-reading text-[20px] leading-relaxed text-on-surface">{text || "—"}</p>
-      </div>
+    <div className={`shrink-0 flex items-center gap-2 ${compact ? "" : "px-6 py-3"}`}>
+      <span className="material-symbols-outlined text-[16px] text-on-surface-variant">{icon}</span>
+      <h2 className="font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide">{label}</h2>
     </div>
   );
 }
 
-function LivePane({ verseRef, text, black, emergency, presentationActive }: {
-  verseRef: VerseRef;
-  text: string;
-  black: boolean;
-  emergency: boolean;
-  presentationActive: boolean;
+/** Renders verse spans with the same clickable Strong's-number treatment as
+ * VersePanes.tsx's VerseRow — double-click (or tap a number) to look it up,
+ * which also broadcasts to the presentation output via the shared
+ * selectedStrongs/strongsGroup state. Only used for unsplit verses (see
+ * split-verse handling above) since split parts are plain measured
+ * substrings with no span boundaries to render markup against. */
+function VerseSpans({ spans, showStrongs, showRedLetter, onStrongsClick }: {
+  spans: TextSpan[];
+  showStrongs: boolean;
+  showRedLetter: boolean;
+  onStrongsClick: (numbers: string[]) => void;
 }) {
-  const overridden = black || emergency;
   return (
-    <div className="bg-black flex flex-col overflow-hidden">
-      <div className="shrink-0 px-5 py-2.5 flex items-center gap-2 border-b border-white/10">
-        <span className={`w-2 h-2 rounded-full ${presentationActive ? "bg-error animate-pulse" : "bg-white/20"}`} />
-        <span className="font-metadata-mono text-[10px] uppercase tracking-widest text-error">Live</span>
-        {emergency && <span className="font-metadata-mono text-[10px] uppercase tracking-widest text-white/50 ml-auto">Emergency screen showing</span>}
-        {!emergency && black && <span className="font-metadata-mono text-[10px] uppercase tracking-widest text-white/50 ml-auto">Blacked out</span>}
-      </div>
-      <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col justify-center">
-        {overridden ? (
-          <p className="font-body-ui text-[13px] text-white/30 text-center">
-            {emergency ? "Standby screen is showing instead of this." : "Black screen is showing instead of this."}
-          </p>
-        ) : (
-          <>
-            <p className="font-metadata-mono text-[11px] text-white/40 mb-2">{refLabel(verseRef)}</p>
-            <p className="font-body-reading text-[20px] leading-relaxed text-white">{text || "—"}</p>
-          </>
-        )}
-      </div>
-    </div>
+    <>
+      {spans.map((span, i) => {
+        const red = showRedLetter && span.is_red_letter;
+        const strongsNumbers = span.strongs ?? [];
+        if (strongsNumbers.length > 0 && showStrongs) {
+          return (
+            <span
+              key={i}
+              className={`strongs-word relative group/word border-b border-dashed hover:bg-secondary/10 pb-0.5 ${span.is_title ? "font-bold" : ""} ${red ? "text-red-600 dark:text-red-400 border-red-400" : "border-primary"}`}
+              title={strongsNumbers.length === 1 ? "Double-click to look up in concordance" : "Double-click to look up this phrase's Strong's numbers"}
+              onDoubleClick={(e) => { e.stopPropagation(); onStrongsClick(strongsNumbers); }}
+            >
+              <span className="strongs-tag absolute -top-3 left-1/2 -translate-x-1/2 flex gap-1 whitespace-nowrap font-metadata-mono text-[9px] text-secondary opacity-0 transition-opacity">
+                {strongsNumbers.map((strongs) => (
+                  <button
+                    key={strongs}
+                    type="button"
+                    className="hover:text-primary hover:underline"
+                    title={`Look up ${strongs}`}
+                    onClick={(e) => { e.stopPropagation(); onStrongsClick([strongs]); }}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  >
+                    {strongs}
+                  </button>
+                ))}
+              </span>
+              {span.text}
+            </span>
+          );
+        }
+        if (span.is_title) {
+          return <strong key={i} className={`font-bold ${red ? "text-red-600 dark:text-red-400" : ""}`}>{span.text}</strong>;
+        }
+        if (span.is_added) {
+          return <em key={i} className={red ? "text-red-600 dark:text-red-400" : undefined}>{span.text}</em>;
+        }
+        return <span key={i} className={red ? "text-red-600 dark:text-red-400" : undefined}>{span.text}</span>;
+      })}
+    </>
   );
 }

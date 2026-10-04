@@ -36,18 +36,16 @@ export default function SideNav({ variant }: Props) {
 
   if (variant === "icon-rail") {
     return (
-      <nav className="fixed left-0 top-12 h-[calc(100vh-48px)] flex flex-col z-40 bg-surface-container-lowest border-r border-outline-variant dark:border-outline w-[64px] hover:w-[200px] group overflow-hidden transition-all duration-200 shrink-0">
-        <div className="flex flex-col h-full items-start w-full py-4 space-y-1">
+      <nav className="fixed left-0 top-14 h-[calc(100vh-56px)] flex flex-col z-40 glass !rounded-none !border-y-0 !border-l-0 w-[64px] hover:w-[200px] group overflow-hidden transition-all duration-200 shrink-0">
+        <div className="flex flex-col h-full items-start w-full py-4 px-2 space-y-2">
           {items.map((item) => {
             const active = view === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => setView(item.id)}
-                className={`w-full flex items-center px-4 py-3 transition-all ${
-                  active
-                    ? "bg-secondary-container text-on-secondary-container font-bold border-r-2 border-primary translate-x-0.5"
-                    : "text-secondary hover:bg-surface-container-high"
+                className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-all ${
+                  active ? "ctl-active font-bold" : "text-secondary hover:text-on-surface"
                 }`}
               >
                 <span className="material-symbols-outlined mr-4 flex-shrink-0 text-[20px]">
@@ -66,8 +64,8 @@ export default function SideNav({ variant }: Props) {
 
   // full variant
   return (
-    <nav className="w-sidebar-width bg-surface-container-lowest border-r border-outline-variant dark:border-outline flex flex-col shrink-0 h-full z-40">
-      <div className="p-4 border-b border-outline-variant dark:border-outline">
+    <nav className="w-sidebar-width glass !rounded-none !border-y-0 !border-l-0 h-full flex flex-col shrink-0 z-40">
+      <div className="p-5 pb-3">
         <h2 className="font-headline-md text-headline-md font-bold text-primary">
           Scriptura
         </h2>
@@ -76,17 +74,15 @@ export default function SideNav({ variant }: Props) {
         </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-2">
+      <div className="flex-1 overflow-y-auto py-2 px-3 space-y-1.5">
         {items.map((item) => {
           const active = view === item.id;
           return (
             <button
               key={item.id}
               onClick={() => setView(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 transition-all text-left ${
-                active
-                  ? "bg-secondary-container text-on-secondary-container font-bold border-r-2 border-primary"
-                  : "text-secondary hover:bg-surface-container-high"
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-left ${
+                active ? "ctl-active font-bold" : "text-secondary hover:text-on-surface"
               }`}
             >
               <span className="material-symbols-outlined text-[20px]">{item.icon}</span>

@@ -398,13 +398,13 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
+        className="fixed inset-0 z-40 bg-black/10"
         onClick={close}
       />
 
       {/* Sheet */}
       <div
-        className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full rounded-t-2xl shadow-2xl bg-surface border border-outline-variant flex flex-col transition-all duration-300 ease-out ${
+        className={`fixed bottom-3 left-1/2 -translate-x-1/2 z-50 w-full flex flex-col transition-all duration-300 ease-out glass glass-strong rounded-3xl ${
           visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
         style={{ maxWidth: isFullscreen ? "90%" : "56rem", height: drag.height }}
@@ -494,10 +494,10 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
             <button
               key={pill.id}
               type="button"
-              className={`px-3 py-1 rounded-full font-body-ui text-[12px] font-medium transition-colors ${
+              className={`px-3 py-1 rounded-md font-body-ui text-[12px] font-medium transition-colors ${
                 source === pill.id
-                  ? "bg-primary text-on-primary"
-                  : "bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest"
+                  ? "btn-primary"
+                  : "ctl text-on-surface-variant"
               }`}
               onClick={() => setSource(pill.id)}
             >
@@ -560,7 +560,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                   below already behaves. */}
               <button
                 type="button"
-                className="w-full flex items-center justify-between px-3 py-2 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant font-metadata-mono text-[11px] uppercase tracking-widest transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 rounded ctl text-on-surface-variant font-metadata-mono text-[11px] uppercase tracking-widest transition-colors"
                 onClick={() => setShowUsage((v) => !v)}
               >
                 <span>{entry.usage_count > 0 ? `Occurs ${entry.usage_count}× in the Bible` : "Usage"}</span>
@@ -569,7 +569,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                 </span>
               </button>
               {showUsage && (
-                <div className="rounded border border-outline-variant p-4">
+                <div className="p-4 ctl rounded-xl">
                   {entry.usage_count > 0 ? (
                     <>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5">

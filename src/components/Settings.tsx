@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAppStore, type DisplayPrefs } from "../store/app";
 import { api, type Preferences } from "../lib/tauri";
 import { open as shellOpen } from "@tauri-apps/plugin-shell";
@@ -105,10 +106,10 @@ export default function Settings() {
 
   const isOpen = (id: string) => openSections.has(id);
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[60]" onClick={() => setSettingsOpen(false)}>
       <div
-        className={`absolute bottom-0 left-0 right-0 bg-surface border-t border-outline-variant rounded-t-2xl shadow-2xl transition-all duration-300 ease-out flex flex-col ${
+        className={`absolute bottom-3 left-3 right-3 glass glass-strong rounded-3xl transition-all duration-300 ease-out flex flex-col ${
           visible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
         }`}
         style={{ maxHeight: "52vh" }}
@@ -184,14 +185,14 @@ export default function Settings() {
                   <button
                     onClick={() => setDisplayPrefs({ textAlign: "left" })}
                     title="Left align"
-                    className={`p-1.5 rounded-DEFAULT transition-colors ${displayPrefs.textAlign === "left" ? "bg-primary text-on-primary" : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"}`}
+                    className={`p-1.5 rounded-md transition-colors ${displayPrefs.textAlign === "left" ? "btn-primary" : "ctl text-on-surface-variant"}`}
                   >
                     <span className="material-symbols-outlined text-[18px]">format_align_left</span>
                   </button>
                   <button
                     onClick={() => setDisplayPrefs({ textAlign: "justify" })}
                     title="Justify"
-                    className={`p-1.5 rounded-DEFAULT transition-colors ${displayPrefs.textAlign === "justify" ? "bg-primary text-on-primary" : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"}`}
+                    className={`p-1.5 rounded-md transition-colors ${displayPrefs.textAlign === "justify" ? "btn-primary" : "ctl text-on-surface-variant"}`}
                   >
                     <span className="material-symbols-outlined text-[18px]">format_align_justify</span>
                   </button>
@@ -203,12 +204,12 @@ export default function Settings() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => save({ font_size_reading: Math.max(14, prefs.font_size_reading - 1) })}
-                    className="w-7 h-7 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high flex items-center justify-center font-bold text-on-surface text-sm"
+                    className="w-7 h-7 rounded-md ctl flex items-center justify-center font-bold text-on-surface text-sm"
                   >−</button>
                   <span className="font-metadata-mono text-on-surface w-10 text-center text-sm">{prefs.font_size_reading}px</span>
                   <button
                     onClick={() => save({ font_size_reading: Math.min(98, prefs.font_size_reading + 1) })}
-                    className="w-7 h-7 rounded-DEFAULT bg-surface-container hover:bg-surface-container-high flex items-center justify-center font-bold text-on-surface text-sm"
+                    className="w-7 h-7 rounded-md ctl flex items-center justify-center font-bold text-on-surface text-sm"
                   >+</button>
                   <div className="flex gap-1 ml-1 flex-wrap">
                     {FONT_SIZE_PRESETS.map((s) => (
@@ -374,7 +375,7 @@ export default function Settings() {
             <SubRow label="Tutorial" description="Onboarding walkthrough — coming soon.">
               <button
                 onClick={() => setShortcutsOpen(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-DEFAULT text-[12px] font-body-ui bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-body-ui ctl text-on-surface-variant transition-colors"
               >
                 <span className="material-symbols-outlined text-[14px]">keyboard</span>
                 View shortcuts
@@ -417,7 +418,7 @@ export default function Settings() {
                   );
                   shellOpen(`mailto:okkodann@gmail.com?subject=${subject}&body=${body}`).catch(() => {});
                 }}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-DEFAULT text-[12px] font-body-ui bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-body-ui ctl text-on-surface-variant transition-colors"
               >
                 <span className="material-symbols-outlined text-[14px]">mail</span>
                 Email us
@@ -444,7 +445,8 @@ export default function Settings() {
 
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -563,7 +565,7 @@ function SheetUpdateChecker() {
       {state.phase === "idle" && (
         <button
           onClick={handleCheck}
-          className="px-2.5 py-1 rounded-DEFAULT text-[12px] font-body-ui bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors"
+          className="px-2.5 py-1 rounded-md text-[12px] font-body-ui ctl text-on-surface-variant transition-colors"
         >
           Check for updates
         </button>
@@ -577,7 +579,7 @@ function SheetUpdateChecker() {
       {state.phase === "available" && (
         <button
           onClick={() => handleInstall(state.update)}
-          className="px-2.5 py-1 rounded-DEFAULT text-[12px] font-body-ui bg-primary text-on-primary hover:opacity-90 transition-opacity"
+          className="px-2.5 py-1 rounded-md text-[12px] font-body-ui btn-primary"
         >
           Download &amp; install v{state.update.version}
         </button>
@@ -614,10 +616,10 @@ function ChipButton({ active, onClick, children, mono }: { active: boolean; onCl
   return (
     <button
       onClick={onClick}
-      className={`px-2.5 py-1 rounded-DEFAULT text-[12px] transition-colors ${mono ? "font-metadata-mono" : "font-body-ui"} ${
+      className={`px-2.5 py-1 rounded-md text-[12px] transition-colors ${mono ? "font-metadata-mono" : "font-body-ui"} ${
         active
-          ? "bg-primary text-on-primary"
-          : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
+          ? "btn-primary"
+          : "ctl text-on-surface-variant"
       }`}
     >
       {children}
@@ -712,7 +714,7 @@ export function ShortcutsOverlay({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="bg-surface border border-outline-variant rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col"
+        className="w-full max-w-lg max-h-[80vh] flex flex-col glass glass-strong rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -750,7 +752,7 @@ export function ShortcutsOverlay({ onClose }: { onClose: () => void }) {
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       {s.keys.map((k, i) => (
-                        <span key={i} className="inline-flex items-center justify-center text-on-surface bg-surface-container border border-outline-variant rounded px-1.5 py-0.5">
+                        <span key={i} className="inline-flex items-center justify-center text-on-surface px-1.5 py-0.5 field rounded-md">
                           {/^[a-z_]+$/.test(k)
                             ? <span className="material-symbols-outlined text-[14px] leading-none">{k}</span>
                             : <span className="font-metadata-mono text-[11px]">{k}</span>
@@ -775,9 +777,9 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   return (
     <button
       onClick={() => onChange(!value)}
-      className={`relative w-11 h-6 rounded-full overflow-hidden transition-colors shrink-0 ${value ? "bg-primary" : "bg-surface-container-high"}`}
+      className={`relative w-10 h-6 rounded-full shrink-0 transition-colors ${value ? "bg-primary" : "bg-on-surface/15"}`}
     >
-      <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${value ? "translate-x-5" : "translate-x-0"}`} />
+      <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-150 ${value ? "translate-x-4" : "translate-x-0"}`} />
     </button>
   );
 }

@@ -68,14 +68,14 @@ export default function TopBar() {
   const modeIcon = searchMode === "word" ? "auto_stories" : "search";
 
   return (
-    <header className="flex justify-between items-center h-12 px-content-margin w-full z-50 bg-surface border-b border-outline-variant shrink-0">
+    <header className="flex justify-between items-center h-14 px-content-margin w-full z-50 glass !rounded-none !border-x-0 !border-t-0 shrink-0">
       {/* Left: logo + current reading position */}
       <div className="flex items-center gap-4">
         <span className="font-headline-md text-headline-md font-bold text-primary select-none">
           Scriptura
         </span>
         <button
-          className="text-primary border-b-2 border-primary pb-0.5 translate-y-[1px] font-body-ui text-body-ui transition-colors hover:opacity-80"
+          className="ctl rounded-lg px-3 py-1.5 text-on-surface font-semibold font-body-ui text-body-ui"
           onClick={() => setView("reading")}
         >
           {refLabel}
@@ -90,7 +90,7 @@ export default function TopBar() {
           <button
             onClick={toggleMode}
             title={modeLabel}
-            className="p-1 rounded text-secondary hover:bg-surface-container-low hover:text-primary transition-colors shrink-0"
+            className="ctl rounded-lg p-1.5 text-secondary hover:text-primary shrink-0"
           >
             <span className="material-symbols-outlined text-[18px]">{modeIcon}</span>
           </button>
@@ -103,7 +103,7 @@ export default function TopBar() {
               </span>
               <input
                 ref={wordInputRef}
-                className="w-full pl-8 pr-3 py-1 bg-surface-container-low border border-outline-variant rounded-DEFAULT focus:outline-none focus:border-primary text-body-ui font-body-ui transition-colors placeholder:text-on-surface-variant"
+                className="w-full pl-9 pr-3 py-1.5 field rounded-lg focus:outline-none text-body-ui font-body-ui transition-colors placeholder:text-on-surface-variant"
                 placeholder="Search (Ctrl+K)"
                 onFocus={() => setView("search")}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -119,19 +119,19 @@ export default function TopBar() {
       </div>
 
       {/* Right: toolbar actions */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2.5">
         {workspace === "presentation" && (
           <button
             aria-label="Service queue"
             onClick={() => setServiceOrderOpen(!serviceOrderOpen)}
-            className={`relative p-1.5 rounded transition-colors ${
-              serviceOrderOpen ? "bg-secondary-container text-on-secondary-container" : "text-secondary hover:bg-surface-container-low"
+            className={`relative p-2 rounded-md ${
+              serviceOrderOpen ? "ctl-active" : "ghost text-secondary"
             }`}
             title="Service queue (Ctrl+Q)"
           >
             <span className="material-symbols-outlined text-[20px]">queue_play_next</span>
             {serviceOrder.length > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full bg-primary text-on-primary font-metadata-mono text-[9px] flex items-center justify-center px-0.5 leading-none">
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full btn-primary text-on-primary font-metadata-mono text-[9px] flex items-center justify-center px-0.5 leading-none">
                 {serviceOrder.length}
               </span>
             )}
@@ -140,33 +140,27 @@ export default function TopBar() {
         <button
           aria-label="Toggle parallel view"
           onClick={() => setParallelMode(!parallelMode)}
-          className={`p-1.5 rounded text-secondary hover:bg-surface-container-low transition-colors ${
-            parallelMode ? "bg-secondary-container" : ""
-          }`}
+          className={`p-2 rounded-md ${parallelMode ? "ctl-active" : "ghost text-secondary"}`}
         >
           <span className="material-symbols-outlined text-[20px]">splitscreen</span>
         </button>
         <button
           aria-label="Font size"
-          className="p-1.5 rounded text-secondary hover:bg-surface-container-low transition-colors"
+          className="p-2 rounded-md ghost text-secondary"
         >
           <span className="material-symbols-outlined text-[20px]">format_size</span>
         </button>
         <button
           aria-label="Toggle theme"
           onClick={cycleTheme}
-          className="p-1.5 rounded text-secondary hover:bg-surface-container-low transition-colors"
+          className="p-2 rounded-md ghost text-secondary"
         >
           <span className="material-symbols-outlined text-[20px]">{themeIcon}</span>
         </button>
         <button
           aria-label="Settings"
           onClick={() => setSettingsOpen(true)}
-          className={`p-1.5 rounded transition-colors ${
-            settingsOpen
-              ? "bg-secondary-container text-on-secondary-container"
-              : "text-secondary hover:bg-surface-container-low"
-          }`}
+          className={`p-2 rounded-md ${settingsOpen ? "ctl-active" : "ghost text-secondary"}`}
         >
           <span className="material-symbols-outlined text-[20px]">settings</span>
         </button>

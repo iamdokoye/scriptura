@@ -63,11 +63,11 @@ export default function SearchResults() {
       <SideNav variant="full" />
 
       <main className="flex-1 flex flex-col overflow-hidden bg-background">
-        <div className="p-6 border-b border-outline-variant bg-surface shrink-0">
+        <div className="p-6 border-b border-outline-variant shrink-0">
           <div className="flex items-center justify-between mb-3">
             <h1 className="font-display-lg text-display-lg text-on-surface">Search</h1>
             <button
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-secondary hover:bg-surface-container-low text-[12px] font-body-ui transition-colors border border-outline-variant"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-secondary text-[12px] font-body-ui transition-colors ctl rounded-lg"
               onClick={() => setView("history")}
               title="Search history (Alt+H)"
             >
@@ -79,7 +79,7 @@ export default function SearchResults() {
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
             <input
               autoFocus
-              className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-DEFAULT focus:outline-none focus:border-primary font-body-ui text-body-ui text-on-surface placeholder:text-on-surface-variant"
+              className="w-full pl-10 pr-4 py-2 focus:outline-none font-body-ui text-body-ui text-on-surface placeholder:text-on-surface-variant field rounded-lg"
               placeholder="Search the Bible…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -118,7 +118,7 @@ export default function SearchResults() {
                 <button
                   key={i}
                   onClick={() => navigateTo(r, i)}
-                  className="w-full text-left border border-outline-variant rounded-DEFAULT p-4 bg-surface hover:border-primary hover:bg-surface-container-low transition-colors"
+                  className="w-full text-left p-4 transition-colors ctl rounded-xl"
                 >
                   <span className="font-metadata-mono text-metadata-mono text-secondary font-bold block mb-1">
                     {r.book} {r.chapter}:{r.verse}
