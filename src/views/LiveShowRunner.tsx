@@ -55,6 +55,8 @@ export default function LiveShowRunner() {
   // `versePart` (the live/global equivalent) but stays local until Go
   // carries it over, same as previewRef itself.
   const [previewPart, setPreviewPart] = useState(0);
+  // Which split verse (book|chapter|verse) has its parts unfolded in the list.
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   useEffect(() => setPreviewPart(0), [previewRef.book, previewRef.chapter, previewRef.verse]);
 
   const searchBarRef = useRef<PresentationSearchBarHandle>(null);
@@ -483,52 +485,97 @@ export default function LiveShowRunner() {
               const text = v.spans.map((s) => s.text).join("");
               const parts = previewPartsMap.get(v.verse) ?? [text];
               const split = parts.length > 1;
+              const isPreviewVerse = v.verse === previewRef.verse;
+              // A split verse's parts stay folded away until it's clicked, and
+              // fold again as soon as another verse becomes the preview —
+              // however that happens (click, arrow keys, jump).
+              const open = split && isPreviewVerse && expandedKey === `${previewRef.book}|${previewRef.chapter}|${v.verse}`;
+              const select = (part: number) => { setPreviewRef({ ...previewRef, verse: v.verse }); setPreviewPart(part); };
+              const headActive = isPreviewVerse && (open ? previewPart === 0 : true);
+              const shownPart = isPreviewVerse ? previewPart : 0;
               return (
                 <div key={v.verse} className="mb-1">
-                  {parts.map((part, i) => {
-                    const active = v.verse === previewRef.verse && i === previewPart;
-                    return (
-                      <div key={i} className={i > 0 ? "pl-6 relative mt-1" : ""}>
-                        {i > 0 && (
-                          <span
-                            className="material-symbols-outlined absolute left-1 top-1.5 text-[14px] text-on-surface-variant/40 pointer-events-none"
-                            aria-hidden
-                          >
-                            subdirectory_arrow_right
-                          </span>
-                        )}
-                        {/* A plain div, not a button — the unsplit case nests clickable
-                            Strong's-number buttons inside, which a <button> can't legally contain. */}
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => { setPreviewRef({ ...previewRef, verse: v.verse }); setPreviewPart(i); }}
-                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPreviewRef({ ...previewRef, verse: v.verse }); setPreviewPart(i); } }}
-                          className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-md border border-transparent transition-colors cursor-pointer ${
-                            active
-                              ? "row-selected"
-                              : i === 0
-                              ? "border-transparent hover:bg-surface-container-low"
-                              : "border-outline-variant/50 hover:bg-surface-container-low"
-                          }`}
-                        >
-                          <span className={`font-metadata-mono text-[12px] shrink-0 mt-0.5 ${active ? "text-primary font-bold" : "text-on-surface-variant"}`}>
-                            {i === 0 ? v.verse : `p${i + 1}`}
-                          </span>
-                          {i === 0 && split && (
-                            <span className={`shrink-0 mt-0.5 px-1.5 rounded-full border font-metadata-mono text-[10px] ${active ? "border-primary text-primary" : "border-outline-variant text-on-surface-variant"}`}>
-                              1/{parts.length}
-                            </span>
-                          )}
-                          <span className="font-body-reading text-[14px] leading-snug text-on-surface">
-                            {i === 0 && !split
-                              ? <VerseSpans spans={v.spans} showStrongs={showStrongs} showRedLetter={showRedLetter} onStrongsClick={handleStrongsClick} />
-                              : part}
-                          </span>
-                        </div>
+                  {/* A plain div, not a button — the unsplit case nests clickable
+                      Strong's-number buttons inside, which a <button> can't legally contain. */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={split ? open : undefined}
+                    onClick={() => {
+                      if (split) {
+                        const key = `${previewRef.book}|${previewRef.chapter}|${v.verse}`;
+                        setExpandedKey(open ? null : key);
+                      } else {
+                        setExpandedKey(null);
+                      }
+                      select(open ? previewPart : 0);
+                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } }}
+                    className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-md border border-transparent transition-colors cursor-pointer ${
+                      headActive ? "row-selected" : "border-transparent hover:bg-surface-container-low"
+                    }`}
+                  >
+                    <span className={`font-metadata-mono text-[12px] shrink-0 mt-0.5 ${headActive ? "text-primary font-bold" : "text-on-surface-variant"}`}>
+                      {v.verse}
+                    </span>
+                    {split && (
+                      <span className={`shrink-0 mt-0.5 px-1.5 rounded-full border font-metadata-mono text-[10px] ${isPreviewVerse ? "border-primary text-primary" : "border-outline-variant text-on-surface-variant"}`}>
+                        {shownPart + 1}/{parts.length}
+                      </span>
+                    )}
+                    <span className="font-body-reading text-[14px] leading-snug text-on-surface flex-1 min-w-0">
+                      {!split
+                        ? <VerseSpans spans={v.spans} showStrongs={showStrongs} showRedLetter={showRedLetter} onStrongsClick={handleStrongsClick} />
+                        : parts[0]}
+                    </span>
+                    {split && (
+                      <span
+                        className={`material-symbols-outlined text-[18px] shrink-0 text-on-surface-variant transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+                        aria-hidden
+                      >
+                        expand_more
+                      </span>
+                    )}
+                  </div>
+
+                  {split && (
+                    <div
+                      className="grid transition-[grid-template-rows] duration-200 ease-out"
+                      style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+                      aria-hidden={!open}
+                    >
+                      <div className="overflow-hidden min-h-0">
+                        {parts.slice(1).map((part, j) => {
+                          const i = j + 1;
+                          const active = isPreviewVerse && previewPart === i;
+                          return (
+                            <div key={i} className="pl-6 relative mt-1">
+                              <span
+                                className="material-symbols-outlined absolute left-1 top-1.5 text-[14px] text-on-surface-variant/40 pointer-events-none"
+                                aria-hidden
+                              >
+                                subdirectory_arrow_right
+                              </span>
+                              <div
+                                role="button"
+                                tabIndex={open ? 0 : -1}
+                                onClick={() => select(i)}
+                                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(i); } }}
+                                className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-md border transition-colors cursor-pointer ${
+                                  active ? "row-selected border-transparent" : "border-outline-variant/50 hover:bg-surface-container-low"
+                                }`}
+                              >
+                                <span className={`font-metadata-mono text-[12px] shrink-0 mt-0.5 ${active ? "text-primary font-bold" : "text-on-surface-variant"}`}>
+                                  p{i + 1}
+                                </span>
+                                <span className="font-body-reading text-[14px] leading-snug text-on-surface">{part}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
                 </div>
               );
             })}
