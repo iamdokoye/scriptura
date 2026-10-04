@@ -1029,28 +1029,31 @@ impl Database {
 
 /// Transform a raw user query into an FTS5 MATCH expression.
 ///
-/// Every token gets a `*` prefix wildcard so the search works letter-by-letter:
-///   "god so lov"  →  "god* so* lov*"
+/// Each whitespace-separated word becomes a quoted, prefix-matched term so the
+/// search works letter-by-letter:
+///   "god so lov"  →  "god" * "so" * "lov" *
 /// With the unicode61 tokenizer this reliably matches "For God so loved …"
-/// because "lov*" matches the stored token "loved", "so*" matches "so", etc.
-/// The FTS5 BM25 ranking naturally surfaces the most specific matches first,
-/// so complete-word queries still return better results than noisy partial ones.
+/// because the prefix "lov" matches the stored token "loved".
+///
+/// Words are split on every non-alphanumeric character, exactly like the
+/// tokenizer splits the indexed text: "king's" (or the typographic "king’s"
+/// the KJV uses) is indexed as the tokens "king" and "s", so it is searched as
+/// the phrase "king s" with a prefix on the last token. Quoting every term also
+/// keeps FTS5 syntax (OR, NEAR, `:`, `-` …) in user input from being parsed.
 fn build_fts_query(raw: &str) -> String {
-    // Strip FTS5 syntax characters to avoid parse errors.
-    let sanitized: String = raw
-        .chars()
-        .filter(|c| c.is_alphanumeric() || *c == '\'' || c.is_whitespace())
-        .collect();
-
-    let tokens: Vec<&str> = sanitized.split_whitespace().collect();
-    if tokens.is_empty() {
-        return String::new();
-    }
-
-    // Every token is a prefix query — works letter-by-letter at any position
-    tokens
-        .iter()
-        .map(|t| format!("{}*", t))
+    raw.split_whitespace()
+        .filter_map(|word| {
+            let parts: Vec<String> = word
+                .split(|c: char| !c.is_alphanumeric())
+                .filter(|p| !p.is_empty())
+                .map(str::to_lowercase)
+                .collect();
+            if parts.is_empty() {
+                None
+            } else {
+                Some(format!("\"{}\" *", parts.join(" ")))
+            }
+        })
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -2014,12 +2017,70 @@ mod tests {
 
     #[test]
     fn fts_query_sanitizes_syntax_characters_and_adds_prefix_wildcards() {
-        assert_eq!(build_fts_query("love"), "love*");
-        assert_eq!(build_fts_query("God's love"), "God's* love*");
-        // FTS5 special characters (quotes, colons, parens) are stripped, not
-        // passed through — an unsanitized MATCH query with these can error.
-        assert_eq!(build_fts_query("\"love\" OR:test"), "love* ORtest*");
+        assert_eq!(build_fts_query("love"), "\"love\" *");
+        assert_eq!(
+            build_fts_query("god so lov"),
+            "\"god\" * \"so\" * \"lov\" *"
+        );
+        // Apostrophes (straight or typographic) split like the tokenizer does.
+        assert_eq!(build_fts_query("God's love"), "\"god s\" * \"love\" *");
+        assert_eq!(build_fts_query("king\u{2019}s"), "\"king s\" *");
+        // FTS5 syntax characters and operators must not reach the MATCH parser.
+        assert_eq!(
+            build_fts_query("\"love\" OR:test"),
+            "\"love\" * \"or test\" *"
+        );
+        assert_eq!(build_fts_query("Jonath-elem"), "\"jonath elem\" *");
+        assert_eq!(build_fts_query("'"), "");
         assert_eq!(build_fts_query(""), "");
         assert_eq!(build_fts_query("   "), "");
+    }
+
+    #[test]
+    fn fts_search_handles_apostrophes() {
+        let (db, path) = temp_db("apostrophe");
+        db.replace_module_index(
+            "KJV",
+            &[
+                (
+                    "Esther",
+                    8,
+                    9,
+                    "Then were the king\u{2019}s scribes called".to_string(),
+                ),
+                ("Genesis", 1, 1, "In the beginning God created".to_string()),
+                ("Mark", 1, 1, "the kings of the earth".to_string()),
+            ],
+        )
+        .unwrap();
+        let search = |q: &str| {
+            db.search_fts(
+                q,
+                &SearchOptions {
+                    modules: vec!["KJV".to_string()],
+                    testament: None,
+                    book_filter: None,
+                    strongs_filter: None,
+                    page: None,
+                    page_size: None,
+                },
+            )
+            .unwrap()
+        };
+
+        for q in ["king's", "king\u{2019}s", "king’s scribes", "KING'S"] {
+            let r = search(q);
+            assert!(
+                r.iter().any(|x| x.book == "Esther"),
+                "query {q:?} should find Esther 8:9"
+            );
+        }
+        assert_eq!(
+            search("king").len(),
+            2,
+            "plain prefix search still matches both"
+        );
+        assert!(search("'").is_empty());
+        cleanup(&path);
     }
 }

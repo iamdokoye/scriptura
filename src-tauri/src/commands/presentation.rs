@@ -103,13 +103,18 @@ pub async fn list_monitors(app: AppHandle) -> std::result::Result<Vec<MonitorInf
 /// so the console can size its split measurements and Main Output preview to
 /// exactly what the output screen lays out against.
 #[tauri::command]
-pub async fn get_presentation_window_size(app: AppHandle) -> std::result::Result<Option<(f64, f64)>, String> {
+pub async fn get_presentation_window_size(
+    app: AppHandle,
+) -> std::result::Result<Option<(f64, f64)>, String> {
     let Some(window) = app.get_webview_window("presentation") else {
         return Ok(None);
     };
     let size = window.inner_size().map_err(|e| e.to_string())?;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    Ok(Some((size.width as f64 / scale, size.height as f64 / scale)))
+    Ok(Some((
+        size.width as f64 / scale,
+        size.height as f64 / scale,
+    )))
 }
 
 #[tauri::command]
