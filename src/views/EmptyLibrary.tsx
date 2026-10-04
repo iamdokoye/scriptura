@@ -4,8 +4,8 @@ export default function EmptyLibrary() {
   const { setView } = useAppStore();
 
   return (
-    <div className="flex flex-1 items-center justify-center h-full p-3">
-      <div className="flex flex-1 h-full items-center justify-center panel rounded-3xl">
+    <div className="flex flex-1 items-center justify-center h-full">
+      <div className="flex flex-1 h-full items-center justify-center">
       <div className="flex flex-col items-center text-center max-w-sm px-8">
         <span className="material-symbols-outlined text-[72px] text-primary mb-6">
           library_books

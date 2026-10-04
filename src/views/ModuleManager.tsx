@@ -99,9 +99,9 @@ export default function ModuleManager() {
     <div className="flex flex-1 overflow-hidden">
       <SideNav variant="full" />
 
-      <main className="flex-1 flex flex-col overflow-hidden panel rounded-3xl m-3">
+      <main className="flex-1 flex flex-col overflow-hidden bg-background">
         {/* Header */}
-        <div className="p-6 shrink-0">
+        <div className="p-6 border-b border-outline-variant shrink-0">
           <h1 className="font-display-lg text-display-lg text-on-surface mb-1">Module Library</h1>
           <p className="font-body-ui text-body-ui text-on-surface-variant">
             Download and manage Bible texts, commentaries, and lexicons.

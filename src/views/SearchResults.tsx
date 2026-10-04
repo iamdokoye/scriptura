@@ -62,8 +62,8 @@ export default function SearchResults() {
     <div className="flex flex-1 overflow-hidden">
       <SideNav variant="full" />
 
-      <main className="flex-1 flex flex-col overflow-hidden panel rounded-3xl m-3">
-        <div className="p-6 shrink-0">
+      <main className="flex-1 flex flex-col overflow-hidden bg-background">
+        <div className="p-6 border-b border-outline-variant shrink-0">
           <div className="flex items-center justify-between mb-3">
             <h1 className="font-display-lg text-display-lg text-on-surface">Search</h1>
             <button

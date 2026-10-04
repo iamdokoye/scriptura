@@ -37,8 +37,8 @@ export default function BookmarksNotes() {
     <div className="flex flex-1 overflow-hidden">
       <SideNav variant="full" />
 
-      <main className="flex-1 flex flex-col overflow-hidden panel rounded-3xl m-3">
-        <div className="p-6 shrink-0">
+      <main className="flex-1 flex flex-col overflow-hidden bg-background">
+        <div className="p-6 border-b border-outline-variant shrink-0">
           <h1 className="font-display-lg text-display-lg text-on-surface mb-4">
             {view === "bookmarks" ? "Bookmarks" : "Notes"}
           </h1>

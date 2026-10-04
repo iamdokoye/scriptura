@@ -36,7 +36,7 @@ export default function SideNav({ variant }: Props) {
 
   if (variant === "icon-rail") {
     return (
-      <nav className="fixed left-3 top-[68px] h-[calc(100vh-80px)] flex flex-col z-40 panel rounded-3xl w-[64px] hover:w-[200px] group overflow-hidden transition-all duration-200 shrink-0">
+      <nav className="fixed left-0 top-14 h-[calc(100vh-56px)] flex flex-col z-40 glass !rounded-none !border-y-0 !border-l-0 w-[64px] hover:w-[200px] group overflow-hidden transition-all duration-200 shrink-0">
         <div className="flex flex-col h-full items-start w-full py-4 px-2 space-y-2">
           {items.map((item) => {
             const active = view === item.id;
@@ -64,7 +64,7 @@ export default function SideNav({ variant }: Props) {
 
   // full variant
   return (
-    <nav className="w-sidebar-width panel rounded-3xl m-3 mr-0 h-[calc(100%-1.5rem)] flex flex-col shrink-0 z-40">
+    <nav className="w-sidebar-width glass !rounded-none !border-y-0 !border-l-0 h-full flex flex-col shrink-0 z-40">
       <div className="p-5 pb-3">
         <h2 className="font-headline-md text-headline-md font-bold text-primary">
           Scriptura

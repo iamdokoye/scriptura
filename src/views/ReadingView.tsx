@@ -517,7 +517,7 @@ export default function ReadingView() {
             />
             {parallelMode && (
               <>
-                <div className="w-3 shrink-0" />
+                <div className="w-px bg-outline-variant shrink-0" />
                 {parallelChapter ? (
                   <ParallelPane chapter={parallelChapter} onStrongsClick={handleStrongsClick} showStrongs={showStrongs} readingFontSize={readingFontSize} displayPrefs={displayPrefs} scrollContainerRef={parallelScrollRef} />
                 ) : (
@@ -564,11 +564,11 @@ export default function ReadingView() {
     <div className="flex flex-1 overflow-hidden">
       <SideNav variant="icon-rail" />
 
-      <main className="flex flex-1 overflow-hidden ml-[84px] gap-3 py-3 pr-3">
+      <main className="flex flex-1 overflow-hidden ml-16">
         <BookNavigator />
 
         {/* Center reading pane(s) */}
-        <section className="flex-1 panel rounded-3xl flex flex-col h-full overflow-hidden">
+        <section className="flex-1 bg-surface flex flex-col h-full overflow-hidden">
           {/* Reading toolbar */}
           <div className="sticky top-0 px-content-margin pt-4 pb-2 flex items-center justify-between z-10 shrink-0">
             <h1 className="font-display-lg text-display-lg text-on-surface">
@@ -638,7 +638,7 @@ export default function ReadingView() {
 
             {parallelMode && (
               <>
-                <div className="w-3 shrink-0" />
+                <div className="w-px bg-outline-variant shrink-0" />
                 {parallelChapter ? (
                   <ParallelPane chapter={parallelChapter} onStrongsClick={handleStrongsClick} showStrongs={showStrongs} readingFontSize={readingFontSize} displayPrefs={displayPrefs} scrollContainerRef={parallelScrollRef} />
                 ) : (
@@ -662,7 +662,7 @@ export default function ReadingView() {
           onPartClick={setVersePart}
           scrollContainerRef={primaryScrollRef}
           verseNumber={currentRef.verse}
-          leftOffset={84}
+          leftOffset={64}
         />
       )}
       {sheets}

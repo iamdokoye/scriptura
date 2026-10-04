@@ -47,7 +47,7 @@ export default function BookNavigator() {
   }, []);
 
   return (
-    <aside className="w-[220px] panel rounded-3xl flex flex-col h-full overflow-y-auto shrink-0">
+    <aside className="w-[220px] bg-surface-container-lowest border-r border-outline-variant flex flex-col h-full overflow-y-auto shrink-0">
       <div className="p-5 pb-3">
         <h2 className="font-headline-md text-headline-md font-bold text-on-surface">Study Library</h2>
 
