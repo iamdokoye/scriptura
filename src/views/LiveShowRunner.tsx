@@ -524,7 +524,7 @@ export default function LiveShowRunner() {
                         {shownPart + 1}/{parts.length}
                       </span>
                     )}
-                    <span className="font-body-reading text-[14px] leading-snug text-on-surface flex-1 min-w-0">
+                    <span className={`font-body-reading text-[14px] ${showStrongs ? "leading-[1.9]" : "leading-snug"} text-on-surface flex-1 min-w-0`}>
                       <VerseSpans
                         spans={split ? sliceSpansForPart(v.spans, parts, 0) : v.spans}
                         showStrongs={showStrongs}
@@ -572,7 +572,7 @@ export default function LiveShowRunner() {
                                 <span className={`font-metadata-mono text-[12px] shrink-0 mt-0.5 ${active ? "text-primary font-bold" : "text-on-surface-variant"}`}>
                                   p{i + 1}
                                 </span>
-                                <span className="font-body-reading text-[14px] leading-snug text-on-surface">
+                                <span className={`font-body-reading text-[14px] ${showStrongs ? "leading-[1.9]" : "leading-snug"} text-on-surface`}>
                                   <VerseSpans spans={sliceSpansForPart(v.spans, parts, i)} showStrongs={showStrongs} showRedLetter={showRedLetter} onStrongsClick={handleStrongsClick} />
                                 </span>
                               </div>
@@ -610,7 +610,7 @@ export default function LiveShowRunner() {
                   </span>
                 )}
               </p>
-              <p className="font-body-reading text-[15px] leading-relaxed text-on-surface">
+              <p className={`font-body-reading text-[15px] ${showStrongs ? "leading-[1.95]" : "leading-relaxed"} text-on-surface`}>
                 {previewSpansForPart.length > 0
                   ? <VerseSpans spans={previewSpansForPart} showStrongs={showStrongs} showRedLetter={showRedLetter} onStrongsClick={handleStrongsClick} />
                   : "—"}
@@ -674,7 +674,7 @@ function VerseSpans({ spans, showStrongs, showRedLetter, onStrongsClick }: {
           return (
             <span
               key={i}
-              className={`strongs-word relative group/word border-b border-dashed hover:bg-secondary/10 pb-0.5 ${span.is_title ? "font-bold" : ""} ${red ? "text-red-600 dark:text-red-400 border-red-400" : "border-primary"}`}
+              className={`strongs-word relative group/word border-b border-dashed hover:bg-secondary/10 pb-[3px] ${span.is_title ? "font-bold" : ""} ${red ? "text-red-600 dark:text-red-400 border-red-400/70" : "border-primary/50"}`}
               title={strongsNumbers.length === 1 ? "Double-click to look up in concordance" : "Double-click to look up this phrase's Strong's numbers"}
               onDoubleClick={(e) => { e.stopPropagation(); onStrongsClick(strongsNumbers); }}
             >

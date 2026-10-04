@@ -10,6 +10,9 @@ export const FONT_FAMILY_CSS: Record<string, string> = {
   mono:   `"Courier New", Courier, monospace`,
 };
 
+/** Extra line-height added while Strong's underlines are shown. */
+const STRONGS_LEADING = 0.3;
+
 export function PrimaryPane({
   chapter, loading, error, currentVerse, onStrongsClick, onVerseClick, onCrossRefClick, onCompareClick, onCommentaryClick, onNotesClick, onAddToServiceClick, showBorder, showStrongs, showCrossRefs, showRedLetter, showCommentary, showNotes, readingFontSize, displayPrefs, presentationTheme, fullscreen, scrollContainerRef, currentPart, onPartClick, activeVerseParts,
 }: {
@@ -61,7 +64,8 @@ export function PrimaryPane({
   const horizPadding = `max(16px, ${displayPrefs.margins / 2}%)`;
   const textStyle: React.CSSProperties = {
     fontSize: `${readingFontSize}px`,
-    lineHeight: 1 + displayPrefs.lineSpacing,
+    // Strong's underlines sit between lines, so give them extra room.
+    lineHeight: 1 + displayPrefs.lineSpacing + (showStrongs ? STRONGS_LEADING : 0),
     letterSpacing: displayPrefs.letterSpacing === 0 ? undefined : `${(displayPrefs.letterSpacing * 0.1).toFixed(3)}em`,
     textAlign: displayPrefs.textAlign,
     fontFamily: FONT_FAMILY_CSS[displayPrefs.fontFamily],
@@ -211,7 +215,7 @@ export const VerseRow = memo(function VerseRow({
               return (
                 <span
                   key={i}
-                  className={`strongs-word relative group/word border-b border-dashed hover:bg-secondary/10 pb-0.5 ${span.is_title ? "font-bold" : ""} ${red ? "text-red-600 dark:text-red-400 border-red-400" : "border-primary"}`}
+                  className={`strongs-word relative group/word border-b border-dashed hover:bg-secondary/10 pb-[3px] ${span.is_title ? "font-bold" : ""} ${red ? "text-red-600 dark:text-red-400 border-red-400/70" : "border-primary/50"}`}
                   title={strongsNumbers.length === 1 ? "Double-click to look up in concordance" : "Double-click to look up this phrase's Strong's numbers"}
                   onDoubleClick={(e) => { e.stopPropagation(); onStrongsClick(strongsNumbers); }}
                 >
