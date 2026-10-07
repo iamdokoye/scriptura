@@ -2,6 +2,17 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
+## [0.1.30] - 2026-10-07
+
+### Added
+- Accent colour presets in Settings → Appearance: indigo (default), blue, teal, green, gold, orange and rose, each with light and dark shades. The choice is saved with your other preferences.
+- Double-click a verse or split part in the Live Show verse list to send it to the live output. Strong's lookup on a word moved to Option/Alt-click, or a single click on the number tag that appears above the word on hover.
+- Grammatical markers such as the Greek article (G3588) and the Hebrew direct-object marker (H853) no longer appear as Strong's tags. A phrase like "his hand" now offers only its real word.
+- `docs/SHORTCUTS.md`: every keyboard shortcut and gesture in the app, with when each is active.
+
+### Fixed
+- The Abbott-Smith and Full LSJ tabs showed the article instead of the real word for a phrase like "the Spirit". Whether a number is a grammatical marker is now judged from the bundled Strong's entry for every lexicon.
+
 ## [0.1.29] - 2026-10-04
 
 ### Added
