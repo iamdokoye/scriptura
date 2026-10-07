@@ -19,6 +19,23 @@ fn stepbible_cache_dir(
     Ok(dir)
 }
 
+/// The marker flag for `strongs_number` as judged from the bundled Strong's
+/// lexicon (StrongsGreek / StrongsHebrew); None if that module isn't installed
+/// or has no such entry.
+fn bundled_marker_flag(registry: &ModuleRegistry, strongs_number: &str) -> Option<bool> {
+    let module_id = if strongs_number.starts_with('G') {
+        "StrongsGreek"
+    } else {
+        "StrongsHebrew"
+    };
+    let conf = registry.conf_for(module_id)?;
+    let reader = LexiconReader::open(&registry.module_path(module_id), &conf).ok()?;
+    reader
+        .get_strongs_entry(strongs_number)
+        .ok()
+        .map(|e| e.is_untranslated_marker)
+}
+
 #[tauri::command]
 pub fn get_strongs_entry(
     module_id: String, // lexicon module, e.g. "StrongsGreek", or a STEPBible source id like "TBESG"
@@ -30,7 +47,17 @@ pub fn get_strongs_entry(
     let mut entry = if let Some(source) = stepbible::source_for_id(&module_id) {
         let cache_dir = stepbible_cache_dir(&registry)?;
         stepbible::ensure_downloaded(&cache_dir, source)?;
-        stepbible::get_entry(&cache_dir, source, &strongs_number)?
+        let mut entry = stepbible::get_entry(&cache_dir, source, &strongs_number)?;
+        // Whether a number is a grammatical marker (the Greek article G3588,
+        // the Hebrew direct-object marker H0853…) is a fact about the word,
+        // not about which dictionary is on screen. Only Strong's own wording
+        // is matched by the detector, so judge it from the bundled Strong's
+        // entry — otherwise the article reads as a normal word under
+        // Abbott-Smith/LSJ and wins over the real word in a phrase.
+        if bundled_marker_flag(&registry, &strongs_number).unwrap_or(false) {
+            entry.is_untranslated_marker = true;
+        }
+        entry
     } else {
         let conf = registry
             .conf_for(&module_id)
