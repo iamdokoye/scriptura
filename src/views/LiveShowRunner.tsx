@@ -185,13 +185,18 @@ export default function LiveShowRunner() {
   const liveQueueIndex = serviceOrder.findIndex((item) => sameRef(item, currentRef));
   const nextItem: ServiceItem | null = liveQueueIndex >= 0 ? serviceOrder[liveQueueIndex + 1] ?? null : null;
 
-  const goLive = useCallback(() => {
-    const sameVerse = sameRef(previewRef, currentRef);
-    if (sameVerse && previewPart === versePart) return;
+  // Sends a specific verse/part to the output. Takes the target explicitly so
+  // a double-click can send the row it landed on without waiting for the
+  // preview state its first click set to settle.
+  const sendLive = useCallback((ref: VerseRef, part: number) => {
+    const sameVerse = sameRef(ref, currentRef);
+    if (sameVerse && part === versePart) return;
     if (!sameVerse) pushLiveHistory(currentRef);
-    setCurrentRef(previewRef);
-    setVersePart(previewPart);
-  }, [previewRef, currentRef, previewPart, versePart, pushLiveHistory, setCurrentRef, setVersePart]);
+    setCurrentRef(ref);
+    setVersePart(part);
+  }, [currentRef, versePart, pushLiveHistory, setCurrentRef, setVersePart]);
+
+  const goLive = useCallback(() => sendLive(previewRef, previewPart), [sendLive, previewRef, previewPart]);
 
   const goBack = useCallback(() => {
     const prev = popLiveHistory();
@@ -537,7 +542,10 @@ export default function LiveShowRunner() {
                     role="button"
                     tabIndex={0}
                     aria-expanded={split ? open : undefined}
-                    onClick={() => {
+                    onClick={(e) => {
+                      // The second click of a double-click (which sends the verse
+                      // live) must not also toggle the dropdown back shut.
+                      if (e.detail > 1) return;
                       if (split) {
                         const key = `${previewRef.book}|${previewRef.chapter}|${v.verse}`;
                         setExpandedKey(open ? null : key);
@@ -546,8 +554,15 @@ export default function LiveShowRunner() {
                       }
                       select(open ? previewPart : 0);
                     }}
+                    onDoubleClick={() => {
+                      const ref = { ...previewRef, verse: v.verse };
+                      setPreviewRef(ref);
+                      setPreviewPart(0);
+                      sendLive(ref, 0);
+                    }}
+                    title="Double-click to send live"
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } }}
-                    className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-md border border-transparent transition-colors cursor-pointer ${
+                    className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-md border border-transparent transition-colors cursor-pointer select-none ${
                       headActive ? "row-selected" : "border-transparent hover:bg-surface-container-low"
                     }`}
                   >
@@ -599,8 +614,10 @@ export default function LiveShowRunner() {
                                 role="button"
                                 tabIndex={open ? 0 : -1}
                                 onClick={() => select(i)}
+                                onDoubleClick={() => { select(i); sendLive({ ...previewRef, verse: v.verse }, i); }}
+                                title="Double-click to send live"
                                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(i); } }}
-                                className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-md border transition-colors cursor-pointer ${
+                                className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-md border transition-colors cursor-pointer select-none ${
                                   active ? "row-selected border-transparent" : "border-outline-variant/50 hover:bg-surface-container-low"
                                 }`}
                               >
@@ -689,7 +706,7 @@ function PanelHeader({ icon, label, compact }: { icon: string; label: string; co
 }
 
 /** Renders verse spans with the same clickable Strong's-number treatment as
- * VersePanes.tsx's VerseRow — double-click (or tap a number) to look it up,
+ * VersePanes.tsx's VerseRow — Option/Alt-click a word (or click its number tag) to look it up,
  * which also broadcasts to the presentation output via the shared
  * selectedStrongs/strongsGroup state. Only used for unsplit verses (see
  * split-verse handling above) since split parts are plain measured
@@ -710,8 +727,8 @@ function VerseSpans({ spans, showStrongs, showRedLetter, onStrongsClick }: {
             <span
               key={i}
               className={`strongs-word relative group/word border-b border-dashed hover:bg-secondary/10 pb-[3px] ${span.is_title ? "font-bold" : ""} ${red ? "text-red-600 dark:text-red-400 border-red-400/70" : "border-primary/50"}`}
-              title={strongsNumbers.length === 1 ? "Double-click to look up in concordance" : "Double-click to look up this phrase's Strong's numbers"}
-              onDoubleClick={(e) => { e.stopPropagation(); onStrongsClick(strongsNumbers); }}
+              title={strongsNumbers.length === 1 ? "Option/Alt-click to look up in concordance" : "Option/Alt-click to look up this phrase's Strong's numbers"}
+              onClick={(e) => { if (e.altKey) { e.stopPropagation(); onStrongsClick(strongsNumbers); } }}
             >
               <span className="strongs-tag absolute -top-3 left-1/2 -translate-x-1/2 flex gap-1 whitespace-nowrap font-metadata-mono text-[9px] text-secondary opacity-0 transition-opacity">
                 {strongsNumbers.map((strongs) => (
