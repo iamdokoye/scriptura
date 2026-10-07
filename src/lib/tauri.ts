@@ -293,6 +293,9 @@ export const api = {
   ensureStepBibleLexicon: (source_id: string) =>
     invoke<void>("ensure_stepbible_lexicon", { sourceId: source_id }),
 
+  /** Strong's numbers that are grammatical markers (G3588, H853…), normalized. */
+  listMarkerStrongs: () => invoke<string[]>("list_marker_strongs"),
+
   search: (query: string, options: SearchOptions) =>
     invoke<SearchResult[]>("search", { query, options }),
 

@@ -1,7 +1,8 @@
 import { memo, useEffect, useRef } from "react";
 import type { ChapterText, TextSpan, PresentationTheme } from "../lib/tauri";
-import type { DisplayPrefs } from "../store/app";
+import { useAppStore, type DisplayPrefs } from "../store/app";
 import { PART_LABELS, type ThemeForSplit } from "../lib/verseSplit";
+import { contentStrongs } from "../lib/strongsMarkers";
 
 export const FONT_FAMILY_CSS: Record<string, string> = {
   system: `-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`,
@@ -183,6 +184,7 @@ export const VerseRow = memo(function VerseRow({
   // Use the pre-measured parts from ReadingView when available (they come from
   // actual DOM measurement against the presentation box dimensions), otherwise
   // fall back to null (no chips shown for inactive verses).
+  const markerStrongs = useAppStore((s) => s.markerStrongs);
   const splitParts = active && splitLongVerses
     ? (precomputedSplitParts && precomputedSplitParts.length > 0 ? precomputedSplitParts : null)
     : null;
@@ -210,7 +212,7 @@ export const VerseRow = memo(function VerseRow({
         >
           {spans.map((span, i) => {
             const red = showRedLetter && span.is_red_letter;
-            const strongsNumbers = span.strongs ?? [];
+            const strongsNumbers = contentStrongs(span.strongs ?? [], markerStrongs);
             if (strongsNumbers.length > 0 && showStrongs) {
               return (
                 <span

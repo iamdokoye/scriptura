@@ -403,6 +403,86 @@ impl LexiconReader {
         Err(AppError::Sword(format!("key not found in zLD: {key}")))
     }
 
+    /// Every entry in this lexicon that is a grammatical marker (see
+    /// `is_untranslated_marker_text`), as plain Strong's numbers without the
+    /// G/H prefix or any letter suffix. One pass over the whole module, so
+    /// callers should cache the result. Only meaningful for the bundled
+    /// StrongsGreek / StrongsHebrew zLD modules.
+    pub fn marker_numbers(&self) -> Result<Vec<u32>> {
+        if matches!(self.conf.compression, Compression::None) {
+            // RawLD (StrongsHebrew): keys are zero-padded 5-digit numbers, so
+            // walk the Strong's range with the files read once up front
+            // rather than re-reading them per entry. Hebrew tops out at 8674.
+            let idx = self.read_file("idx")?;
+            let dat = self.read_file("dat")?;
+            let mut out = Vec::new();
+            for n in 1..=9000u32 {
+                let Ok(raw) = self.binary_search_rawld(&format!("{n:05}"), &idx, &dat) else {
+                    continue;
+                };
+                if parse_strongs_entry(&format!("H{n}"), &raw)
+                    .map(|e| e.is_untranslated_marker)
+                    .unwrap_or(false)
+                {
+                    out.push(n);
+                }
+            }
+            return Ok(out);
+        }
+        let zdx = self.read_file("zdx")?;
+        let zdt = self.read_file("zdt")?;
+        let num_blocks = zdx.len() / 8;
+        let mut out = Vec::new();
+
+        for bnum in 0..num_blocks {
+            let blk_off = read_u32_le(&zdx, bnum * 8).unwrap_or(0) as usize;
+            let blk_csz = read_u32_le(&zdx, bnum * 8 + 4).unwrap_or(0) as usize;
+            if blk_off + blk_csz > zdt.len() || blk_csz == 0 {
+                continue;
+            }
+            let Ok(blk) = decompress_zlib(&zdt[blk_off..blk_off + blk_csz]) else {
+                continue;
+            };
+            let Some(num_entries) = read_u32_le(&blk, 0) else {
+                continue;
+            };
+            for eidx in 0..num_entries as usize {
+                let (Some(entry_off), Some(entry_sz)) = (
+                    read_u32_le(&blk, 4 + eidx * 8),
+                    read_u32_le(&blk, 4 + eidx * 8 + 4),
+                ) else {
+                    break;
+                };
+                let (entry_off, entry_sz) = (entry_off as usize, entry_sz as usize);
+                if entry_sz == 0 || entry_off + entry_sz > blk.len() {
+                    continue;
+                }
+                let Ok(raw) = self.decode(&blk[entry_off..entry_off + entry_sz]) else {
+                    continue;
+                };
+                let Some(at) = raw.find(" n=\"") else {
+                    continue;
+                };
+                let digits: String = raw[at + 4..]
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect();
+                let Ok(n) = digits.parse::<u32>() else {
+                    continue;
+                };
+                if parse_strongs_entry(&format!("G{n}"), &raw)
+                    .map(|e| e.is_untranslated_marker)
+                    .unwrap_or(false)
+                {
+                    out.push(n);
+                }
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
+        Ok(out)
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     fn read_file(&self, ext: &str) -> Result<Vec<u8>> {

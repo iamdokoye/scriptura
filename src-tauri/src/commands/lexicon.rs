@@ -19,6 +19,41 @@ fn stepbible_cache_dir(
     Ok(dir)
 }
 
+/// Every Strong's number that is a grammatical marker rather than a real word
+/// (the Greek article G3588, the Hebrew direct-object marker H853, …), as
+/// plain "G3588" / "H853" with no zero padding. The reading and Live Show
+/// views use this to leave markers out of the clickable Strong's tags so a
+/// phrase like "his hand" shows only its real word.
+///
+/// Computed once from the bundled Strong's lexicons and cached. An empty
+/// result (lexicons not installed yet) isn't cached, so a later call retries.
+#[tauri::command]
+pub async fn list_marker_strongs(
+    registry: State<'_, Arc<ModuleRegistry>>,
+) -> std::result::Result<Vec<String>, AppError> {
+    static CACHE: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    if let Some(cached) = CACHE.get() {
+        return Ok(cached.clone());
+    }
+
+    let mut all = Vec::new();
+    for (module_id, prefix) in [("StrongsGreek", 'G'), ("StrongsHebrew", 'H')] {
+        let Some(conf) = registry.conf_for(module_id) else {
+            continue;
+        };
+        let Ok(reader) = LexiconReader::open(&registry.module_path(module_id), &conf) else {
+            continue;
+        };
+        if let Ok(numbers) = reader.marker_numbers() {
+            all.extend(numbers.into_iter().map(|n| format!("{prefix}{n}")));
+        }
+    }
+    if !all.is_empty() {
+        let _ = CACHE.set(all.clone());
+    }
+    Ok(all)
+}
+
 /// The marker flag for `strongs_number` as judged from the bundled Strong's
 /// lexicon (StrongsGreek / StrongsHebrew); None if that module isn't installed
 /// or has no such entry.

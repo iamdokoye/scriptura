@@ -6,6 +6,10 @@ export interface StudyToolsSlice {
   // From backend preferences
   showStrongs: boolean;
   setShowStrongs: (v: boolean) => void;
+  /** Normalized Strong's numbers (e.g. "G3588") that are grammatical markers
+   *  rather than real words; left out of the clickable Strong's tags. */
+  markerStrongs: ReadonlySet<string>;
+  setMarkerStrongs: (numbers: string[]) => void;
 
   // Study panel section visibility — also backend preferences (moved off
   // localStorage; see displayPrefsSlice for why).
@@ -25,6 +29,8 @@ export interface StudyToolsSlice {
 export const createStudyToolsSlice: StateCreator<AppState, [], [], StudyToolsSlice> = (set) => ({
   showStrongs: true,
   setShowStrongs: (showStrongs) => set({ showStrongs }),
+  markerStrongs: new Set<string>(),
+  setMarkerStrongs: (numbers) => set({ markerStrongs: new Set(numbers) }),
 
   showCommentary: true,
   setShowCommentary: (showCommentary) => {

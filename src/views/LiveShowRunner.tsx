@@ -5,6 +5,7 @@ import { useChapterData } from "../hooks/useChapterData";
 import { usePresentationSync } from "../hooks/usePresentationSync";
 import { measureVersePartsDOM, sliceSpansForPart } from "../lib/verseSplit";
 import { animateScrollBy } from "../lib/animateScroll";
+import { contentStrongs } from "../lib/strongsMarkers";
 import { FONT_FAMILY_CSS } from "../components/VersePanes";
 import StrongsSheet from "../components/StrongsSheet";
 import OutputPreview from "../components/OutputPreview";
@@ -717,11 +718,12 @@ function VerseSpans({ spans, showStrongs, showRedLetter, onStrongsClick }: {
   showRedLetter: boolean;
   onStrongsClick: (numbers: string[]) => void;
 }) {
+  const markerStrongs = useAppStore((s) => s.markerStrongs);
   return (
     <>
       {spans.map((span, i) => {
         const red = showRedLetter && span.is_red_letter;
-        const strongsNumbers = span.strongs ?? [];
+        const strongsNumbers = contentStrongs(span.strongs ?? [], markerStrongs);
         if (strongsNumbers.length > 0 && showStrongs) {
           return (
             <span

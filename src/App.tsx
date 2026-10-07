@@ -22,7 +22,7 @@ export default function App() {
     view, theme, setTheme, hasModules, setHasModules, setPrimaryModule, setCurrentRef, setView,
     setShowStrongs, setReadingFontSize, isFullscreen, serviceOrderOpen, setServiceOrderOpen,
     hydrateDisplayPrefs, hydrateStudyTools, hydrateSearchHistory, hydrateServiceOrder, hydratePresentationThemes,
-    hydrateWorkspace, workspace, accent, setAccent,
+    hydrateWorkspace, workspace, accent, setAccent, setMarkerStrongs,
   } = useAppStore();
   const presenting = workspace === "presentation";
   const queueDrawerW = useResizable({
@@ -88,11 +88,19 @@ export default function App() {
 
         // Auto-install reference modules silently — always, even on first launch
         const installedIds = new Set(modules.map((m) => m.id));
+        const installs: Promise<unknown>[] = [];
         for (const id of ["StrongsGreek", "StrongsHebrew", "TSK"]) {
           if (!installedIds.has(id)) {
-            api.installModule(id).catch(() => {});
+            installs.push(api.installModule(id).catch(() => {}));
           }
         }
+
+        // Grammatical markers (G3588, H853…) are left out of the clickable
+        // Strong's tags. On a first launch the lexicons are still being
+        // installed, so look again once those installs settle.
+        const loadMarkers = () => api.listMarkerStrongs().then(setMarkerStrongs).catch(() => {});
+        loadMarkers();
+        if (installs.length > 0) Promise.allSettled(installs).then(loadMarkers);
 
         // STEPBible-Data's richer companion lexicons (see the Strong's sheet's
         // pill switcher) aren't SWORD modules, so they don't go through
