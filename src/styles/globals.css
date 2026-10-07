@@ -166,6 +166,22 @@
   --col-gold:                      200 154 60;
 }
 
+/* ── Page frame ────────────────────────────────────────────────────────────
+   The app is one fixed-size shell whose panels scroll internally, never the
+   document. Without this, anything that briefly overflows the window (a
+   sheet sliding in, a drag past an edge, macOS rubber-banding) scrolls the
+   whole page a few pixels and exposes the bare <body> — white, since it had
+   no background — as a stripe along the bottom edge. */
+html, body, #root {
+  height: 100%;
+}
+html, body {
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: rgb(var(--col-background));
+}
+
 /* ── Scrollbar ─────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
