@@ -4,6 +4,7 @@ import App from "./App";
 import PresentationView from "./views/PresentationView";
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./styles/globals.css";
+import "./styles/accents.css";
 
 const isPresentation = (window as { __SCRIPTURA_PRESENTATION__?: boolean }).__SCRIPTURA_PRESENTATION__ === true;
 

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useAppStore } from "./store/app";
 import { api } from "./lib/tauri";
+import { applyAccent, isAccentId } from "./lib/accents";
 import { importLegacyLocalStorageIfNeeded } from "./lib/legacyImport";
 import TopBar from "./components/TopBar";
 import PresentationTopBar from "./components/PresentationTopBar";
@@ -21,7 +22,7 @@ export default function App() {
     view, theme, setTheme, hasModules, setHasModules, setPrimaryModule, setCurrentRef, setView,
     setShowStrongs, setReadingFontSize, isFullscreen, serviceOrderOpen, setServiceOrderOpen,
     hydrateDisplayPrefs, hydrateStudyTools, hydrateSearchHistory, hydrateServiceOrder, hydratePresentationThemes,
-    hydrateWorkspace, workspace,
+    hydrateWorkspace, workspace, accent, setAccent,
   } = useAppStore();
   const presenting = workspace === "presentation";
   const queueDrawerW = useResizable({
@@ -38,6 +39,9 @@ export default function App() {
       setView("reading");
     }
   }, [presenting, view, setView]);
+
+  // Accent colour preset (indigo = no attribute)
+  useEffect(() => { applyAccent(accent); }, [accent]);
 
   // Apply theme class to root element
   useEffect(() => {
@@ -72,6 +76,7 @@ export default function App() {
         ]);
 
         setTheme(prefs.theme);
+        if (isAccentId(prefs.accent)) setAccent(prefs.accent);
         setShowStrongs(prefs.show_strongs);
         setReadingFontSize(prefs.font_size_reading);
         hydrateDisplayPrefs(prefs);

@@ -69,6 +69,7 @@ impl Database {
             (13, SCHEMA_V13_WORKSPACE),
             (14, SCHEMA_V14_SPLIT_LONG_VERSES),
             (15, SCHEMA_V15_SCROLL_V_PADDING),
+            (16, SCHEMA_V16_ACCENT),
         ]
     }
 
@@ -96,7 +97,7 @@ impl Database {
         verse_display, default_commentary, show_commentary, show_notes, show_cross_refs, \
         show_red_letter, font_family, text_align, margins, line_spacing, letter_spacing, \
         strongs_sheet_height, presentation_context, default_lexicon_source, workspace, \
-        split_long_verses";
+        split_long_verses, accent";
 
     fn read_preferences(conn: &Connection) -> rusqlite::Result<Option<Preferences>> {
         let result = conn.query_row(
@@ -124,6 +125,7 @@ impl Database {
                     default_lexicon_source: row.get(17)?,
                     workspace: row.get(18)?,
                     split_long_verses: row.get::<_, i32>(19).map(|v| v != 0).unwrap_or(false),
+                    accent: row.get(20)?,
                 })
             },
         );
@@ -140,8 +142,8 @@ impl Database {
                 verse_display, default_commentary, show_commentary, show_notes, show_cross_refs,
                 show_red_letter, font_family, text_align, margins, line_spacing, letter_spacing,
                 strongs_sheet_height, presentation_context, default_lexicon_source, workspace,
-                split_long_verses)
-             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
+                split_long_verses, accent)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
              ON CONFLICT(id) DO UPDATE SET
                theme=excluded.theme,
                font_size_reading=excluded.font_size_reading,
@@ -162,7 +164,8 @@ impl Database {
                presentation_context=excluded.presentation_context,
                default_lexicon_source=excluded.default_lexicon_source,
                workspace=excluded.workspace,
-               split_long_verses=excluded.split_long_verses",
+               split_long_verses=excluded.split_long_verses,
+               accent=excluded.accent",
             params![
                 prefs.theme,
                 prefs.font_size_reading,
@@ -184,6 +187,7 @@ impl Database {
                 prefs.default_lexicon_source,
                 prefs.workspace,
                 prefs.split_long_verses as i32,
+                prefs.accent,
             ],
         )?;
         Ok(())
@@ -268,6 +272,9 @@ impl Database {
             }
             if let Some(v) = obj.get("split_long_verses").and_then(|v| v.as_bool()) {
                 current.split_long_verses = v;
+            }
+            if let Some(v) = obj.get("accent").and_then(|v| v.as_str()) {
+                current.accent = v.to_string();
             }
         }
 
@@ -1268,6 +1275,12 @@ const SCHEMA_V15_SCROLL_V_PADDING: &str = r#"
 ALTER TABLE presentation_themes ADD COLUMN scroll_v_padding INTEGER NOT NULL DEFAULT 32;
 "#;
 
+/// v16: app accent colour preset (the app's "primary" hue). Existing installs
+/// keep the original indigo.
+const SCHEMA_V16_ACCENT: &str = r#"
+ALTER TABLE preferences ADD COLUMN accent TEXT NOT NULL DEFAULT 'indigo';
+"#;
+
 fn presentation_theme_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PresentationTheme> {
     Ok(PresentationTheme {
         id: row.get(0)?,
@@ -1404,6 +1417,7 @@ mod tests {
         // No row yet — falls back to Preferences::default() rather than erroring.
         let defaults = db.get_preferences().unwrap();
         assert_eq!(defaults.theme, Preferences::default().theme);
+        assert_eq!(defaults.accent, "indigo");
 
         db.update_preferences(&serde_json::json!({
             "theme": "dark",
@@ -1416,6 +1430,13 @@ mod tests {
         assert_eq!(loaded.theme, "dark");
         assert_eq!(loaded.font_size_reading, 22);
         assert!(!loaded.show_strongs);
+
+        // The accent colour persists and a later patch for other fields keeps it.
+        db.update_preferences(&serde_json::json!({ "accent": "teal" }))
+            .unwrap();
+        db.update_preferences(&serde_json::json!({ "show_notes": false }))
+            .unwrap();
+        assert_eq!(db.get_preferences().unwrap().accent, "teal");
 
         // A second, disjoint patch shouldn't clobber fields the first patch set —
         // this is exactly the read-modify-write correctness update_preferences

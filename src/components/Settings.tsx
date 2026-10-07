@@ -5,6 +5,7 @@ import { api, type Preferences } from "../lib/tauri";
 import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import { checkForUpdate, downloadAndInstall, getVersion } from "../lib/updater";
 import type { Update } from "@tauri-apps/plugin-updater";
+import { ACCENTS, isAccentId } from "../lib/accents";
 
 const FONT_SIZE_PRESETS = [14, 16, 32, 48, 64, 72, 98];
 
@@ -31,6 +32,7 @@ const DEFAULT_PREFS: Preferences = {
   default_lexicon_source: "ours",
   workspace: "study",
   split_long_verses: false,
+  accent: "indigo",
 };
 
 const FONTS: { id: DisplayPrefs["fontFamily"]; label: string }[] = [
@@ -44,7 +46,7 @@ const FONTS: { id: DisplayPrefs["fontFamily"]; label: string }[] = [
 export default function Settings() {
   const {
     settingsOpen, setSettingsOpen,
-    setTheme, setShowStrongs, setReadingFontSize,
+    setTheme, setAccent, setShowStrongs, setReadingFontSize,
     showCommentary, setShowCommentary,
     showNotes, setShowNotes,
     showCrossRefs, setShowCrossRefs,
@@ -95,6 +97,7 @@ export default function Settings() {
     try {
       await api.setPreferences(update);
       if (update.theme) setTheme(update.theme);
+      if (update.accent && isAccentId(update.accent)) setAccent(update.accent);
       if (update.show_strongs !== undefined) setShowStrongs(update.show_strongs);
       if (update.font_size_reading !== undefined) setReadingFontSize(update.font_size_reading);
     } finally {
@@ -262,6 +265,31 @@ export default function Settings() {
                     {t === "light" ? "Light" : t === "dark" ? "Dark" : "System"}
                   </ChipButton>
                 ))}
+              </div>
+            </SubRow>
+
+            {/* Accent colour */}
+            <SubRow label="Accent colour" description="The app's highlight colour — buttons, selections and links.">
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Accent colour">
+                {ACCENTS.map((a) => {
+                  const selected = prefs.accent === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      role="radio"
+                      aria-checked={selected}
+                      aria-label={a.label}
+                      title={a.label}
+                      onClick={() => save({ accent: a.id })}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center transition-transform hover:scale-110 ${
+                        selected ? "ring-2 ring-offset-2 ring-offset-surface ring-on-surface/70" : "ring-1 ring-outline-variant"
+                      }`}
+                      style={{ background: a.swatch }}
+                    >
+                      {selected && <span className="material-symbols-outlined text-[16px] text-white">check</span>}
+                    </button>
+                  );
+                })}
               </div>
             </SubRow>
 

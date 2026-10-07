@@ -1,0 +1,194 @@
+/* Accent presets — generated; each overrides the indigo primary tokens in globals.css.
+   Applied with <html data-accent="blue"> etc.; indigo is the default and needs no attribute. */
+
+[data-accent="blue"] {
+  --col-primary: 37 99 235;
+  --col-on-primary: 255 255 255;
+  --col-primary-container: 233 239 253;
+  --col-on-primary-container: 20 54 129;
+  --col-primary-fixed: 222 232 252;
+  --col-primary-fixed-dim: 179 200 248;
+  --col-on-primary-fixed: 9 25 59;
+  --col-on-primary-fixed-variant: 20 54 129;
+  --col-secondary-container: 238 243 253;
+  --col-on-secondary-container: 20 54 129;
+  --col-surface-tint: 37 99 235;
+  --col-inverse-primary: 96 165 250;
+  --blob-1: rgba(37, 99, 235, 0.14);
+}
+
+.dark[data-accent="blue"] {
+  --col-primary: 96 165 250;
+  --col-on-primary: 14 17 22;
+  --col-primary-container: 96 165 250;
+  --col-on-primary-container: 29 50 75;
+  --col-primary-fixed: 36 63 95;
+  --col-primary-fixed-dim: 56 96 145;
+  --col-on-primary-fixed: 215 232 254;
+  --col-on-primary-fixed-variant: 176 210 252;
+  --col-secondary-container: 32 50 72;
+  --col-on-secondary-container: 176 210 252;
+  --col-surface-tint: 144 192 252;
+  --col-inverse-primary: 58 99 150;
+  --blob-1: rgba(96, 165, 250, 0.16);
+}
+
+[data-accent="teal"] {
+  --col-primary: 15 118 110;
+  --col-on-primary: 255 255 255;
+  --col-primary-container: 231 241 240;
+  --col-on-primary-container: 8 65 61;
+  --col-primary-fixed: 219 234 233;
+  --col-primary-fixed-dim: 171 207 204;
+  --col-on-primary-fixed: 4 30 28;
+  --col-on-primary-fixed-variant: 8 65 61;
+  --col-secondary-container: 236 244 243;
+  --col-on-secondary-container: 8 65 61;
+  --col-surface-tint: 15 118 110;
+  --col-inverse-primary: 45 212 191;
+  --blob-1: rgba(15, 118, 110, 0.14);
+}
+
+.dark[data-accent="teal"] {
+  --col-primary: 45 212 191;
+  --col-on-primary: 14 17 22;
+  --col-primary-container: 45 212 191;
+  --col-on-primary-container: 14 64 57;
+  --col-primary-fixed: 17 81 73;
+  --col-primary-fixed-dim: 26 123 111;
+  --col-on-primary-fixed: 202 244 239;
+  --col-on-primary-fixed-variant: 150 234 223;
+  --col-secondary-container: 21 60 59;
+  --col-on-secondary-container: 150 234 223;
+  --col-surface-tint: 108 225 210;
+  --col-inverse-primary: 27 127 115;
+  --blob-1: rgba(45, 212, 191, 0.16);
+}
+
+[data-accent="green"] {
+  --col-primary: 21 128 61;
+  --col-on-primary: 255 255 255;
+  --col-primary-container: 232 242 236;
+  --col-on-primary-container: 12 70 34;
+  --col-primary-fixed: 220 236 226;
+  --col-primary-fixed-dim: 173 211 187;
+  --col-on-primary-fixed: 5 32 15;
+  --col-on-primary-fixed-variant: 12 70 34;
+  --col-secondary-container: 236 245 239;
+  --col-on-secondary-container: 12 70 34;
+  --col-surface-tint: 21 128 61;
+  --col-inverse-primary: 74 222 128;
+  --blob-1: rgba(21, 128, 61, 0.14);
+}
+
+.dark[data-accent="green"] {
+  --col-primary: 74 222 128;
+  --col-on-primary: 14 17 22;
+  --col-primary-container: 74 222 128;
+  --col-on-primary-container: 22 67 38;
+  --col-primary-fixed: 28 84 49;
+  --col-primary-fixed-dim: 43 129 74;
+  --col-on-primary-fixed: 210 247 223;
+  --col-on-primary-fixed-variant: 164 238 192;
+  --col-secondary-container: 27 62 45;
+  --col-on-secondary-container: 164 238 192;
+  --col-surface-tint: 128 232 166;
+  --col-inverse-primary: 44 133 77;
+  --blob-1: rgba(74, 222, 128, 0.16);
+}
+
+[data-accent="gold"] {
+  --col-primary: 161 98 7;
+  --col-on-primary: 255 255 255;
+  --col-primary-container: 246 239 230;
+  --col-on-primary-container: 89 54 4;
+  --col-primary-fixed: 241 231 218;
+  --col-primary-fixed-dim: 222 200 168;
+  --col-on-primary-fixed: 40 24 2;
+  --col-on-primary-fixed-variant: 89 54 4;
+  --col-secondary-container: 247 242 235;
+  --col-on-secondary-container: 89 54 4;
+  --col-surface-tint: 161 98 7;
+  --col-inverse-primary: 251 191 36;
+  --blob-1: rgba(161, 98, 7, 0.14);
+}
+
+.dark[data-accent="gold"] {
+  --col-primary: 251 191 36;
+  --col-on-primary: 14 17 22;
+  --col-primary-container: 251 191 36;
+  --col-on-primary-container: 75 57 11;
+  --col-primary-fixed: 95 73 14;
+  --col-primary-fixed-dim: 146 111 21;
+  --col-on-primary-fixed: 254 239 200;
+  --col-on-primary-fixed-variant: 253 223 146;
+  --col-secondary-container: 66 55 25;
+  --col-on-secondary-container: 253 223 146;
+  --col-surface-tint: 252 210 102;
+  --col-inverse-primary: 151 115 22;
+  --blob-1: rgba(251, 191, 36, 0.16);
+}
+
+[data-accent="orange"] {
+  --col-primary: 194 65 12;
+  --col-on-primary: 255 255 255;
+  --col-primary-container: 249 236 231;
+  --col-on-primary-container: 107 36 7;
+  --col-primary-fixed: 246 226 219;
+  --col-primary-fixed-dim: 234 188 170;
+  --col-on-primary-fixed: 48 16 3;
+  --col-on-primary-fixed-variant: 107 36 7;
+  --col-secondary-container: 250 240 236;
+  --col-on-secondary-container: 107 36 7;
+  --col-surface-tint: 194 65 12;
+  --col-inverse-primary: 251 146 60;
+  --blob-1: rgba(194, 65, 12, 0.14);
+}
+
+.dark[data-accent="orange"] {
+  --col-primary: 251 146 60;
+  --col-on-primary: 14 17 22;
+  --col-primary-container: 251 146 60;
+  --col-on-primary-container: 75 44 18;
+  --col-primary-fixed: 95 55 23;
+  --col-primary-fixed-dim: 146 85 35;
+  --col-on-primary-fixed: 254 228 206;
+  --col-on-primary-fixed-variant: 253 200 158;
+  --col-secondary-container: 66 45 30;
+  --col-on-secondary-container: 253 200 158;
+  --col-surface-tint: 252 179 118;
+  --col-inverse-primary: 151 88 36;
+  --blob-1: rgba(251, 146, 60, 0.16);
+}
+
+[data-accent="rose"] {
+  --col-primary: 225 29 72;
+  --col-on-primary: 255 255 255;
+  --col-primary-container: 252 232 237;
+  --col-on-primary-container: 124 16 40;
+  --col-primary-fixed: 250 221 228;
+  --col-primary-fixed-dim: 244 176 191;
+  --col-on-primary-fixed: 56 7 18;
+  --col-on-primary-fixed-variant: 124 16 40;
+  --col-secondary-container: 253 237 240;
+  --col-on-secondary-container: 124 16 40;
+  --col-surface-tint: 225 29 72;
+  --col-inverse-primary: 251 113 133;
+  --blob-1: rgba(225, 29, 72, 0.14);
+}
+
+.dark[data-accent="rose"] {
+  --col-primary: 251 113 133;
+  --col-on-primary: 14 17 22;
+  --col-primary-container: 251 113 133;
+  --col-on-primary-container: 75 34 40;
+  --col-primary-fixed: 95 43 51;
+  --col-primary-fixed-dim: 146 66 77;
+  --col-on-primary-fixed: 254 220 224;
+  --col-on-primary-fixed-variant: 253 184 194;
+  --col-secondary-container: 66 38 46;
+  --col-on-secondary-container: 253 184 194;
+  --col-surface-tint: 252 156 170;
+  --col-inverse-primary: 151 68 80;
+  --blob-1: rgba(251, 113, 133, 0.16);
+}

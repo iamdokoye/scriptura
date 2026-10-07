@@ -147,6 +147,8 @@ export interface Preferences {
   workspace: "study" | "presentation";
   /** Split long verses into labelled parts (a, b, c…) for the presentation screen. */
   split_long_verses: boolean;
+  /** App accent colour preset — see lib/accents.ts. */
+  accent: string;
 }
 
 export interface ReadingPosition {
