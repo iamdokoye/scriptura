@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useAppStore } from "./store/app";
 import { api } from "./lib/tauri";
 import { applyAccent, isAccentId } from "./lib/accents";
@@ -44,15 +44,27 @@ export default function App() {
   useEffect(() => { applyAccent(accent); }, [accent]);
 
   // Apply theme class to root element
+  const themeAppliedOnce = useRef(false);
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove("light", "dark");
-    if (theme === "system") {
-      const mq = window.matchMedia("(prefers-color-scheme: dark)");
-      root.classList.add(mq.matches ? "dark" : "light");
-    } else {
-      root.classList.add(theme);
+    const next = theme === "system"
+      ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+      : theme;
+    const other = next === "dark" ? "light" : "dark";
+    if (root.classList.contains(next) && !root.classList.contains(other)) {
+      themeAppliedOnce.current = true;
+      return;
     }
+    // Fade between palettes — but not on the very first paint, and not for
+    // people who've asked their OS for reduced motion.
+    const animate = themeAppliedOnce.current && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    themeAppliedOnce.current = true;
+    if (animate) root.classList.add("theme-fading");
+    root.classList.remove("light", "dark");
+    root.classList.add(next);
+    if (!animate) return;
+    const timer = window.setTimeout(() => root.classList.remove("theme-fading"), 420);
+    return () => { window.clearTimeout(timer); root.classList.remove("theme-fading"); };
   }, [theme]);
 
   // On launch: import any pre-consolidation localStorage data (one-time, see

@@ -306,6 +306,19 @@ html, body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Light/dark fade ───────────────────────────────────────────────────────
+   App.tsx adds .theme-fading to <html> for ~400ms around a theme switch, so
+   every colour glides to its new value instead of snapping. It is temporary
+   on purpose: a permanent catch-all transition would slow every hover and
+   fight the components' own transitions. */
+.theme-fading,
+.theme-fading *,
+.theme-fading *::before,
+.theme-fading *::after {
+  transition: background-color 320ms ease, color 320ms ease, border-color 320ms ease,
+              fill 320ms ease, stroke 320ms ease, box-shadow 320ms ease, outline-color 320ms ease !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .presentation-transition-fade, .presentation-transition-slide { animation: none; }
 }
