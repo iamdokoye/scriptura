@@ -98,12 +98,18 @@ export default function App() {
         hydratePresentationThemes(presentationThemes);
         hydrateWorkspace(prefs.workspace);
 
-        // Auto-install reference modules silently — always, even on first launch
+        // Auto-install reference modules silently — always, even on first
+        // launch. On a fresh install with no Bible at all, also fetch the
+        // KJV so the app opens to something readable instead of an empty
+        // library. Install failures (offline, blocked) are logged, not
+        // fatal — the Modules screen is still there to retry from.
         const installedIds = new Set(modules.map((m) => m.id));
+        const hadBible = modules.some((m) => m.category === "Bible");
+        const wanted = hadBible ? ["StrongsGreek", "StrongsHebrew", "TSK"] : ["KJV", "StrongsGreek", "StrongsHebrew", "TSK"];
         const installs: Promise<unknown>[] = [];
-        for (const id of ["StrongsGreek", "StrongsHebrew", "TSK"]) {
+        for (const id of wanted) {
           if (!installedIds.has(id)) {
-            installs.push(api.installModule(id).catch(() => {}));
+            installs.push(api.installModule(id).catch((e) => console.error(`[auto-install ${id}]`, e)));
           }
         }
 
@@ -123,30 +129,38 @@ export default function App() {
         api.ensureStepBibleLexicon("TBESG").catch(() => {});
         api.ensureStepBibleLexicon("TBESH").catch(() => {});
 
-        if (modules.length === 0) {
+        // Only a Bible can be the reading module. A library holding just
+        // lexicons (StrongsGreek, TSK…) used to fall back to modules[0] and
+        // try to read John 3 out of a dictionary.
+        const start = (installed: typeof modules) => {
+          const bible = installed.find((m) => m.category === "Bible");
+          if (!bible) return false;
+          setHasModules(true);
+          setPrimaryModule(bible.id);
+          // Presentation-mode operators land straight in the Live Show console
+          // instead of the reading view — study mode keeps today's default.
+          setView(prefs.workspace === "presentation" ? "live" : "reading");
+          if (pos) {
+            setCurrentRef({ book: pos.book, chapter: pos.chapter, verse: pos.verse });
+          }
+          // Rebuild FTS index for any module that wasn't indexed
+          for (const m of installed) {
+            if (!m.index_built) {
+              api.rebuildSearchIndex(m.id).catch((e) => console.error("[fts rebuild]", m.id, e));
+            }
+          }
+          return true;
+        };
+
+        if (!start(modules)) {
           setHasModules(false);
           setView("modules");
-          return;
-        }
-
-        setHasModules(true);
-        const bible = modules.find((m) => m.category === "Bible") ?? modules[0];
-        setPrimaryModule(bible.id);
-        // Presentation-mode operators land straight in the Live Show console
-        // instead of the reading view — study mode keeps today's default.
-        if (prefs.workspace === "presentation") {
-          setView("live");
-        }
-
-        if (pos) {
-          setCurrentRef({ book: pos.book, chapter: pos.chapter, verse: pos.verse });
-        }
-
-        // Rebuild FTS index for any module that wasn't indexed
-        for (const m of modules) {
-          if (!m.index_built) {
-            api.rebuildSearchIndex(m.id).catch((e) => console.error("[fts rebuild]", m.id, e));
-          }
+          // First launch: once the KJV (and lexicons) finish installing, open
+          // straight into reading.
+          Promise.allSettled(installs).then(async () => {
+            const after = await api.listInstalledModules().catch(() => []);
+            start(after);
+          });
         }
       } catch {
         // Backend not yet available (dev mode without Tauri) — show modules view

@@ -28,10 +28,12 @@ export default function ModuleManager() {
       ([avail, inst]) => {
         setAvailable(avail);
         setInstalled(inst);
-        if (inst.length > 0) {
+        // The library only counts as ready once a Bible is in it — lexicons
+        // alone can't be read, and used to flip the app into a broken reader.
+        const bible = inst.find((m) => m.category === "Bible");
+        if (bible) {
           setHasModules(true);
-          const bible = inst.find((m) => m.category === "Bible");
-          if (bible) setPrimaryModule(bible.id);
+          setPrimaryModule(bible.id);
         }
         setLoading(false);
       }
@@ -54,7 +56,11 @@ export default function ModuleManager() {
           // Refresh installed list
           api.listInstalledModules().then((inst) => {
             setInstalled(inst);
-            setHasModules(inst.length > 0);
+            // Lexicon installs (including the silent ones at startup) finish
+            // here too — only a Bible makes the library readable.
+            const bible = inst.find((m) => m.category === "Bible");
+            setHasModules(!!bible);
+            if (bible && !useAppStore.getState().primaryModule) setPrimaryModule(bible.id);
           });
         }
       }
