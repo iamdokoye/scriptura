@@ -103,6 +103,10 @@ Words with apostrophes (`king's`, `king’s`) and hyphens match. Symbols such as
 |---|---|
 | Click a verse | Select it into Preview. A split verse also unfolds its parts |
 | Click a split verse again | Fold the parts back up |
+| Click a slide in the Preview column | Select that slide (part) of the previewed verse |
+| **Double-click** a slide in the Preview column, or an item in the Schedule | **Send it to the live output** |
+| Click a slide in the Live column, or the arrows under Live Output | Change which part of the live verse is on screen |
+| Arrows under Preview Output | Step through the previewed verse's slides |
 | Click a part (`p2`, `p3`, …) | Select that part into Preview |
 | **Double-click** a verse or a part | **Send it to the live output** (works on any word in the row too) |
 | **Option/Alt-click** a word (Strong's on) | Open the Strong's concordance for that word, without sending anything live |
@@ -111,17 +115,18 @@ Words with apostrophes (`king's`, `king’s`) and hyphens match. Symbols such as
 | Drag a panel divider | Resize the panel. Sizes are remembered |
 | Double-click a panel divider | Reset that panel to its default size |
 
+The Live Show console is laid out like EasyWorship: **Schedule** (the queue), **Preview** and **Live** columns across the top, each of the last two ending in an output strip (a thumbnail of the real output screen, "Slide n of N" and previous/next slide arrows), with the verse **library** across the bottom.
+
 Resizable panels and their saved settings (browser storage keys, default sizes):
 
 | Panel | Key | Default | Limits |
 |---|---|---|---|
-| Main Output / Queue column width | `scriptura.live.asideWidth` | 320 px | 240 px to 60% of window |
-| Main Output preview height | `scriptura.live.outputHeight` | 186 px | 80 px up to the output's aspect ratio |
-| Verse picker height | `scriptura.live.bottomHeight` | 38% of window | 200 px to window height − 260 |
-| Preview column width | `scriptura.live.previewWidth` | 300 px | 220 px to 50% of window |
+| Schedule column width | `scriptura.live.queueWidth` | 24% of window | 180 px to 40% of window |
+| Live column width | `scriptura.live.liveWidth` | 30% of window | 240 px to 50% of window |
+| Library height | `scriptura.live.bottomHeight` | 38% of window | 200 px to window height − 260 |
 | Queue drawer width (`Mod+Q`) | `scriptura.queueDrawerWidth` | 324 px | 280 px to 70% of window |
 
-Stored sizes are clamped to these limits when the app starts, so a size saved in a different-sized window can't leave a panel collapsed.
+The Preview column takes the remaining width. Stored sizes are clamped to these limits when the app starts, so a size saved in a different-sized window can't leave a panel collapsed.
 
 The verse list scrolls to the selected verse whenever the selection changes. This is a short eased glide, about 280 ms. Scrolling with the wheel or clicking during it stops it.
 

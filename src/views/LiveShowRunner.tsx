@@ -3,7 +3,7 @@ import { useAppStore, type VerseRef, type ServiceItem } from "../store/app";
 import { api, type TextSpan } from "../lib/tauri";
 import { useChapterData } from "../hooks/useChapterData";
 import { usePresentationSync } from "../hooks/usePresentationSync";
-import { measureVersePartsDOM, sliceSpansForPart } from "../lib/verseSplit";
+import { measureVersePartsDOM, sliceSpansForPart, PART_LABELS } from "../lib/verseSplit";
 import { animateScrollBy } from "../lib/animateScroll";
 import { contentStrongs } from "../lib/strongsMarkers";
 import { FONT_FAMILY_CSS } from "../components/VersePanes";
@@ -72,23 +72,18 @@ export default function LiveShowRunner() {
 
   // Every major panel is user-resizable; sizes persist across restarts and
   // double-clicking a divider restores its default.
-  const asideW = useResizable({
-    storageKey: "scriptura.live.asideWidth", initial: 320, min: 240, axis: "x", invert: true,
-    max: () => Math.round(window.innerWidth * 0.6),
+  const queueW = useResizable({
+    storageKey: "scriptura.live.queueWidth", initial: Math.round(window.innerWidth * 0.24), min: 180, axis: "x",
+    max: () => Math.round(window.innerWidth * 0.4),
   });
-  const outputH = useResizable({
-    storageKey: "scriptura.live.outputHeight", initial: 186, min: 80, axis: "y",
-    max: () => Math.round((asideW.size - 32) * (stage.h / stage.w)) + 24,
+  const liveW = useResizable({
+    storageKey: "scriptura.live.liveWidth", initial: Math.round(window.innerWidth * 0.3), min: 240, axis: "x", invert: true,
+    max: () => Math.round(window.innerWidth * 0.5),
   });
   const bottomH = useResizable({
     storageKey: "scriptura.live.bottomHeight", initial: Math.round(window.innerHeight * 0.38), min: 200, axis: "y", invert: true,
     max: () => window.innerHeight - 260,
   });
-  const previewW = useResizable({
-    storageKey: "scriptura.live.previewWidth", initial: 300, min: 220, axis: "x", invert: true,
-    max: () => Math.round(window.innerWidth * 0.5),
-  });
-
 
   usePresentationSync({
     presentationActive, primaryModule, currentRef, parallelModule, parallelMode,
@@ -185,7 +180,6 @@ export default function LiveShowRunner() {
 
   const previewQueueIndex = serviceOrder.findIndex((item) => sameRef(item, previewRef));
   const liveQueueIndex = serviceOrder.findIndex((item) => sameRef(item, currentRef));
-  const nextItem: ServiceItem | null = liveQueueIndex >= 0 ? serviceOrder[liveQueueIndex + 1] ?? null : null;
 
   // Sends a specific verse/part to the output. Takes the target explicitly so
   // a double-click can send the row it landed on without waiting for the
@@ -362,140 +356,245 @@ export default function LiveShowRunner() {
     versePart: displayPrefs.splitLongVerses ? versePart : undefined,
   }), [currentRef, primaryModule, parallelModule, parallelMode, displayPrefs, readingFontSize, activePresentationTheme, liveBlack, liveEmergency, versePart]);
 
+  // What the Preview Output thumbnail shows: the previewed verse and part,
+  // laid out exactly as it would go out (never black/emergency, no parallel).
+  const previewOutputState: PresentState = useMemo(() => ({
+    ...outputState,
+    book: previewRef.book,
+    chapter: previewRef.chapter,
+    verse: previewRef.verse,
+    parallelMode: false,
+    black: false,
+    emergency: false,
+    versePart: displayPrefs.splitLongVerses ? previewPart : undefined,
+  }), [outputState, previewRef, previewPart, displayPrefs.splitLongVerses]);
+
   const liveText = verseText(liveChapter?.verses, currentRef.verse);
   const liveParts = displayPrefs.splitLongVerses ? splitParts(liveText) : [liveText];
-  const liveActiveText = liveParts[versePart] ?? liveParts[0] ?? liveText;
   const liveSplit = liveParts.length > 1;
 
   const previewText = verseText(previewChapter?.verses, previewRef.verse);
   const previewParts = previewPartsMap.get(previewRef.verse) ?? [previewText];
   const previewVerseSpans = previewChapter?.verses.find((v) => v.verse === previewRef.verse)?.spans ?? [];
-  const previewSpansForPart = (previewParts.length > 1 ? sliceSpansForPart(previewVerseSpans, previewParts, Math.min(previewPart, previewParts.length - 1)) : previewVerseSpans);
   const previewSplit = previewParts.length > 1;
 
   const overridden = liveBlack || liveEmergency;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-3 gap-3">
-      {/* Live display + Main Output / Queue */}
-      <div className="flex-1 min-h-0 flex gap-3 overflow-hidden">
-        <section className="flex-1 min-w-0 flex flex-col overflow-hidden panel rounded-3xl">
-          <PanelHeader icon="tv" label="Live display" />
-          <div className="flex-1 min-h-0 overflow-y-auto p-6 flex items-start">
-            {overridden ? (
-              <div className="w-full px-5 py-8 text-center ctl rounded-xl">
-                <p className="font-body-ui text-[13px] text-on-surface-variant">
-                  {liveEmergency ? "Standby screen is showing on the output." : "Output is cut to black."}
+      {/* Schedule | Preview | Live — each column ends in an output strip */}
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+        {/* ── Schedule (queue) ── */}
+        <section style={{ width: queueW.size }} className="shrink-0 flex flex-col overflow-hidden panel rounded-3xl">
+          <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-outline-variant">
+            <h2 className="font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide">Schedule</h2>
+            <div className="flex items-center gap-2 whitespace-nowrap">
+              <button
+                onClick={() => setServiceOrderOpen(true)}
+                className="flex items-center gap-1 font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors"
+                title="Reorder or remove queue items (Ctrl+Q)"
+              >
+                <span className="material-symbols-outlined text-[16px]">reorder</span>
+                <span className="hidden min-[1100px]:inline">Edit</span>
+              </button>
+              {serviceOrder.length > 0 && (
+                <button
+                  onClick={clearServiceOrder}
+                  className="flex items-center gap-1 px-1.5 py-1 -my-1 rounded-md font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-error ghost"
+                  title="Clear the whole schedule"
+                >
+                  <span className="material-symbols-outlined text-[16px]">delete_sweep</span>
+                  <span className="hidden min-[1100px]:inline">Clear all</span>
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {serviceOrder.length === 0 ? (
+              <div className="p-5 text-center">
+                <p className="font-body-ui text-[12px] text-on-surface-variant leading-relaxed">
+                  Nothing scheduled yet. Add verses from the library below with the Queue button.
                 </p>
               </div>
             ) : (
-              <div className="w-full rounded-xl row-selected panel px-6 py-5">
-                <p className="font-metadata-mono text-[11px] uppercase tracking-widest text-primary mb-1.5 flex items-center gap-2">
-                  {refLabel(currentRef)} {primaryModule ? `(${primaryModule})` : ""}
-                  {liveSplit && (
-                    <span className="px-1.5 rounded-full border border-primary text-primary normal-case">
-                      {versePart + 1}/{liveParts.length}
-                    </span>
-                  )}
-                </p>
-                <p className="font-body-reading text-[20px] leading-relaxed text-on-surface">{liveActiveText || "—"}</p>
-              </div>
+              <ul className="py-2">
+                {serviceOrder.map((item, idx) => {
+                  const isPreview = idx === previewQueueIndex;
+                  const isLive = idx === liveQueueIndex;
+                  return (
+                    <li key={item.id}>
+                      <button
+                        onClick={() => selectQueueItem(item)}
+                        onDoubleClick={() => { selectQueueItem(item); sendLive({ book: item.book, chapter: item.chapter, verse: item.verse }, 0); }}
+                        title="Double-click to send live"
+                        className={`w-full text-left px-3 py-2 mx-2 mb-1 rounded-md border border-transparent transition-colors select-none ${
+                          isPreview ? "row-selected" : "hover:bg-surface-container-low"
+                        }`}
+                        style={{ width: "calc(100% - 1rem)" }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-metadata-mono text-[10px] text-on-surface-variant">{idx + 1}</span>
+                          <span className={`font-body-ui text-[13px] font-semibold truncate ${isPreview ? "text-primary" : "text-on-surface"}`}>
+                            {refLabel(item)} ({item.module})
+                          </span>
+                          {isLive && <span className="font-metadata-mono text-[9px] uppercase tracking-widest text-error ml-auto shrink-0">Live</span>}
+                        </div>
+                        <p className="font-body-ui text-[11px] text-on-surface-variant leading-snug mt-0.5 line-clamp-2">{item.text}</p>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
         </section>
 
-        <ResizeHandle axis="x" label="main output and queue" dragging={asideW.dragging} handleProps={asideW.handleProps} />
+        <ResizeHandle axis="x" label="schedule" dragging={queueW.dragging} handleProps={queueW.handleProps} />
 
-        <aside style={{ width: asideW.size }} className="shrink-0 flex flex-col overflow-hidden glass rounded-3xl">
-          <div className="shrink min-h-0 flex flex-col p-4">
-            <PanelHeader icon="monitor" label="Main Output" compact />
-            <div className="mt-2 min-h-0" style={{ height: Math.min(outputH.size, Math.round((asideW.size - 32) * (stage.h / stage.w)) + 24) }}>
-              <OutputPreview state={outputState} chapter={liveChapter} parallelChapter={liveParallelChapter} stage={stage} outputOpen={presentationActive} />
+        {/* ── Preview ── */}
+        <section className="flex-1 min-w-0 flex flex-col overflow-hidden panel rounded-3xl">
+          <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-outline-variant">
+            <h2 className="font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide truncate">
+              Preview <span className="font-normal normal-case tracking-normal text-on-surface-variant">— {refLabel(previewRef)}{primaryModule ? ` (${primaryModule})` : ""}</span>
+            </h2>
+            <div className="ml-auto flex items-center gap-2 shrink-0">
+              <button
+                onClick={addPreviewToQueue}
+                disabled={previewInQueue}
+                className="flex items-center gap-1 px-2 py-1 rounded-md ctl font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                title={previewInQueue ? "Already in the schedule" : "Add to schedule (Ctrl+Alt+Q)"}
+              >
+                <span className="material-symbols-outlined text-[14px]">playlist_add</span>
+                <span className="hidden min-[1100px]:inline">Queue</span>
+              </button>
+              <button
+                onClick={goBack}
+                disabled={liveHistory.length === 0}
+                className="p-1.5 ctl rounded-md text-on-surface disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Return to the previously-live verse (Backspace)"
+              >
+                <span className="material-symbols-outlined text-[16px]">undo</span>
+              </button>
+              <button
+                onClick={goLive}
+                disabled={sameRef(previewRef, currentRef) && previewPart === versePart}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md btn-primary font-body-ui text-[13px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                title="Send the previewed verse live (Enter, or double-click it)"
+              >
+                <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                Go Live
+              </button>
             </div>
           </div>
-          <div className="px-4">
-            <ResizeHandle axis="y" label="main output preview" dragging={outputH.dragging} handleProps={outputH.handleProps} />
-          </div>
 
-          <div className="flex-1 min-h-[120px] flex flex-col overflow-hidden">
-            <div className="shrink-0 flex items-center justify-between px-4 py-2">
-              <span className="font-body-ui text-[13px] font-bold text-on-surface">Queue</span>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setServiceOrderOpen(true)}
-                  className="flex items-center gap-1 font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors"
-                  title="Reorder or remove queue items (Ctrl+Q)"
+          <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1.5">
+            {previewParts.map((_, i) => {
+              const active = i === previewPart;
+              const spans = previewParts.length > 1 ? sliceSpansForPart(previewVerseSpans, previewParts, i) : previewVerseSpans;
+              return (
+                <div
+                  key={i}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setPreviewPart(i)}
+                  onDoubleClick={() => { setPreviewPart(i); sendLive(previewRef, i); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPreviewPart(i); } }}
+                  title="Double-click to send live"
+                  className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border transition-colors cursor-pointer select-none ${
+                    active ? "row-selected border-primary/30" : "border-outline-variant/60 hover:bg-surface-container-low"
+                  }`}
                 >
-                  <span className="material-symbols-outlined text-[14px]">reorder</span>
-                  Edit
-                </button>
-                {serviceOrder.length > 0 && (
-                  <button
-                    onClick={clearServiceOrder}
-                    className="px-1.5 py-1 -my-1 rounded-md font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-error ghost"
-                  >
-                    Clear all
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              {serviceOrder.length === 0 ? (
-                <div className="p-5 text-center">
-                  <p className="font-body-ui text-[12px] text-on-surface-variant leading-relaxed">
-                    No items in the service queue yet — add verses from the reading view, or just browse below.
-                  </p>
+                  <span className={`font-metadata-mono text-[12px] shrink-0 mt-0.5 ${active ? "text-primary font-bold" : "text-on-surface-variant"}`}>{i + 1}</span>
+                  <div className="min-w-0">
+                    <p className={`font-body-ui text-[13px] font-bold ${active ? "text-primary" : "text-on-surface"}`}>
+                      {slideLabel(previewRef, previewParts.length > 1 ? i : null, primaryModule)}
+                    </p>
+                    <p className={`font-body-reading text-[14px] ${showStrongs ? "leading-[1.9]" : "leading-snug"} text-on-surface`}>
+                      {spans.length > 0
+                        ? <VerseSpans spans={spans} showStrongs={showStrongs} showRedLetter={showRedLetter} onStrongsClick={handleStrongsClick} />
+                        : "—"}
+                    </p>
+                  </div>
                 </div>
-              ) : (
-                <ul className="py-2">
-                  {serviceOrder.map((item, idx) => {
-                    const isPreview = idx === previewQueueIndex;
-                    const isLive = idx === liveQueueIndex;
-                    return (
-                      <li key={item.id}>
-                        <button
-                          onClick={() => selectQueueItem(item)}
-                          className={`w-full text-left px-3 py-2 mx-2 mb-1 rounded-md border border-transparent transition-colors ${
-                            isPreview ? "row-selected" : "border-transparent hover:bg-surface-container-low"
-                          }`}
-                          style={{ width: "calc(100% - 1rem)" }}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-metadata-mono text-[10px] text-on-surface-variant">{idx + 1}</span>
-                            <span className={`font-body-ui text-[13px] font-semibold ${isPreview ? "text-primary" : "text-on-surface"}`}>
-                              {refLabel(item)}
-                            </span>
-                            {isLive && <span className="font-metadata-mono text-[9px] uppercase tracking-widest text-error ml-auto shrink-0">Live</span>}
-                          </div>
-                          <p className="font-body-ui text-[11px] text-on-surface-variant leading-snug mt-0.5 line-clamp-2">{item.text}</p>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
+              );
+            })}
           </div>
-        </aside>
+
+          <OutputStrip
+            title="Preview Output"
+            label={slideLabel(previewRef, previewSplit ? previewPart : null, primaryModule)}
+            slide={previewPart}
+            slides={previewParts.length}
+            onSlide={(n) => setPreviewPart(n)}
+            stage={stage}
+          >
+            <OutputPreview state={previewOutputState} chapter={previewChapter} parallelChapter={null} stage={stage} outputOpen />
+          </OutputStrip>
+        </section>
+
+        <ResizeHandle axis="x" label="live" dragging={liveW.dragging} handleProps={liveW.handleProps} />
+
+        {/* ── Live ── */}
+        <section style={{ width: liveW.size }} className="shrink-0 flex flex-col overflow-hidden panel rounded-3xl">
+          <div className="shrink-0 flex items-center gap-2 px-4 py-3 border-b border-outline-variant">
+            <h2 className="font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide">Live</h2>
+            {presentationActive && (
+              <span className="flex items-center gap-1 font-metadata-mono text-[9px] uppercase tracking-widest text-error">
+                <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse" />
+                On air
+              </span>
+            )}
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1.5">
+            {overridden && (
+              <div className="px-3 py-3 text-center ctl rounded-lg">
+                <p className="font-body-ui text-[12px] text-on-surface-variant">
+                  {liveEmergency ? "Standby screen is showing on the output." : "Output is cut to black."}
+                </p>
+              </div>
+            )}
+            {liveParts.map((part, i) => {
+              const active = i === versePart || liveParts.length === 1;
+              return (
+                <div
+                  key={i}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setVersePart(i)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setVersePart(i); } }}
+                  className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border transition-colors cursor-pointer select-none ${
+                    active ? "row-selected border-primary/30" : "border-outline-variant/60 hover:bg-surface-container-low"
+                  } ${overridden ? "opacity-50" : ""}`}
+                >
+                  <span className={`font-metadata-mono text-[12px] shrink-0 mt-0.5 ${active ? "text-primary font-bold" : "text-on-surface-variant"}`}>{i + 1}</span>
+                  <div className="min-w-0">
+                    <p className={`font-body-ui text-[13px] font-bold ${active ? "text-primary" : "text-on-surface"}`}>
+                      {slideLabel(currentRef, liveSplit ? i : null, primaryModule)}
+                    </p>
+                    <p className="font-body-reading text-[14px] leading-snug text-on-surface">{part || "—"}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <OutputStrip
+            title="Live Output"
+            label={slideLabel(currentRef, liveSplit ? versePart : null, primaryModule)}
+            slide={Math.min(versePart, liveParts.length - 1)}
+            slides={liveParts.length}
+            onSlide={(n) => setVersePart(n)}
+            stage={stage}
+          >
+            <OutputPreview state={outputState} chapter={liveChapter} parallelChapter={liveParallelChapter} stage={stage} outputOpen={presentationActive} />
+          </OutputStrip>
+        </section>
       </div>
 
-      {nextItem && (
-        <div className="shrink-0 px-6 py-2.5 flex items-center gap-3 glass rounded-2xl">
-          <span className="font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant">Next in queue</span>
-          <span className="font-body-ui text-[13px] font-semibold text-on-surface">{refLabel(nextItem)}</span>
-          <span className="font-body-ui text-[12px] text-on-surface-variant truncate">{nextItem.text}</span>
-          <button
-            onClick={() => selectQueueItem(nextItem)}
-            className="ml-auto px-2 py-1 rounded-md font-body-ui text-[12px] text-primary ghost shrink-0"
-          >
-            Preview this
-          </button>
-        </div>
-      )}
+      <ResizeHandle axis="y" label="library" dragging={bottomH.dragging} handleProps={bottomH.handleProps} />
 
-      <ResizeHandle axis="y" label="verse picker" dragging={bottomH.dragging} handleProps={bottomH.handleProps} />
-
-      {/* Reference picker + verse list + preview */}
+      {/* ── Library: reference bar + verse list ── */}
       <div style={{ height: bottomH.size }} className="shrink-0 panel rounded-3xl flex flex-col overflow-hidden">
         <div className="shrink-0 flex items-center gap-3 px-4 py-2.5">
           {primaryModule && (
@@ -641,55 +740,6 @@ export default function LiveShowRunner() {
             })}
           </div>
 
-          <ResizeHandle axis="x" label="preview" dragging={previewW.dragging} handleProps={previewW.handleProps} />
-          <div style={{ width: previewW.size }} className="shrink-0 flex flex-col overflow-hidden">
-            <div className="shrink-0 flex items-center justify-between px-4 pt-3">
-              <PanelHeader icon="visibility" label="Preview" compact />
-              <button
-                onClick={addPreviewToQueue}
-                disabled={previewInQueue}
-                className="flex items-center gap-1 font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                title={previewInQueue ? "Already in the queue" : "Add to queue (Ctrl+Alt+Q)"}
-              >
-                <span className="material-symbols-outlined text-[14px]">playlist_add</span>
-                Queue
-              </button>
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto p-4">
-              <p className="font-metadata-mono text-[11px] text-on-surface-variant mb-1.5 flex items-center gap-2">
-                {refLabel(previewRef)}
-                {previewSplit && (
-                  <span className="px-1.5 text-on-surface-variant ctl rounded-lg">
-                    {previewPart + 1}/{previewParts.length}
-                  </span>
-                )}
-              </p>
-              <p className={`font-body-reading text-[15px] ${showStrongs ? "leading-[1.95]" : "leading-relaxed"} text-on-surface`}>
-                {previewSpansForPart.length > 0
-                  ? <VerseSpans spans={previewSpansForPart} showStrongs={showStrongs} showRedLetter={showRedLetter} onStrongsClick={handleStrongsClick} />
-                  : "—"}
-              </p>
-            </div>
-            <div className="shrink-0 border-t border-outline-variant p-3 flex items-center gap-2">
-              <button
-                onClick={goLive}
-                disabled={sameRef(previewRef, currentRef) && previewPart === versePart}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md btn-primary font-body-ui text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-                title="Send the previewed verse live (Enter)"
-              >
-                <span className="material-symbols-outlined text-[18px]">play_arrow</span>
-                GO
-              </button>
-              <button
-                onClick={goBack}
-                disabled={liveHistory.length === 0}
-                className="flex items-center gap-1.5 px-3 py-2.5 text-on-surface font-body-ui text-[13px] disabled:opacity-40 disabled:cursor-not-allowed transition-opacity ctl rounded-lg"
-                title="Return to the previously-live verse (Backspace)"
-              >
-                <span className="material-symbols-outlined text-[18px]">undo</span>
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -698,11 +748,53 @@ export default function LiveShowRunner() {
   );
 }
 
-function PanelHeader({ icon, label, compact }: { icon: string; label: string; compact?: boolean }) {
+/** "Genesis 1:3 (KJV)" — with a part letter ("Genesis 1:3a") when the verse is split. */
+function slideLabel(ref: VerseRef, part: number | null, module: string | null) {
+  const letter = part === null ? "" : (PART_LABELS[part] ?? String.fromCharCode(97 + part));
+  return `${ref.book} ${ref.chapter}:${ref.verse}${letter}${module ? ` (${module})` : ""}`;
+}
+
+/** The bottom strip of the Preview and Live columns: a thumbnail of the real
+ *  output screen, what it shows, and slide arrows to step through a split verse. */
+function OutputStrip({ title, label, slide, slides, onSlide, stage, children }: {
+  title: string;
+  label: string;
+  slide: number;
+  slides: number;
+  onSlide: (n: number) => void;
+  stage: { w: number; h: number };
+  children: React.ReactNode;
+}) {
   return (
-    <div className={`shrink-0 flex items-center gap-2 ${compact ? "" : "px-6 py-3"}`}>
-      <span className="material-symbols-outlined text-[16px] text-on-surface-variant">{icon}</span>
-      <h2 className="font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide">{label}</h2>
+    <div className="shrink-0 border-t border-outline-variant px-3 py-2.5">
+      <p className="font-body-ui text-[11px] font-bold text-on-surface-variant uppercase tracking-wide mb-2">{title}</p>
+      <div className="flex items-center gap-3">
+        <div className="shrink-0 rounded-md overflow-hidden" style={{ width: "42%", maxWidth: 230, minWidth: 110, aspectRatio: `${stage.w} / ${stage.h}` }}>
+          {children}
+        </div>
+        <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+          <p className="font-body-ui text-[12px] text-on-surface truncate" title={label}>{label}</p>
+          <p className="font-body-ui text-[12px] text-on-surface-variant whitespace-nowrap">Slide {slides === 0 ? 0 : slide + 1} of {slides}</p>
+          <div className="flex ctl rounded-md overflow-hidden self-start">
+            <button
+              onClick={() => onSlide(Math.max(0, slide - 1))}
+              disabled={slide <= 0}
+              className="px-2 py-1 disabled:opacity-35 hover:bg-on-surface/10"
+              aria-label="Previous slide"
+            >
+              <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+            </button>
+            <button
+              onClick={() => onSlide(Math.min(slides - 1, slide + 1))}
+              disabled={slide >= slides - 1}
+              className="px-2 py-1 border-l border-outline-variant disabled:opacity-35 hover:bg-on-surface/10"
+              aria-label="Next slide"
+            >
+              <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
