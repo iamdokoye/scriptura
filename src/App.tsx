@@ -55,16 +55,21 @@ export default function App() {
       themeAppliedOnce.current = true;
       return;
     }
-    // Fade between palettes — but not on the very first paint, and not for
-    // people who've asked their OS for reduced motion.
+    const swap = () => {
+      root.classList.remove("light", "dark");
+      root.classList.add(next);
+    };
+    // Cross-fade between palettes — but not on the very first paint, and not
+    // for people who've asked their OS for reduced motion. The browser fades a
+    // snapshot of the old screen into the new one on the GPU, so it stays
+    // smooth even with the frosted-glass panels; animating every element's
+    // colours (the earlier approach) repainted the blurred layers each frame
+    // and stuttered. Without the API the theme simply switches instantly.
     const animate = themeAppliedOnce.current && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     themeAppliedOnce.current = true;
-    if (animate) root.classList.add("theme-fading");
-    root.classList.remove("light", "dark");
-    root.classList.add(next);
-    if (!animate) return;
-    const timer = window.setTimeout(() => root.classList.remove("theme-fading"), 420);
-    return () => { window.clearTimeout(timer); root.classList.remove("theme-fading"); };
+    const vt = (document as Document & { startViewTransition?: (cb: () => void) => unknown }).startViewTransition;
+    if (animate && vt) vt.call(document, swap);
+    else swap();
   }, [theme]);
 
   // On launch: import any pre-consolidation localStorage data (one-time, see
