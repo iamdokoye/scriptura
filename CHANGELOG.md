@@ -2,6 +2,20 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
+## [0.1.31] - 2026-10-11
+
+### Added
+- Redesigned Theme Designer: a three-pane layout with a theme library, a canvas with undo/redo and zoom, and a collapsible inspector. It has configurable grids with optional snap-to-grid.
+- Themes now control the live output's text: font size, line height and letter spacing come from the theme, so the text options in Settings only affect reading text. Existing themes were seeded from your current settings, so the live output looks the same after upgrading.
+- Themes can have a picture background and a verse-box fill (what makes a lower-third bar).
+- Two new built-in themes next to Midnight: **Lower Third** (chroma-key green with a bottom bar) and **Dusk Landscape** (a picture background). Built-in themes can't be deleted or edited in place, so duplicate one to make your own. The "New theme" menu also offers Plain background, Lower third and Picture background starting points.
+- Switching between light and dark mode now fades instead of snapping. It is skipped when your OS asks for reduced motion.
+
+### Fixed
+- A fresh install showed "SWORD module error: data dir not found" for StrongsGreek instead of a Bible. The library counted lexicons as a readable Bible. Only a Bible can now be the reading module, and a first launch with no Bible installs the KJV automatically and opens it.
+- The presentation top bar ran off the edge of the window at the 900 px minimum width, hiding Help, light/dark and Settings. It now drops its lowest-priority items as the window narrows.
+- Dragging past the edge of the window, or a sheet sliding in, could scroll the whole page a few pixels and show a white stripe along the bottom. The page frame no longer scrolls.
+
 ## [0.1.30] - 2026-10-07
 
 ### Added
