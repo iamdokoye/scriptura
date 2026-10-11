@@ -4,6 +4,7 @@ import { api, type ChapterText, type PresentationTheme } from "../lib/tauri";
 import StrongsSheet from "../components/StrongsSheet";
 import { useShrinkToFit } from "../hooks/useShrinkToFit";
 import { useAppStore, type DisplayPrefs } from "../store/app";
+import { liveDisplayPrefs, liveFontSize, liveSafeMargin } from "../lib/liveText";
 import { PART_LABELS, measureVersePartsDOM, type MeasureTextStyle } from "../lib/verseSplit";
 
 const FONT_FAMILY_CSS: Record<string, string> = {
@@ -188,15 +189,26 @@ export function PresentationStage({ state, chapter, parallelChapter, withStrongs
   }
 
   const ctx = state.displayPrefs.presentationContext ?? 1;
-  const fontSize = state.readingFontSize;
-  const prefs = state.displayPrefs;
-  // 5% baseline keeps text off the edges even at margins=0;
-  // the margins slider adds on top of that (same half-each-side formula as the reading view)
   const presentationTheme = state.presentationTheme;
-  const hPadPct = presentationTheme?.safe_margin ?? (5 + prefs.margins / 2);
+  // Live text styling comes from the theme alone — Settings → Text only styles
+  // reading text, so font, size, spacing, alignment and margins are read from
+  // the theme here rather than from the synced display preferences.
+  const fontSize = liveFontSize(presentationTheme);
+  const prefs = liveDisplayPrefs(state.displayPrefs, presentationTheme);
+  const hPadPct = liveSafeMargin(presentationTheme);
   const hPad = `${hPadPct}%`;
+  const image = presentationTheme?.background_image;
+  const dim = presentationTheme?.background_image_dim ?? 0;
+  const backdrop: React.CSSProperties = image
+    ? {
+        backgroundColor: presentationTheme?.background_color || "#000000",
+        backgroundImage: `linear-gradient(rgba(0,0,0,${dim}), rgba(0,0,0,${dim})), url("${image}")`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }
+    : { background: presentationTheme?.background_gradient || presentationTheme?.background_color || "#000000" };
   const themeStyle: React.CSSProperties = {
-    background: presentationTheme?.background_gradient || presentationTheme?.background_color || "#000000",
+    ...backdrop,
     "--presentation-text": presentationTheme?.text_color ?? "#ffffff",
     "--presentation-reference": presentationTheme?.reference_color ?? "#b8c4d8",
     "--presentation-shadow": presentationTheme?.text_shadow ? "0 2px 12px rgba(0,0,0,.75)" : "none",
@@ -478,7 +490,7 @@ function FreeformVerseLayout({ text, reference, module, prefs, maxFontSize, refS
           to the frame — items-center on a row-flex parent leaves height
           content-determined, so scrollHeight never exceeds clientHeight and
           the shrink loop never fires. */}
-      <div className="absolute flex flex-col overflow-hidden" style={verseBox}>
+      <div className="absolute flex flex-col overflow-hidden" style={{ ...verseBox, background: theme.verse_box_fill || undefined, padding: theme.verse_box_fill ? "0 1.2%" : undefined }}>
         <ShrinkingVerseText text={text} maxFontSize={maxFontSize} prefs={prefs} centered={theme.text_align === "center"} widen={false} noShrink={noShrink} />
       </div>
       <div className={`absolute flex items-center ${referenceAlignment(theme)}`} style={referenceBox}>

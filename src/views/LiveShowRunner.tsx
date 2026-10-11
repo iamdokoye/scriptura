@@ -8,6 +8,7 @@ import { animateScrollBy } from "../lib/animateScroll";
 import { contentStrongs } from "../lib/strongsMarkers";
 import { FONT_FAMILY_CSS } from "../components/VersePanes";
 import StrongsSheet from "../components/StrongsSheet";
+import { liveDisplayPrefs, liveFontSize, liveSafeMargin } from "../lib/liveText";
 import OutputPreview from "../components/OutputPreview";
 import { usePresentationStage } from "../hooks/usePresentationStage";
 import type { PresentState } from "../lib/presentation";
@@ -106,7 +107,8 @@ export default function LiveShowRunner() {
   const splitBox = useMemo(() => {
     const ctx = displayPrefs.presentationContext ?? 1;
     const theme = activePresentationTheme;
-    const hPadPct = theme?.safe_margin ?? (5 + displayPrefs.margins / 2);
+    const live = liveDisplayPrefs(displayPrefs, theme);
+    const hPadPct = liveSafeMargin(theme);
     const screenW = stage.w;
     const screenH = stage.h;
 
@@ -123,21 +125,20 @@ export default function LiveShowRunner() {
       boxH = screenH * 0.75;
     }
 
-    const fontFamily = FONT_FAMILY_CSS[theme?.font_family ?? displayPrefs.fontFamily] ?? FONT_FAMILY_CSS.system;
+    // Live text is styled by the theme alone (see lib/liveText.ts), so the
+    // split here is measured with the same font the output window will use.
+    const fontFamily = FONT_FAMILY_CSS[live.fontFamily] ?? FONT_FAMILY_CSS.system;
     return {
       boxW, boxH,
       style: {
         fontFamily,
-        fontSizePx: readingFontSize * (theme?.font_scale ?? 1),
-        lineHeight: 1 + displayPrefs.lineSpacing,
+        fontSizePx: liveFontSize(theme) * (theme?.font_scale ?? 1),
+        lineHeight: 1 + live.lineSpacing,
         fontWeight: theme?.text_font_weight ?? 600,
-        textAlign: theme?.text_align ?? displayPrefs.textAlign,
+        textAlign: live.textAlign,
       },
     };
-  }, [
-    displayPrefs.presentationContext, displayPrefs.margins, displayPrefs.fontFamily,
-    displayPrefs.lineSpacing, displayPrefs.textAlign, activePresentationTheme, readingFontSize, stage.w, stage.h,
-  ]);
+  }, [displayPrefs, activePresentationTheme, stage.w, stage.h]);
 
   const splitParts = useCallback((text: string) => measureVersePartsDOM(text.trim(), splitBox.boxW, splitBox.boxH, splitBox.style), [splitBox]);
 

@@ -21,6 +21,7 @@ import { usePresentationSync } from "../hooks/usePresentationSync";
 import { usePresentationCloseSync } from "../hooks/usePresentationCloseSync";
 import { useReadingPositionPersistence } from "../hooks/useReadingPositionPersistence";
 import { measureVersePartsDOM } from "../lib/verseSplit";
+import { liveDisplayPrefs, liveFontSize, liveSafeMargin } from "../lib/liveText";
 import { usePresentationStage } from "../hooks/usePresentationStage";
 
 export default function ReadingView() {
@@ -140,7 +141,8 @@ export default function ReadingView() {
 
     const ctx = displayPrefs.presentationContext ?? 1;
     const theme = effectivePresentationTheme;
-    const hPadPct = theme?.safe_margin ?? (5 + displayPrefs.margins / 2);
+    const hPadPct = liveSafeMargin(theme);
+    const live = liveDisplayPrefs(displayPrefs, theme);
 
     const screenW = stage.w;
     const screenH = stage.h;
@@ -159,18 +161,16 @@ export default function ReadingView() {
     }
 
     // Font style must mirror PresentationView's makeTextStyle exactly.
-    const fontFamily = FONT_FAMILY_CSS[theme?.font_family ?? displayPrefs.fontFamily] ?? FONT_FAMILY_CSS.system;
+    const fontFamily = FONT_FAMILY_CSS[live.fontFamily] ?? FONT_FAMILY_CSS.system;
     return measureVersePartsDOM(text, boxW, boxH, {
       fontFamily,
-      fontSizePx: readingFontSize * (theme?.font_scale ?? 1),
-      lineHeight: 1 + displayPrefs.lineSpacing,
+      fontSizePx: liveFontSize(theme) * (theme?.font_scale ?? 1),
+      lineHeight: 1 + live.lineSpacing,
       fontWeight: theme?.text_font_weight ?? 600,
-      textAlign: theme?.text_align ?? displayPrefs.textAlign,
+      textAlign: live.textAlign,
     });
   }, [
-    displayPrefs.splitLongVerses, displayPrefs.margins, displayPrefs.presentationContext,
-    displayPrefs.lineSpacing, displayPrefs.fontFamily, displayPrefs.textAlign,
-    chapter, currentRef.verse, readingFontSize, effectivePresentationTheme, stage.w, stage.h,
+    displayPrefs, chapter, currentRef.verse, effectivePresentationTheme, stage.w, stage.h,
   ]);
 
   // black/emergency are set from the Live Show console, but broadcast from

@@ -256,6 +256,16 @@ export interface PresentationTheme {
   transition_type: "none" | "fade" | "slide";
   transition_duration: number;
   scroll_v_padding: number;
+  // Live-output text styling lives here, not in Settings (which only styles
+  // reading text). font_size is px on a 1080p frame; font_scale multiplies it.
+  font_size: number;
+  line_spacing: number;   // line-height = 1 + value
+  letter_spacing: number; // tenths of an em
+  // A picture behind the text (downscaled JPEG data URL) and how much to darken it.
+  background_image: string | null;
+  background_image_dim: number;
+  // Optional fill behind the verse box — what makes a lower-third bar.
+  verse_box_fill: string | null;
   // Which theme is currently applied — a session preference, freely
   // reassignable to any theme (including personal ones) and unrelated to
   // whether it can be deleted. See is_builtin for that.

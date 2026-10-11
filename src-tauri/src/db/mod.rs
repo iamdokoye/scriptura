@@ -70,6 +70,8 @@ impl Database {
             (14, SCHEMA_V14_SPLIT_LONG_VERSES),
             (15, SCHEMA_V15_SCROLL_V_PADDING),
             (16, SCHEMA_V16_ACCENT),
+            (17, SCHEMA_V17_THEME_LIVE_TEXT_AND_MEDIA),
+            (18, SCHEMA_V18_BUILTIN_PRESET_THEMES),
         ]
     }
 
@@ -635,7 +637,8 @@ impl Database {
                     verse_box_x, verse_box_y, verse_box_width, verse_box_height,
                     reference_box_x, reference_box_y, reference_box_width, reference_box_height,
                     auto_layout, min_font_scale, transition_type, transition_duration,
-                    scroll_v_padding, is_default, is_builtin, created_at, updated_at
+                    scroll_v_padding, font_size, line_spacing, letter_spacing, background_image,
+                    background_image_dim, verse_box_fill, is_default, is_builtin, created_at, updated_at
              FROM presentation_themes
              ORDER BY is_default DESC, name COLLATE NOCASE",
         )?;
@@ -647,6 +650,7 @@ impl Database {
         &self,
         input: &PresentationThemeInput,
     ) -> Result<PresentationTheme> {
+        let (background_image, verse_box_fill) = validated_theme_media(input)?;
         let conn = self.conn();
         let id = format!("theme-{}", now_millis());
         conn.execute(
@@ -657,8 +661,9 @@ impl Database {
                 verse_box_x, verse_box_y, verse_box_width, verse_box_height,
                 reference_box_x, reference_box_y, reference_box_width, reference_box_height,
                 auto_layout, min_font_scale, transition_type, transition_duration,
-                scroll_v_padding
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
+                scroll_v_padding, font_size, line_spacing, letter_spacing, background_image,
+                background_image_dim, verse_box_fill
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34)",
             params![
                 id, input.name, input.background_color, input.background_gradient,
                 input.text_color, input.reference_color, input.font_family, input.text_align,
@@ -672,6 +677,9 @@ impl Database {
                 input.auto_layout, input.min_font_scale.clamp(0.5, 1.0),
                 input.transition_type, input.transition_duration.clamp(0, 2_000),
                 input.scroll_v_padding.min(50),
+                input.font_size.clamp(12.0, 300.0), input.line_spacing.clamp(0.0, 2.0),
+                input.letter_spacing.clamp(-1.0, 2.0), background_image,
+                input.background_image_dim.clamp(0.0, 0.9), verse_box_fill,
             ],
         )?;
         self.presentation_theme_by_id(&conn, &id)
@@ -682,6 +690,7 @@ impl Database {
         id: &str,
         input: &PresentationThemeInput,
     ) -> Result<PresentationTheme> {
+        let (background_image, verse_box_fill) = validated_theme_media(input)?;
         let conn = self.conn();
         let changed = conn.execute(
             "UPDATE presentation_themes SET
@@ -692,7 +701,9 @@ impl Database {
                 verse_box_x=?16, verse_box_y=?17, verse_box_width=?18, verse_box_height=?19,
                 reference_box_x=?20, reference_box_y=?21, reference_box_width=?22, reference_box_height=?23,
                 auto_layout=?24, min_font_scale=?25, transition_type=?26, transition_duration=?27,
-                scroll_v_padding=?28, updated_at=datetime('now')
+                scroll_v_padding=?28, font_size=?29, line_spacing=?30, letter_spacing=?31,
+                background_image=?32, background_image_dim=?33, verse_box_fill=?34,
+                updated_at=datetime('now')
              WHERE id=?1",
             params![
                 id, input.name, input.background_color, input.background_gradient,
@@ -707,6 +718,9 @@ impl Database {
                 input.auto_layout, input.min_font_scale.clamp(0.5, 1.0),
                 input.transition_type, input.transition_duration.clamp(0, 2_000),
                 input.scroll_v_padding.min(50),
+                input.font_size.clamp(12.0, 300.0), input.line_spacing.clamp(0.0, 2.0),
+                input.letter_spacing.clamp(-1.0, 2.0), background_image,
+                input.background_image_dim.clamp(0.0, 0.9), verse_box_fill,
             ],
         )?;
         if changed == 0 {
@@ -717,7 +731,8 @@ impl Database {
         self.presentation_theme_by_id(&conn, id)
     }
 
-    /// Only the seeded Midnight theme (`is_builtin`) is protected from
+    /// Only the seeded built-in themes (`is_builtin`: Midnight, Lower Third,
+    /// Dusk Landscape) are protected from
     /// deletion — every user-created theme stays personal and deletable no
     /// matter what, including one that's currently the active/default
     /// theme (previously `is_default` alone blocked deletion, so picking
@@ -740,7 +755,7 @@ impl Database {
             }
             Some(true) => {
                 return Err(AppError::Other(
-                    "the built-in Midnight theme cannot be deleted".into(),
+                    "built-in themes cannot be deleted — duplicate one to make your own".into(),
                 ));
             }
             Some(false) => {}
@@ -755,7 +770,7 @@ impl Database {
         // theme guaranteed to still exist: the built-in.
         tx.execute(
             "UPDATE presentation_themes SET is_default=1
-             WHERE is_builtin=1
+             WHERE id='builtin-midnight'
                AND NOT EXISTS (SELECT 1 FROM presentation_themes WHERE is_default=1)",
             [],
         )?;
@@ -788,7 +803,8 @@ impl Database {
                     verse_box_x, verse_box_y, verse_box_width, verse_box_height,
                     reference_box_x, reference_box_y, reference_box_width, reference_box_height,
                     auto_layout, min_font_scale, transition_type, transition_duration,
-                    scroll_v_padding, is_default, is_builtin, created_at, updated_at
+                    scroll_v_padding, font_size, line_spacing, letter_spacing, background_image,
+                    background_image_dim, verse_box_fill, is_default, is_builtin, created_at, updated_at
              FROM presentation_themes WHERE id=?1",
             params![id],
             presentation_theme_from_row,
@@ -1281,6 +1297,104 @@ const SCHEMA_V16_ACCENT: &str = r#"
 ALTER TABLE preferences ADD COLUMN accent TEXT NOT NULL DEFAULT 'indigo';
 "#;
 
+/// v17: live-output text styling moves from the global display preferences into
+/// the theme (font size, line spacing, letter spacing), and themes gain a
+/// picture background and a verse-box fill (lower thirds). Existing themes are
+/// seeded from the current preferences so the live output looks the same after
+/// upgrading; from then on Settings only affects reading text.
+const SCHEMA_V17_THEME_LIVE_TEXT_AND_MEDIA: &str = r#"
+ALTER TABLE presentation_themes ADD COLUMN font_size REAL NOT NULL DEFAULT 56;
+ALTER TABLE presentation_themes ADD COLUMN line_spacing REAL NOT NULL DEFAULT 0.3;
+ALTER TABLE presentation_themes ADD COLUMN letter_spacing REAL NOT NULL DEFAULT 0;
+ALTER TABLE presentation_themes ADD COLUMN background_image TEXT;
+ALTER TABLE presentation_themes ADD COLUMN background_image_dim REAL NOT NULL DEFAULT 0.35;
+ALTER TABLE presentation_themes ADD COLUMN verse_box_fill TEXT;
+UPDATE presentation_themes SET
+    font_size = COALESCE((SELECT font_size_reading FROM preferences LIMIT 1), 56),
+    line_spacing = COALESCE((SELECT line_spacing FROM preferences LIMIT 1), 0.3),
+    letter_spacing = COALESCE((SELECT letter_spacing FROM preferences LIMIT 1), 0);
+"#;
+
+/// v18: two more built-in themes alongside Midnight — a chroma-key lower
+/// third and a picture background (a bundled dusk landscape, as an SVG data
+/// URL; users replace it with their own photo by duplicating the theme).
+/// Built-in themes can't be deleted or edited in place, only duplicated.
+const SCHEMA_V18_BUILTIN_PRESET_THEMES: &str = r#"
+INSERT OR IGNORE INTO presentation_themes (
+    id, name, background_color, background_gradient, text_color, reference_color,
+    font_family, text_align, font_scale, safe_margin, text_shadow, is_default,
+    text_font_weight, reference_font_scale, reference_font_weight, reference_position,
+    verse_box_x, verse_box_y, verse_box_width, verse_box_height,
+    reference_box_x, reference_box_y, reference_box_width, reference_box_height,
+    auto_layout, min_font_scale, transition_type, transition_duration, is_builtin,
+    scroll_v_padding, font_size, line_spacing, letter_spacing,
+    background_image, background_image_dim, verse_box_fill
+) VALUES (
+    'builtin-lower-third', 'Lower Third', '#00b140', NULL, '#ffffff', '#ffffff',
+    'system', 'left', 1, 4, 0, 0,
+    700, 0.9, 700, 'top-left',
+    4, 78, 92, 16,
+    4, 71, 34, 6,
+    1, 0.6, 'fade', 250, 1,
+    32, 44, 0.3, 0,
+    NULL, 0.35, 'rgba(11, 18, 32, 0.92)'
+);
+
+INSERT OR IGNORE INTO presentation_themes (
+    id, name, background_color, background_gradient, text_color, reference_color,
+    font_family, text_align, font_scale, safe_margin, text_shadow, is_default,
+    text_font_weight, reference_font_scale, reference_font_weight, reference_position,
+    verse_box_x, verse_box_y, verse_box_width, verse_box_height,
+    reference_box_x, reference_box_y, reference_box_width, reference_box_height,
+    auto_layout, min_font_scale, transition_type, transition_duration, is_builtin,
+    scroll_v_padding, font_size, line_spacing, letter_spacing,
+    background_image, background_image_dim, verse_box_fill
+) VALUES (
+    'builtin-picture', 'Dusk Landscape', '#0b1b3a', NULL, '#ffffff', '#f2e4cf',
+    'system', 'center', 1, 5, 1, 0,
+    700, 1, 500, 'bottom-center',
+    10, 24, 80, 48,
+    10, 76, 80, 10,
+    1, 1, 'fade', 300, 1,
+    32, 64, 0.3, 0,
+    'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIwIDEwODAiIHByZXNlcnZlQXNwZWN0UmF0aW89InhNaWRZTWlkIHNsaWNlIj4KPGRlZnM+CjxsaW5lYXJHcmFkaWVudCBpZD0ic2t5IiB4MT0iMCIgeTE9IjAiIHgyPSIwIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMGIxYjNhIi8+PHN0b3Agb2Zmc2V0PSIuNDUiIHN0b3AtY29sb3I9IiMzYjNmN2EiLz48c3RvcCBvZmZzZXQ9Ii43MiIgc3RvcC1jb2xvcj0iI2Q5OGE2YSIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2YyYzY4YSIvPjwvbGluZWFyR3JhZGllbnQ+CjxyYWRpYWxHcmFkaWVudCBpZD0ic3VuIiBjeD0iLjUiIGN5PSIuNSIgcj0iLjUiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI2ZmZjNkNiIgc3RvcC1vcGFjaXR5PSIuOTUiLz48c3RvcCBvZmZzZXQ9Ii4zNSIgc3RvcC1jb2xvcj0iI2ZmZDU5YSIgc3RvcC1vcGFjaXR5PSIuNTUiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmZmQ1OWEiIHN0b3Atb3BhY2l0eT0iMCIvPjwvcmFkaWFsR3JhZGllbnQ+CjxsaW5lYXJHcmFkaWVudCBpZD0iZmFyIiB4MT0iMCIgeTE9IjAiIHgyPSIwIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjNGE0YTdkIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMmEyYTUyIi8+PC9saW5lYXJHcmFkaWVudD4KPGxpbmVhckdyYWRpZW50IGlkPSJtaWQiIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiMyYzMxNTgiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMxNjFhMzgiLz48L2xpbmVhckdyYWRpZW50Pgo8bGluZWFyR3JhZGllbnQgaWQ9Im5lYXIiIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiMxNTFhMzMiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMwNzBhMTgiLz48L2xpbmVhckdyYWRpZW50Pgo8L2RlZnM+CjxyZWN0IHdpZHRoPSIxOTIwIiBoZWlnaHQ9IjEwODAiIGZpbGw9InVybCgjc2t5KSIvPgo8Y2lyY2xlIGN4PSIxMjgwIiBjeT0iNzAwIiByPSI0MjAiIGZpbGw9InVybCgjc3VuKSIvPgo8cGF0aCBkPSJNMCA3NjAgTDIwMCA2MjAgTDM2MCA3MDAgTDU2MCA1NDAgTDc2MCA2OTAgTDk4MCA2MDAgTDEyMDAgNzIwIEwxNDIwIDU5MCBMMTY0MCA3MDAgTDE5MjAgNjIwIEwxOTIwIDEwODAgTDAgMTA4MFoiIGZpbGw9InVybCgjZmFyKSIvPgo8cGF0aCBkPSJNMCA4NjAgTDI2MCA3NDAgTDQ2MCA4MjAgTDcwMCA3MDAgTDk0MCA4MzAgTDExODAgNzYwIEwxNDQwIDg1MCBMMTcwMCA3NTAgTDE5MjAgODIwIEwxOTIwIDEwODAgTDAgMTA4MFoiIGZpbGw9InVybCgjbWlkKSIvPgo8cGF0aCBkPSJNMCA5NjAgTDMyMCA4ODAgTDYyMCA5NDAgTDk0MCA4NzAgTDEyNjAgOTUwIEwxNTYwIDg5MCBMMTkyMCA5NTAgTDE5MjAgMTA4MCBMMCAxMDgwWiIgZmlsbD0idXJsKCNuZWFyKSIvPgo8L3N2Zz4=', 0.4, NULL
+);
+"#;
+
+/// Upper bound on a stored background picture (a downscaled JPEG data URL is
+/// normally a few hundred KB) so a bad client can't bloat the database.
+const MAX_BACKGROUND_IMAGE_BYTES: usize = 6 * 1024 * 1024;
+
+fn validated_theme_media(
+    input: &PresentationThemeInput,
+) -> Result<(Option<String>, Option<String>)> {
+    let image = input
+        .background_image
+        .clone()
+        .filter(|s| !s.trim().is_empty());
+    if let Some(data) = &image {
+        if !data.starts_with("data:image/") {
+            return Err(AppError::Other(
+                "background image must be an image data URL".into(),
+            ));
+        }
+        if data.len() > MAX_BACKGROUND_IMAGE_BYTES {
+            return Err(AppError::Other("background image is too large".into()));
+        }
+    }
+    let fill = input
+        .verse_box_fill
+        .clone()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if fill.as_ref().is_some_and(|f| f.len() > 64) {
+        return Err(AppError::Other(
+            "verse box fill is not a valid colour".into(),
+        ));
+    }
+    Ok((image, fill))
+}
+
 fn presentation_theme_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PresentationTheme> {
     Ok(PresentationTheme {
         id: row.get(0)?,
@@ -1311,10 +1425,16 @@ fn presentation_theme_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Pres
         transition_type: row.get(25)?,
         transition_duration: row.get(26)?,
         scroll_v_padding: row.get::<_, Option<u32>>(27)?.unwrap_or(32),
-        is_default: row.get(28)?,
-        is_builtin: row.get(29)?,
-        created_at: row.get(30)?,
-        updated_at: row.get(31)?,
+        font_size: row.get(28)?,
+        line_spacing: row.get(29)?,
+        letter_spacing: row.get(30)?,
+        background_image: row.get(31)?,
+        background_image_dim: row.get(32)?,
+        verse_box_fill: row.get(33)?,
+        is_default: row.get(34)?,
+        is_builtin: row.get(35)?,
+        created_at: row.get(36)?,
+        updated_at: row.get(37)?,
     })
 }
 
@@ -1452,6 +1572,78 @@ mod tests {
     }
 
     #[test]
+    fn presentation_theme_live_text_and_media_round_trip_and_validate() {
+        let (db, path) = temp_db("presentation-theme-media");
+        let base = db.list_presentation_themes().unwrap().remove(0);
+        assert!(base.font_size >= 12.0, "migration seeds a usable font size");
+
+        let make = |image: Option<&str>, fill: Option<&str>| PresentationThemeInput {
+            name: "Media".into(),
+            background_color: "#000000".into(),
+            background_gradient: None,
+            text_color: "#ffffff".into(),
+            reference_color: "#b8c4d8".into(),
+            font_family: "system".into(),
+            text_align: "left".into(),
+            font_scale: 1.0,
+            text_font_weight: 600,
+            reference_font_scale: 1.0,
+            reference_font_weight: 500,
+            safe_margin: 5,
+            text_shadow: true,
+            reference_position: "bottom-left".into(),
+            verse_box_x: 5.0,
+            verse_box_y: 76.0,
+            verse_box_width: 90.0,
+            verse_box_height: 17.0,
+            reference_box_x: 5.0,
+            reference_box_y: 69.0,
+            reference_box_width: 30.0,
+            reference_box_height: 6.0,
+            auto_layout: true,
+            min_font_scale: 0.65,
+            transition_type: "fade".into(),
+            transition_duration: 300,
+            scroll_v_padding: 32,
+            font_size: 900.0, // out of range: must clamp
+            line_spacing: 0.5,
+            letter_spacing: 0.2,
+            background_image: image.map(String::from),
+            background_image_dim: 5.0, // out of range: must clamp
+            verse_box_fill: fill.map(String::from),
+        };
+
+        let created = db
+            .create_presentation_theme(&make(
+                Some("data:image/jpeg;base64,AAAA"),
+                Some(" rgba(0,0,0,.8) "),
+            ))
+            .unwrap();
+        assert_eq!(
+            created.background_image.as_deref(),
+            Some("data:image/jpeg;base64,AAAA")
+        );
+        assert_eq!(created.verse_box_fill.as_deref(), Some("rgba(0,0,0,.8)"));
+        assert_eq!(created.font_size, 300.0);
+        assert_eq!(created.background_image_dim, 0.9);
+        assert_eq!(created.line_spacing, 0.5);
+
+        // Clearing the picture and fill persists as NULL.
+        let cleared = db
+            .update_presentation_theme(&created.id, &make(None, Some("  ")))
+            .unwrap();
+        assert!(cleared.background_image.is_none());
+        assert!(cleared.verse_box_fill.is_none());
+
+        // Only image data URLs are accepted.
+        assert!(db
+            .create_presentation_theme(&make(Some("https://example.com/a.png"), None))
+            .is_err());
+
+        cleanup(&path);
+    }
+
+    #[test]
     fn presentation_themes_have_a_default_and_support_crud() {
         let (db, path) = temp_db("presentation-themes");
         let initial = db.list_presentation_themes().unwrap();
@@ -1485,6 +1677,12 @@ mod tests {
             transition_type: "slide".into(),
             transition_duration: 450,
             scroll_v_padding: 32,
+            font_size: 56.0,
+            line_spacing: 0.3,
+            letter_spacing: 0.0,
+            background_image: None,
+            background_image_dim: 0.35,
+            verse_box_fill: None,
         };
         let created = db.create_presentation_theme(&input).unwrap();
         assert_eq!(created.name, "Lower third");
@@ -1545,24 +1743,68 @@ mod tests {
             transition_type: "slide".into(),
             transition_duration: 450,
             scroll_v_padding: 32,
+            font_size: 56.0,
+            line_spacing: 0.3,
+            letter_spacing: 0.0,
+            background_image: None,
+            background_image_dim: 0.35,
+            verse_box_fill: None,
         };
         let created = db.create_presentation_theme(&input).unwrap();
         db.set_default_presentation_theme(&created.id).unwrap();
 
         db.delete_presentation_theme(&created.id).unwrap();
 
-        // Midnight (the only theme left, and the only is_builtin one) must
-        // have picked up is_default again — every reader (this list's own
-        // ordering, the frontend's activePresentationTheme hydration)
-        // assumes there's always exactly one default theme.
+        // Midnight must have picked up is_default again (not the other
+        // built-ins) — every reader (this list's own ordering, the
+        // frontend's activePresentationTheme hydration) assumes there's
+        // always exactly one default theme.
         let remaining = db.list_presentation_themes().unwrap();
-        assert_eq!(remaining.len(), 1);
-        assert!(remaining[0].is_builtin);
-        assert!(remaining[0].is_default);
+        assert_eq!(remaining.len(), 3);
+        assert!(remaining.iter().all(|t| t.is_builtin));
+        assert_eq!(remaining.iter().filter(|t| t.is_default).count(), 1);
+        let default = remaining.iter().find(|t| t.is_default).unwrap();
+        assert_eq!(default.id, "builtin-midnight");
 
-        // The built-in theme itself is still permanent.
-        assert!(db.delete_presentation_theme(&remaining[0].id).is_err());
+        // The built-in themes themselves are still permanent.
+        for t in &remaining {
+            assert!(db.delete_presentation_theme(&t.id).is_err());
+        }
 
+        cleanup(&path);
+    }
+
+    #[test]
+    fn built_in_lower_third_and_picture_themes_are_seeded() {
+        let (db, path) = temp_db("builtin-presets");
+        let themes = db.list_presentation_themes().unwrap();
+        let get = |id: &str| {
+            themes
+                .iter()
+                .find(|t| t.id == id)
+                .unwrap_or_else(|| panic!("{id} missing"))
+        };
+
+        let lower = get("builtin-lower-third");
+        assert!(lower.is_builtin && !lower.is_default);
+        // A lower third is a filled bar in the bottom fifth of the frame.
+        assert!(lower.verse_box_fill.is_some());
+        assert!(lower.verse_box_y >= 70.0 && lower.verse_box_y + lower.verse_box_height <= 100.0);
+        assert_eq!(lower.background_color, "#00b140");
+
+        let picture = get("builtin-picture");
+        assert!(picture.is_builtin && !picture.is_default);
+        let image = picture
+            .background_image
+            .as_deref()
+            .expect("picture theme has an image");
+        assert!(image.starts_with("data:image/svg+xml;base64,"));
+        assert!(image.len() < 20_000, "bundled picture should stay small");
+        assert!(picture.background_image_dim > 0.0);
+
+        // Midnight stays the single default.
+        assert_eq!(themes.iter().filter(|t| t.is_default).count(), 1);
+        assert!(get("builtin-midnight").is_default);
         cleanup(&path);
     }
 
@@ -1574,7 +1816,7 @@ mod tests {
         // a user as "I can't delete created themes."
         let (db, path) = temp_db("presentation-theme-delete");
         let before = db.list_presentation_themes().unwrap();
-        assert_eq!(before.len(), 1); // just the seeded default
+        assert_eq!(before.len(), 3); // the seeded built-ins (Midnight is the default)
 
         let input = PresentationThemeInput {
             name: "Custom theme".into(),
@@ -1604,6 +1846,12 @@ mod tests {
             transition_type: "slide".into(),
             transition_duration: 450,
             scroll_v_padding: 32,
+            font_size: 56.0,
+            line_spacing: 0.3,
+            letter_spacing: 0.0,
+            background_image: None,
+            background_image_dim: 0.35,
+            verse_box_fill: None,
         };
         let created = db.create_presentation_theme(&input).unwrap();
         assert!(!created.is_default);
@@ -1611,7 +1859,7 @@ mod tests {
         db.delete_presentation_theme(&created.id).unwrap();
 
         let after = db.list_presentation_themes().unwrap();
-        assert_eq!(after.len(), 1, "the created theme should be gone");
+        assert_eq!(after.len(), 3, "the created theme should be gone");
         assert!(after.iter().all(|t| t.id != created.id));
 
         // Deleting an id that no longer exists (already gone, or never

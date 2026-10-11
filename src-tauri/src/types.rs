@@ -291,6 +291,21 @@ pub struct PresentationTheme {
     pub transition_type: String,
     pub transition_duration: u32,
     pub scroll_v_padding: u32,
+    /// Base size of the verse text on the live output, in px on a 1080p frame.
+    /// Live text styling comes from the theme alone — the Settings text options
+    /// apply to reading text only. `font_scale` multiplies this.
+    pub font_size: f64,
+    /// Extra line height as a fraction of the font size (line-height = 1 + value).
+    pub line_spacing: f64,
+    /// Letter spacing in tenths of an em.
+    pub letter_spacing: f64,
+    /// A picture behind the text, stored as a (downscaled) data URL.
+    pub background_image: Option<String>,
+    /// 0–0.9 darkening laid over `background_image` so text stays readable.
+    pub background_image_dim: f64,
+    /// Optional fill behind the verse box (any CSS colour) — what makes a
+    /// lower-third bar.
+    pub verse_box_fill: Option<String>,
     /// Which theme is currently applied — a session preference, freely
     /// reassignable to any theme (including personal ones) and unrelated
     /// to whether it can be deleted. See `is_builtin` for that.
@@ -333,6 +348,37 @@ pub struct PresentationThemeInput {
     pub transition_type: String,
     pub transition_duration: u32,
     pub scroll_v_padding: u32,
+    /// Base size of the verse text on the live output, in px on a 1080p frame.
+    /// Live text styling comes from the theme alone — the Settings text options
+    /// apply to reading text only. `font_scale` multiplies this.
+    #[serde(default = "default_theme_font_size")]
+    pub font_size: f64,
+    /// Extra line height as a fraction of the font size (line-height = 1 + value).
+    #[serde(default = "default_theme_line_spacing")]
+    pub line_spacing: f64,
+    /// Letter spacing in tenths of an em.
+    #[serde(default)]
+    pub letter_spacing: f64,
+    /// A picture behind the text, stored as a (downscaled) data URL.
+    #[serde(default)]
+    pub background_image: Option<String>,
+    /// 0–0.9 darkening laid over `background_image` so text stays readable.
+    #[serde(default = "default_theme_image_dim")]
+    pub background_image_dim: f64,
+    /// Optional fill behind the verse box (any CSS colour) — what makes a
+    /// lower-third bar.
+    #[serde(default)]
+    pub verse_box_fill: Option<String>,
+}
+
+fn default_theme_font_size() -> f64 {
+    56.0
+}
+fn default_theme_line_spacing() -> f64 {
+    0.3
+}
+fn default_theme_image_dim() -> f64 {
+    0.35
 }
 
 impl Default for Preferences {

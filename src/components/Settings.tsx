@@ -167,6 +167,9 @@ export default function Settings() {
               open={isOpen("text-settings")} onToggle={() => toggleSection("text-settings")}
               nested
             >
+              <p className="font-body-ui text-[12px] leading-relaxed text-on-surface-variant -mt-1">
+                These options style the text you read in the app. The live output has its own font, size and spacing — set them per theme in Themes.
+              </p>
               {/* Font */}
               <SubRow label="Font">
                 <div className="flex gap-1.5 flex-wrap">
@@ -421,7 +424,7 @@ export default function Settings() {
                   { q: "How do I install Bible modules?", a: "Go to the Modules view (bookshelf icon), search for a translation, and click Install." },
                   { q: "How do I start a presentation?", a: "Click the slideshow icon in the top bar to open the Presentation window, then navigate verses from the reading view. Press Ctrl+Alt+Q to add the current verse to the service queue, and Ctrl+Q to open the queue panel." },
                   { q: "What are Strong's numbers?", a: "Strong's numbers link each word to its original Hebrew or Greek dictionary entry. Enable them in Study Tools settings." },
-                  { q: "How do I change the font or size?", a: "Open Settings → Appearance → Text Settings to adjust font family, size, margins, and spacing." },
+                  { q: "How do I change the font or size?", a: "Open Settings → Appearance → Text Settings to change the text you read in the app. The live output is styled by its theme instead — open Themes and edit the font, size and spacing there." },
                   { q: "How do I use the presentation verse context shortcuts?", a: "Press Ctrl+1–4 while presentation is active: 1 = active verse only, 2 = active + next, 3 = prev + active + next, 4 = full chapter scroll." },
                   { q: "Can I use two Bible translations side by side?", a: "Yes — click the splitscreen icon in the top bar to enable Parallel Mode, then pick the second translation from the Study Library sidebar. Enable the sync icon to scroll both panes together." },
                 ] as const).map(({ q, a }) => (
