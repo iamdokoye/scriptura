@@ -386,9 +386,9 @@ export default function LiveShowRunner() {
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* ── Schedule (queue) ── */}
         <section style={{ width: queueW.size }} className="shrink-0 flex flex-col overflow-hidden panel rounded-3xl">
-          <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-outline-variant">
-            <h2 className="font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide">Schedule</h2>
-            <div className="flex items-center gap-2 whitespace-nowrap">
+          <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-outline-variant">
+            <h2 className="font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide shrink-0">Schedule</h2>
+            <div className="flex items-center gap-3 whitespace-nowrap">
               <button
                 onClick={() => setServiceOrderOpen(true)}
                 className="flex items-center gap-1 font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors"
@@ -449,15 +449,15 @@ export default function LiveShowRunner() {
           </div>
         </section>
 
-        <ResizeHandle axis="x" label="schedule" dragging={queueW.dragging} handleProps={queueW.handleProps} />
+        <ResizeHandle spaced axis="x" label="schedule" dragging={queueW.dragging} handleProps={queueW.handleProps} />
 
         {/* ── Preview ── */}
         <section className="flex-1 min-w-0 flex flex-col overflow-hidden panel rounded-3xl">
-          <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-outline-variant">
-            <h2 className="font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide truncate">
+          <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-outline-variant">
+            <h2 className="min-w-0 flex-1 font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide truncate">
               Preview <span className="font-normal normal-case tracking-normal text-on-surface-variant">— {refLabel(previewRef)}{primaryModule ? ` (${primaryModule})` : ""}</span>
             </h2>
-            <div className="ml-auto flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={addPreviewToQueue}
                 disabled={previewInQueue}
@@ -465,7 +465,7 @@ export default function LiveShowRunner() {
                 title={previewInQueue ? "Already in the schedule" : "Add to schedule (Ctrl+Alt+Q)"}
               >
                 <span className="material-symbols-outlined text-[14px]">playlist_add</span>
-                <span className="hidden min-[1100px]:inline">Queue</span>
+                <span className="hidden min-[1400px]:inline">Queue</span>
               </button>
               <button
                 onClick={goBack}
@@ -487,7 +487,7 @@ export default function LiveShowRunner() {
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1.5">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
             {previewParts.map((_, i) => {
               const active = i === previewPart;
               const spans = previewParts.length > 1 ? sliceSpansForPart(previewVerseSpans, previewParts, i) : previewVerseSpans;
@@ -532,11 +532,11 @@ export default function LiveShowRunner() {
           </OutputStrip>
         </section>
 
-        <ResizeHandle axis="x" label="live" dragging={liveW.dragging} handleProps={liveW.handleProps} />
+        <ResizeHandle spaced axis="x" label="live" dragging={liveW.dragging} handleProps={liveW.handleProps} />
 
         {/* ── Live ── */}
         <section style={{ width: liveW.size }} className="shrink-0 flex flex-col overflow-hidden panel rounded-3xl">
-          <div className="shrink-0 flex items-center gap-2 px-4 py-3 border-b border-outline-variant">
+          <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-outline-variant">
             <h2 className="font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide">Live</h2>
             {presentationActive && (
               <span className="flex items-center gap-1 font-metadata-mono text-[9px] uppercase tracking-widest text-error">
@@ -546,7 +546,7 @@ export default function LiveShowRunner() {
             )}
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1.5">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
             {overridden && (
               <div className="px-3 py-3 text-center ctl rounded-lg">
                 <p className="font-body-ui text-[12px] text-on-surface-variant">
@@ -766,10 +766,10 @@ function OutputStrip({ title, label, slide, slides, onSlide, stage, children }: 
   children: React.ReactNode;
 }) {
   return (
-    <div className="shrink-0 border-t border-outline-variant px-3 py-2.5">
-      <p className="font-body-ui text-[11px] font-bold text-on-surface-variant uppercase tracking-wide mb-2">{title}</p>
-      <div className="flex items-center gap-3">
-        <div className="shrink-0 rounded-md overflow-hidden" style={{ width: "42%", maxWidth: 230, minWidth: 110, aspectRatio: `${stage.w} / ${stage.h}` }}>
+    <div className="shrink-0 border-t border-outline-variant px-4 py-3">
+      <p className="font-body-ui text-[11px] font-bold text-on-surface-variant uppercase tracking-wide mb-3">{title}</p>
+      <div className="flex items-center gap-4">
+        <div className="shrink-0 rounded-md overflow-hidden" style={{ width: "clamp(110px, 40%, 144px)", aspectRatio: `${stage.w} / ${stage.h}` }}>
           {children}
         </div>
         <div className="min-w-0 flex-1 flex flex-col gap-1.5">

@@ -83,10 +83,12 @@ interface HandleProps {
   dragging: boolean;
   handleProps: ReturnType<typeof useResizable>["handleProps"];
   label: string;
+  /** Reserve a full 12px gutter (matching the page's gap-3) instead of overlapping the neighbours. */
+  spaced?: boolean;
 }
 
 /** A thin draggable divider. `axis="x"` resizes horizontally (vertical bar). */
-export function ResizeHandle({ axis, dragging, handleProps, label }: HandleProps) {
+export function ResizeHandle({ axis, dragging, handleProps, label, spaced }: HandleProps) {
   const horizontal = axis === "x";
   return (
     <div
@@ -96,7 +98,7 @@ export function ResizeHandle({ axis, dragging, handleProps, label }: HandleProps
       title="Drag to resize · double-click to reset"
       {...handleProps}
       className={`group shrink-0 flex items-center justify-center touch-none select-none ${
-        horizontal ? "w-2 -mx-1 cursor-col-resize" : "h-2 -my-1 cursor-row-resize"
+        horizontal ? (spaced ? "w-3 cursor-col-resize" : "w-2 -mx-1 cursor-col-resize") : "h-2 -my-1 cursor-row-resize"
       }`}
     >
       <span
