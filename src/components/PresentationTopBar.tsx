@@ -124,21 +124,21 @@ export default function PresentationTopBar() {
   }, [liveBlack, setLiveBlack, liveEmergency, setLiveEmergency, serviceOrderOpen, setServiceOrderOpen, presentationActive, setDisplayPrefs, readingFontSize, setReadingFontSize, setView]);
 
   return (
-    <header className="flex items-center h-14 px-content-margin w-full z-50 glass !rounded-none !border-x-0 !border-t-0 shrink-0 gap-6">
-      <span className="font-headline-md text-headline-md font-bold text-primary select-none shrink-0">
+    <header className="flex items-center h-14 px-content-margin w-full z-50 glass !rounded-none !border-x-0 !border-t-0 shrink-0 gap-3 min-[1100px]:gap-6">
+      <span className="font-headline-md text-headline-md font-bold text-primary select-none shrink-0 hidden min-[960px]:block">
         Scriptura
       </span>
 
       <nav className="flex items-center gap-1 shrink-0">
         <TabButton label="Scriptures" active={activeTab === "scriptures"} onClick={() => setView("live")} />
-        <TabButton label="Slides" active={false} disabled />
-        <TabButton label="Songs" active={false} disabled />
+        <TabButton label="Slides" active={false} disabled className="hidden min-[1100px]:block" />
+        <TabButton label="Songs" active={false} disabled className="hidden min-[1100px]:block" />
       </nav>
 
-      <div className="flex-1 flex items-center justify-center gap-2">
+      <div className="flex-1 min-w-0 flex items-center justify-center gap-1.5 min-[1100px]:gap-2">
         <button
           onClick={output.toggle}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-body-ui text-[13px] font-bold transition-colors ${
+          className={`flex items-center gap-1.5 px-3 min-[1100px]:px-4 py-1.5 rounded-lg font-body-ui text-[13px] font-bold transition-colors ${
             output.presentationActive ? "btn-live" : "ctl text-on-surface"
           }`}
           title={output.presentationActive ? "Stop the presentation output" : "Send output live"}
@@ -148,7 +148,7 @@ export default function PresentationTopBar() {
         </button>
         <button
           onClick={() => setLiveBlack(!liveBlack)}
-          className={`px-4 py-1.5 rounded-lg font-body-ui text-[13px] font-bold transition-colors ${
+          className={`px-3 min-[1100px]:px-4 py-1.5 rounded-lg font-body-ui text-[13px] font-bold transition-colors ${
             liveBlack ? "bg-on-surface text-surface" : "ctl text-on-surface"
           }`}
           title="Cut the live output to black (C)"
@@ -158,7 +158,7 @@ export default function PresentationTopBar() {
         <button
           onClick={clearOverrides}
           disabled={cleared}
-          className={`px-4 py-1.5 rounded-lg font-body-ui text-[13px] font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+          className={`px-3 min-[1100px]:px-4 py-1.5 rounded-lg font-body-ui text-[13px] font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
             cleared ? "field text-on-surface-variant" : "ctl text-primary"
           }`}
           title="Clear black/emergency overrides and resume normal output"
@@ -167,7 +167,7 @@ export default function PresentationTopBar() {
         </button>
       </div>
 
-      <div className="flex items-center gap-2.5 shrink-0">
+      <div className="flex items-center gap-0.5 min-[1100px]:gap-2.5 shrink-0">
         <div className="relative">
           <IconButton
             icon="cast"
@@ -178,9 +178,9 @@ export default function PresentationTopBar() {
           {outputsOpen && <OutputsPanel output={output} onClose={() => setOutputsOpen(false)} />}
         </div>
         <IconButton icon="palette" label="Themes" active={view === "customize"} onClick={() => setView("customize")} />
-        <IconButton icon="movie" label="Studio" disabled title="Coming soon" />
-        <IconButton icon="notifications" label="Alerts" disabled title="Coming soon" />
-        <IconButton icon="help" label="Get help" onClick={() => openExternal("https://github.com/iamdokoye/scriptura/issues")} />
+        <IconButton icon="movie" label="Studio" disabled title="Coming soon" className="hidden min-[1100px]:block" />
+        <IconButton icon="notifications" label="Alerts" disabled title="Coming soon" className="hidden min-[1100px]:block" />
+        <IconButton icon="help" label="Get help" onClick={() => openExternal("https://github.com/iamdokoye/scriptura/issues")} className="hidden min-[960px]:block" />
         <IconButton
           icon={isDark ? "light_mode" : "dark_mode"}
           label={isDark ? "Switch to light mode" : "Switch to dark mode"}
@@ -194,7 +194,7 @@ export default function PresentationTopBar() {
   );
 }
 
-function TabButton({ label, active, disabled, onClick }: { label: string; active: boolean; disabled?: boolean; onClick?: () => void }) {
+function TabButton({ label, active, disabled, onClick, className = "" }: { label: string; active: boolean; disabled?: boolean; onClick?: () => void; className?: string }) {
   return (
     <button
       onClick={onClick}
@@ -202,20 +202,21 @@ function TabButton({ label, active, disabled, onClick }: { label: string; active
       title={disabled ? "Coming soon" : undefined}
       className={`px-3.5 py-1.5 rounded-lg font-body-ui text-[14px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
         active ? "btn-primary" : "text-on-surface hover:text-primary"
-      }`}
+      } ${className}`}
     >
       {label}
     </button>
   );
 }
 
-function IconButton({ icon, label, active, disabled, title, onClick }: {
+function IconButton({ icon, label, active, disabled, title, onClick, className = "" }: {
   icon: string;
   label: string;
   active?: boolean;
   disabled?: boolean;
   title?: string;
   onClick?: () => void;
+  className?: string;
 }) {
   return (
     <button
@@ -225,7 +226,7 @@ function IconButton({ icon, label, active, disabled, title, onClick }: {
       disabled={disabled}
       className={`p-2 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed ${
         active ? "ctl-active" : "ghost text-secondary"
-      }`}
+      } ${className}`}
     >
       <span className="material-symbols-outlined text-[20px]">{icon}</span>
     </button>
