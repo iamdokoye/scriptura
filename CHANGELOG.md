@@ -2,6 +2,11 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
+## [0.1.34] - 2026-10-18
+
+### Fixed
+- Version 0.1.33 never shipped: its build stopped on an unused variable in the Live Show console. Everything listed under 0.1.33 is in this release.
+
 ## [0.1.33] - 2026-10-18
 
 ### Added
