@@ -66,6 +66,14 @@ export function useResizable({ storageKey, initial, min, max, axis, invert }: Op
     }
   }, [storageKey]);
 
+  /** Grows the panel to at least `px` (within its limits) without saving it, so a
+   *  temporary need for room doesn't overwrite the size the user chose. */
+  const growTo = useCallback((px: number) => {
+    const upper = typeof max === "function" ? max() : max;
+    const target = Math.min(px, Math.max(min, upper));
+    if (target > sizeRef.current) commit(target);
+  }, [max, min, commit]);
+
   const reset = useCallback(() => {
     commit(initial);
     try {
@@ -75,7 +83,7 @@ export function useResizable({ storageKey, initial, min, max, axis, invert }: Op
     }
   }, [initial, storageKey, commit]);
 
-  return { size, dragging, handleProps: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onDoubleClick: reset } };
+  return { size, dragging, growTo, handleProps: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onDoubleClick: reset } };
 }
 
 interface HandleProps {

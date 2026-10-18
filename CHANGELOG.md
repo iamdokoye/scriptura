@@ -2,6 +2,15 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
+## [Unreleased]
+
+### Added
+- **Thayer's Greek Lexicon**: Full New Testament Greek Thayer definitions bundled offline (all 5,523 Strong's numbers G1–G5624) with hierarchical sense outlines and clickable Scripture references. Select "Thayer" via the pill toggle or set it as default in Settings.
+- **Ask Scripture** in the Live Show console: a panel beside the verse list where you describe a passage, topic or feeling in plain words and get matching verses. Click a result to load it into Preview and select it. It runs on a search service you deploy on Modal (see `services/scripture-search/README.md`); open it with the **Ask** button or `Mod+Shift+K`, and enter the service's URL and access token the first time.
+
+### Changed
+- The Live Show search bar is now a single input with no modes. What you type decides what happens: `jn 3:16` or `v5` jumps to a verse, anything else searches the text, `/john` forces a text search for a word that is also a book name, and starting with `?` asks Ask Scripture. The icon and the tag at the right edge show what the bar decided. `Mod+K` and `Mod+L` both just focus the bar.
+
 ## [0.1.34] - 2026-10-18
 
 ### Fixed

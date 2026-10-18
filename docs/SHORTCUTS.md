@@ -63,8 +63,8 @@ The console works on a **Preview** (what you have lined up) and a **Live** outpu
 
 | Keys | Action |
 |---|---|
-| `Mod+L` | Focus the verse-jump bar (switches it to verse mode) |
-| `Mod+K` | Focus the search bar in word-search mode |
+| `Mod+L` or `Mod+K` | Focus the search bar (one bar, no modes. See 1.3) |
+| `Mod+Shift+K` | Open or close the Ask Scripture panel |
 | `Mod+Q` | Add the previewed verse or selected range of scriptures to the schedule |
 | `Mod+Alt+Q` | Add the previewed verse or selected range of scriptures to the schedule (alias) |
 | `Mod+Shift+Q` | Open or close the service queue drawer |
@@ -75,11 +75,20 @@ Keys with a modifier are ignored by the plain-key handler above, so `Mod+↓` ne
 
 ### 1.3 Verse-jump and search bar (Live Show)
 
-Defined in `src/components/PresentationSearchBar.tsx` and `src/components/ScriptureNav.tsx`.
+Defined in `src/components/PresentationSearchBar.tsx`, with the routing rules in `src/lib/searchRouting.ts`.
 
-The first button on the bar cycles **verse jump ↔ word search**. The separate `#` button turns Strong's numbers on or off.
+The bar is a single input with no modes. What you type decides what happens, and the icon and the tag at the right edge of the input (`Verse`, `Text`, `Ask AI`) show what it decided:
 
-**Verse jump mode**
+| You type | The bar does |
+|---|---|
+| `jn 3:16`, `1co 2`, `psalm 23`, `v5`, or a book name or abbreviation | Verse jump |
+| Anything else, e.g. `love your enemies` | Word search of the current Bible |
+| `/john` (a leading `/`) | Word search, even for a word that is also a book name (`john`, `mark`, `acts`) |
+| `? verses about hope` (a leading `?`) | Ask Scripture: opens the panel and runs the question. Enter sends it |
+
+Verse jump and word search are guessed from the text, because both are free and instant. Ask Scripture is never guessed: it makes a network call that costs money, so you opt in with `?`. Short words that are also book prefixes (`is`, `so`, `he`) are treated as the start of a phrase, so Space doesn't turn them into Isaiah, Song of Solomon or Hebrews. The separate `#` button turns Strong's numbers on or off, and the **Ask** button opens the panel.
+
+**Verse jump**
 
 | Input | Result |
 |---|---|
@@ -90,7 +99,7 @@ The first button on the bar cycles **verse jump ↔ word search**. The separate 
 | `Enter` | Jump to the reference (verse defaults to 1, chapter to 1) |
 | `Esc` | Clear the box |
 
-**Word-search mode**
+**Word search**
 
 | Keys | Action |
 |---|---|
@@ -100,6 +109,12 @@ The first button on the bar cycles **verse jump ↔ word search**. The separate 
 | `Esc` | Clear the box and close the results |
 
 Words with apostrophes (`king's`, `king’s`) and hyphens match. Symbols such as `:` or `OR` are treated as plain text.
+
+### 1.3a Ask Scripture panel
+
+Defined in `src/components/aiSearch/`. Opens beside the verse list with the **Ask** button, `Mod+Shift+K`, or `?` in the search bar. Describe what you're looking for and press Enter (Shift+Enter adds a line). Click a result to load that verse into Preview and select it. `Esc` closes the panel. Its width is resizable and remembered (`scriptura.live.aiWidth`, 340 px default).
+
+Results show text from the Bible you have open. A result that doesn't exist in that translation is hidden. The first time, the panel asks for the service URL and access token; see `services/scripture-search/README.md`.
 
 ### 1.4 Mouse gestures (Live Show verse list)
 
@@ -207,8 +222,9 @@ Defined in `src/components/VersePanes.tsx` and `src/components/VerseSplitPanel.t
 
 | Keys | Study | Presentation |
 |---|---|---|
-| `Mod+K` | Word search | Word-search mode in the Live Show bar |
-| `Mod+L` | Scripture navigator | Verse-jump mode in the Live Show bar |
+| `Mod+K` | Word search | Focus the Live Show search bar |
+| `Mod+L` | Scripture navigator | Focus the Live Show search bar (same as `Mod+K`) |
+| `Mod+Shift+K` | none | Open or close Ask Scripture |
 | `Mod+N` / `Mod+P` | Next / previous chapter | Next / previous chapter in Preview |
 | `Mod+↓` / `Mod+↑` | Next / previous verse (current verse) | Next / previous verse (Preview) |
 | `Mod+Q` | Add to queue (presentation only) | Add selected verse(s) to schedule |
@@ -238,7 +254,8 @@ Defined in `src/components/VersePanes.tsx` and `src/components/VerseSplitPanel.t
 |---|---|
 | Presentation-wide shortcuts | `src/components/PresentationTopBar.tsx` |
 | Live Show console keys and gestures | `src/views/LiveShowRunner.tsx` |
-| Live Show verse-jump / search / Strong's toggle | `src/components/PresentationSearchBar.tsx`, `src/components/ScriptureNav.tsx` |
+| Live Show search bar (verse jump / word search / Ask), Strong's toggle | `src/components/PresentationSearchBar.tsx`, `src/lib/searchRouting.ts`, `src/hooks/useScriptureInput.ts` |
+| Ask Scripture panel | `src/components/aiSearch/`, `src/store/aiSearchStore.ts`, `src-tauri/src/commands/ai_search.rs`, `services/scripture-search/` |
 | Panel resizing and saved sizes | `src/hooks/useResizable.tsx` |
 | Eased verse-list scroll | `src/lib/animateScroll.ts` |
 | Study top bar | `src/components/TopBar.tsx` |

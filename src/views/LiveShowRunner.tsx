@@ -14,6 +14,8 @@ import { usePresentationStage } from "../hooks/usePresentationStage";
 import type { PresentState } from "../lib/presentation";
 import PresentationSearchBar, { type PresentationSearchBarHandle } from "../components/PresentationSearchBar";
 import { ResizeHandle, useResizable } from "../hooks/useResizable";
+import AiSearchDock from "../components/aiSearch/AiSearchDock";
+import { useAiSearchStore } from "../store/aiSearchStore";
 
 function verseText(chapterVerses: { verse: number; spans: { text: string }[] }[] | undefined, verse: number): string {
   return chapterVerses?.find((v) => v.verse === verse)?.spans.map((s) => s.text).join("") ?? "";
@@ -124,6 +126,12 @@ export default function LiveShowRunner() {
     storageKey: "scriptura.live.bottomHeight", initial: Math.round(window.innerHeight * 0.38), min: 200, axis: "y", invert: true,
     max: () => window.innerHeight - 260,
   });
+
+  // The Ask Scripture panel sits beside the verse list and needs more height than the
+  // library's default; make room when it opens (not saved as the user's chosen size).
+  const aiOpen = useAiSearchStore((s) => s.open);
+  const growLibrary = bottomH.growTo;
+  useEffect(() => { if (aiOpen) growLibrary(Math.round(window.innerHeight * 0.55)); }, [aiOpen, growLibrary]);
 
   usePresentationSync({
     presentationActive, primaryModule, currentRef, parallelModule, parallelMode,
@@ -478,6 +486,16 @@ export default function LiveShowRunner() {
     }
   }, [primaryModule, previewRef]);
 
+  // Loads a verse into the Preview and selects it — shared by the search bar and
+  // the Ask Scripture panel so both land on a verse the same way.
+  const navigatePreview = useCallback((ref: VerseRef) => {
+    setActiveQueueItemId(null);
+    setPreviewRef(ref);
+    setSelectionAnchor(ref.verse);
+    setSelectedRange({ start: ref.verse, end: ref.verse });
+    setActiveSlideIndex(0);
+  }, []);
+
   const handleVerseClick = useCallback((verseNum: number, shiftKey: boolean) => {
     setActiveQueueItemId(null);
     if (shiftKey) {
@@ -529,14 +547,11 @@ export default function LiveShowRunner() {
         addSelectedToQueue();
         return;
       }
-      if (mod && !e.altKey && e.code === "KeyL") {
+      // One search bar, no modes: Ctrl+K and Ctrl+L both just focus it, and what
+      // gets typed decides whether it jumps, searches the text or asks the AI.
+      if (mod && !e.altKey && !e.shiftKey && (e.code === "KeyL" || e.code === "KeyK")) {
         e.preventDefault();
-        searchBarRef.current?.focus("scripture");
-        return;
-      }
-      if (mod && !e.altKey && e.code === "KeyK") {
-        e.preventDefault();
-        searchBarRef.current?.focus("word");
+        searchBarRef.current?.focus();
         return;
       }
       if (mod && !e.altKey && (e.code === "KeyP" || e.code === "KeyN")) {
@@ -928,13 +943,7 @@ export default function LiveShowRunner() {
             <PresentationSearchBar
               ref={searchBarRef}
               baseRef={previewRef}
-              onNavigate={(ref) => {
-                setActiveQueueItemId(null);
-                setPreviewRef(ref);
-                setSelectionAnchor(ref.verse);
-                setSelectedRange({ start: ref.verse, end: ref.verse });
-                setActiveSlideIndex(0);
-              }}
+              onNavigate={navigatePreview}
             />
           </div>
         </div>
@@ -1070,6 +1079,7 @@ export default function LiveShowRunner() {
             })}
           </div>
 
+          <AiSearchDock onNavigate={navigatePreview} activeRef={previewRef} />
         </div>
       </div>
 
