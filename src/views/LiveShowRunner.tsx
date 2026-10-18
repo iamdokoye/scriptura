@@ -221,7 +221,6 @@ export default function LiveShowRunner() {
   const previewQueueIndex = serviceOrder.findIndex((item) =>
     activeQueueItemId ? item.id === activeQueueItemId : itemContainsRef(item, previewRef)
   );
-  const liveQueueIndex = serviceOrder.findIndex((item) => itemContainsRef(item, currentRef));
 
   // Sends a specific verse/part to the output. Takes the target explicitly so
   // a double-click can send the row it landed on without waiting for the
