@@ -2,6 +2,17 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
+## [0.1.33] - 2026-10-18
+
+### Added
+- The Module Manager library opens instantly: a bundled catalog is shown straight away, the last downloaded catalog is cached between launches, and the live repositories refresh in parallel in the background.
+- Select a range of scriptures in the library with Shift-click or Shift + arrow keys, then add the whole range to the schedule. `Mod+Q` now adds the previewed verse or selected range to the schedule, and the service queue drawer moved to `Mod+Shift+Q`.
+- The Strong's sheet keeps the full lexicon entry for Abbott-Smith, BDB and LSJ: Greek and Hebrew words, Septuagint notes, and verse citations you can click, laid out as an indented outline of senses.
+
+### Fixed
+- Some Strong's lexicon entries were cut off or came out empty (for example G2149 and G4396) because one unclosed `[` in the source swallowed the rest of the entry.
+- Lexicon entries from STEPBible no longer begin with a stray `: `, and TFLSJ sense numbers (`2)`, `II)`) are no longer left inside a dangling bold tag. Mismatched bold, italic and citation tags in the source are repaired.
+
 ## [0.1.32] - 2026-10-18
 
 ### Added
