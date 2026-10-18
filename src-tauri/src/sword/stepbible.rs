@@ -21,22 +21,66 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use std::path::{Path, PathBuf};
 
-static REF_ATTR_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?is)<ref(?:=['"]?([^'">]+)['"]?)?>(.*?)</ref>"#).unwrap()
-});
+/// Rewrites STEPBible's `<ref='Mat.5.29'>` opening tags as
+/// `<ref target="Mat.5.29">`. Only the opening tag is rewritten — pairing it
+/// with its `</ref>` is left to `balance_inline_tags`, because the source
+/// nests citations inside citations (G3873) and a lazy open…close match
+/// leaves the inner opening tag unconverted.
+static REF_OPEN_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"(?i)<ref=['"]?([^'">]*)['"]?>"#).unwrap());
 
 fn normalize_ref_tags(s: &str) -> String {
-    REF_ATTR_RE
+    REF_OPEN_RE
         .replace_all(s, |caps: &regex::Captures| {
-            let target = caps.get(1).map(|m| m.as_str().trim()).unwrap_or("");
-            let content = caps.get(2).map(|m| m.as_str().trim()).unwrap_or("");
-            if target.is_empty() {
-                format!("<ref target=\"{content}\">{content}</ref>")
-            } else {
-                format!("<ref target=\"{target}\">{content}</ref>")
-            }
+            format!("<ref target=\"{}\">", caps[1].trim())
         })
         .to_string()
+}
+
+/// A bold sense marker such as `<b>__2</b>` (TFLSJ wraps its outline markers
+/// in `<Level#><b>…</b>`). Left alone, the marker is rewritten to `2)` on a
+/// new line *inside* the `<b>`, leaving a dangling `<b>\n  2) </b>`.
+static BOLD_SENSE_MARKER_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"(?i)<b>\s*(__(?:\d+\.?|\([a-z]\)|[IVXLCDM]+))\s*</b>"#).unwrap());
+
+fn unbold_sense_markers(s: &str) -> String {
+    BOLD_SENSE_MARKER_RE.replace_all(s, "$1 ").to_string()
+}
+
+static INLINE_TAG_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"(?i)<(/?)(b|i|ref)\b[^>]*>"#).unwrap());
+
+/// Makes `<b>`, `<i>` and `<ref>` properly nested: a stray closing tag is
+/// dropped, a closing tag that skips over still-open inner tags closes them
+/// first, and anything left open at the end is closed. The source has
+/// the occasional unclosed `<b>` or extra `</ref>`; the frontend's
+/// `DOMParser` would repair those, but this keeps the stored text well-formed
+/// for any other consumer.
+fn balance_inline_tags(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut stack: Vec<String> = Vec::new();
+    let mut last = 0;
+    for caps in INLINE_TAG_RE.captures_iter(s) {
+        let m = caps.get(0).unwrap();
+        out.push_str(&s[last..m.start()]);
+        last = m.end();
+        let name = caps[2].to_ascii_lowercase();
+        if caps[1].is_empty() {
+            stack.push(name);
+            out.push_str(m.as_str());
+        } else if let Some(pos) = stack.iter().rposition(|t| *t == name) {
+            while stack.len() > pos + 1 {
+                out.push_str(&format!("</{}>", stack.pop().unwrap()));
+            }
+            stack.pop();
+            out.push_str(m.as_str());
+        }
+    }
+    out.push_str(&s[last..]);
+    while let Some(t) = stack.pop() {
+        out.push_str(&format!("</{t}>"));
+    }
+    out
 }
 
 static A_TAG_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"(?is)<a[^>]*>(.*?)</a>"#).unwrap());
@@ -51,9 +95,8 @@ fn replace_br_with_newline(s: &str) -> String {
     BR_RE.replace_all(s, "\n").to_string()
 }
 
-static HTML_TAG_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?is)</?([a-zA-Z0-9_-]+)(?:[\s/=][^>]*)?>"#).unwrap()
-});
+static HTML_TAG_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"(?is)</?([a-zA-Z0-9_-]+)(?:[\s/=][^>]*)?>"#).unwrap());
 
 fn strip_unsupported_tags(s: &str) -> String {
     HTML_TAG_RE
@@ -170,8 +213,13 @@ fn clean_stepbible_prose(raw_html: &str) -> String {
     let with_re = norm_refs.replace("<re>", "\n\n").replace("</re>", "\n\n");
     let with_br = replace_br_with_newline(&with_re);
     let stripped = strip_unsupported_tags(&with_br);
-    let cleaned = cleanup_punctuation(&stripped);
-    format_sense_outline(&cleaned)
+    let unbolded = unbold_sense_markers(&stripped);
+    let balanced = balance_inline_tags(&unbolded);
+    let cleaned = cleanup_punctuation(&balanced);
+    // TBESH meanings open with ": gloss" (the gloss column's separator), and
+    // a removed leading word can strand other punctuation the same way.
+    let cleaned = cleaned.trim_start_matches(|c: char| c.is_whitespace() || ",;:".contains(c));
+    format_sense_outline(cleaned)
 }
 
 pub struct StepBibleSource {
@@ -333,8 +381,12 @@ mod tests {
         assert!(entry.long_def.contains("Of men's love"));
         assert!(entry.long_def.contains("distinct from"));
         assert!(entry.long_def.contains("friendship"));
-        assert!(entry.long_def.contains("<ref target=\"John.13.35\">Jhn 13:35;</ref>"));
-        assert!(entry.long_def.contains("<ref target=\"1Jn.2.5.\">1Jn 2:5.</ref>"));
+        assert!(entry
+            .long_def
+            .contains("<ref target=\"John.13.35\">Jhn 13:35;</ref>"));
+        assert!(entry
+            .long_def
+            .contains("<ref target=\"1Jn.2.5.\">1Jn 2:5.</ref>"));
         assert!(entry.long_def.contains("φιλία"));
         assert!(entry.long_def.contains("στοργή"));
         assert!(entry.long_def.contains("ἔρως"));
@@ -349,12 +401,18 @@ mod tests {
     fn parses_morphe_g3444_with_citations_and_greek_synonyms() {
         let line = "G3444\tG3444G =\tG3444G\tμορφή\tmorphē\tG:N-F\tform\t <b>μορφή</b>, -ῆς, ἡ, <BR /> [in LXX for תְּמוּנָה, תֹּאַר, etc. ;] <BR />__1. properly, <b>form, shape, outward appearance</b>: <ref='Mrk.16.12'>Mrk 16:12</ref> (cf. Westc., Intr., 338; Milligan, NTD, 44). <BR />__2. In philos. language, <b>the form</b> (ἡ μορφὴ ἡ κατὰ τὸν λόγον, Arist., Phys., ii, 1), <b>the character or sort:</b> <ref='Php.2.6-7'>Php 2:6, 7</ref>. <BR /> <re><i>SYN.</i>: σχῆμα, which see for distinctions; also Gifford, Incarn., 22 ff.; Lft., Notes, 262 f.; Trench, Syn., § lxx.</re>";
         let entry = parse_row("G3444", line).unwrap();
-        assert!(entry.long_def.contains("<ref target=\"Mrk.16.12\">Mrk 16:12</ref>"));
-        assert!(entry.long_def.contains("<ref target=\"Php.2.6-7\">Php 2:6, 7</ref>"));
+        assert!(entry
+            .long_def
+            .contains("<ref target=\"Mrk.16.12\">Mrk 16:12</ref>"));
+        assert!(entry
+            .long_def
+            .contains("<ref target=\"Php.2.6-7\">Php 2:6, 7</ref>"));
         assert!(entry.long_def.contains("μορφή"));
         assert!(entry.long_def.contains("σχῆμα"));
         assert!(entry.long_def.contains("תְּמוּנָה"));
-        assert!(entry.long_def.contains("1) properly, <b>form, shape, outward appearance</b>"));
+        assert!(entry
+            .long_def
+            .contains("1) properly, <b>form, shape, outward appearance</b>"));
         assert!(entry.long_def.contains("2) In philos. language"));
         assert!(entry.long_def.contains("Notes, 262 f."));
     }
@@ -443,5 +501,84 @@ mod sense_outline_tests {
         let indent_of = |l: &str| l.len() - l.trim_start().len();
         assert!(indent_of(lines[sub1]) > indent_of(lines[group2]));
         assert!(indent_of(lines[sub_a]) > indent_of(lines[sub1]));
+    }
+}
+
+#[cfg(test)]
+mod cleanup_regression_tests {
+    use super::*;
+
+    fn count(s: &str, needle: &str) -> usize {
+        s.matches(needle).count()
+    }
+
+    fn assert_balanced(s: &str) {
+        for t in ["b", "i", "ref"] {
+            assert_eq!(
+                count(s, &format!("<{t} ")) + count(s, &format!("<{t}>")),
+                count(s, &format!("</{t}>")),
+                "unbalanced <{t}> in {s:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn balance_inline_tags_repairs_stray_and_unclosed_tags() {
+        assert_eq!(balance_inline_tags("a</b>b"), "ab");
+        assert_eq!(balance_inline_tags("<b>a"), "<b>a</b>");
+        assert_eq!(
+            balance_inline_tags("<ref target=\"x\"><i>a</ref>b"),
+            "<ref target=\"x\"><i>a</i></ref>b"
+        );
+        assert_eq!(
+            balance_inline_tags("<b>ok</b> <i>fine</i>"),
+            "<b>ok</b> <i>fine</i>"
+        );
+    }
+
+    #[test]
+    fn tbesh_meaning_does_not_start_with_the_gloss_separator() {
+        let line = "H0157\tH0157G =\tH0157G\tאָהֵב\ta.hav\tH:V\tto love: lover\t: lover<br>1) to love<br>1a) (Qal)";
+        let entry = parse_row("H157", line).unwrap();
+        assert!(
+            entry.long_def.starts_with("lover\n1) to love"),
+            "{:?}",
+            entry.long_def
+        );
+    }
+
+    #[test]
+    fn unclosed_bracket_no_longer_swallows_the_rest_of_the_entry() {
+        // G2149: the source has a "[" that is never closed.
+        let line = "G2149\tG2149G =\tG2149G\tεὐρύχωρος\teurychōros\tG:A\tspacious\t <b>εὐρύ-χωρος</b>, -ον <BR /> (εὐρύς, broad + χώρα), [in LXX for רָחַב ni. (<ref='Isa.30.23'>Isa.30:23</ref>, al.) <BR /><b>spacious, broad</b>: <ref='Mat.7.13.'>Mat.7:13.</ref>†";
+        let entry = parse_row("G2149", line).unwrap();
+        assert!(entry.long_def.contains("<b>spacious, broad</b>"));
+        assert!(entry.long_def.contains("Mat.7:13."));
+        assert_balanced(&entry.long_def);
+    }
+
+    #[test]
+    fn nested_ref_citations_stay_well_formed() {
+        // G3873: a <ref> opened inside another <ref>.
+        let line = "G3873\tG3873G =\tG3873G\tπαράκειμαι\tparakeimai\tG:V\tto lie beside\t <b>παρά-κειμαι </b><BR /> [in LXX: <ref='Jdt.3.2-3'>Jdt.3.2-3</ref>, <ref='Bel.1.14, 2,3'>Dan LXX <ref='Bel.1.14'>Bel 1:14</ref>, 2,3</ref> Mac.5* ;] <BR /><b>to lie beside</b>";
+        let entry = parse_row("G3873", line).unwrap();
+        assert!(!entry.long_def.contains("<ref="), "{:?}", entry.long_def);
+        assert!(entry
+            .long_def
+            .contains("<ref target=\"Bel.1.14\">Bel 1:14</ref>"));
+        assert_balanced(&entry.long_def);
+    }
+
+    #[test]
+    fn tflsj_sense_markers_are_not_left_inside_bold_tags() {
+        let line = "G0026\tG0026 =\tG0026\tἀγάπη\tagapē\tG:N-F\tlove\t<b> ἀγάπ-η</b>, ἡ, <br /> <b>love,</b> O<br /><Level3><b>__2</b></Level3> especially <b>love</b> of God<br /><Level2><b>__II</b></Level2> in <i>plural</i>, <b>love-feast,</b>";
+        let entry = parse_row("G26", line).unwrap();
+        assert!(!entry.long_def.contains("<b>\n"), "{:?}", entry.long_def);
+        assert!(entry
+            .long_def
+            .lines()
+            .any(|l| l.trim_start().starts_with("2) especially")));
+        assert!(entry.long_def.lines().any(|l| l.starts_with("II) in")));
+        assert_balanced(&entry.long_def);
     }
 }

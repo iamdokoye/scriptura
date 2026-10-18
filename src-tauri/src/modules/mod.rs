@@ -321,7 +321,10 @@ impl ModuleRegistry {
                 .iter()
                 .map(|repo| s.spawn(move || Self::fetch_live_catalog(repo)))
                 .collect();
-            handles.into_iter().map(|h| h.join().unwrap_or(None)).collect()
+            handles
+                .into_iter()
+                .map(|h| h.join().unwrap_or(None))
+                .collect()
         });
 
         let mut merged: Vec<ModuleInfo> = Vec::new();
