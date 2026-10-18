@@ -52,8 +52,7 @@ export default function PresentationTopBar() {
   // LiveShowRunner), scoped here since this bar is mounted regardless of
   // which presentation screen is on screen:
   //  - C / Ctrl+Shift+E: black/emergency, this bar's own BLACK/CLEAR buttons
-  //  - Ctrl+Q: open the queue editor (reorder/remove — the inline Queue
-  //    column in LiveShowRunner is preview-only)
+  //  - Ctrl+Shift+Q: open the queue editor drawer (reorder/remove)
   //  - Ctrl+1-4: presentation verse context, while output is live
   //  - Ctrl +/-, Ctrl+Alt +/-: font size (same bindings as the reading view)
   //  - Alt+H: search history
@@ -79,7 +78,7 @@ export default function PresentationTopBar() {
         setLiveEmergency(!liveEmergency);
         return;
       }
-      if (mod && !e.altKey && e.code === "KeyQ") {
+      if (mod && e.shiftKey && e.code === "KeyQ") {
         e.preventDefault();
         setServiceOrderOpen(!serviceOrderOpen);
         return;

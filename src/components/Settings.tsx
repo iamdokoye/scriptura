@@ -422,7 +422,7 @@ export default function Settings() {
               <div className="px-8 py-3 space-y-3.5">
                 {([
                   { q: "How do I install Bible modules?", a: "Go to the Modules view (bookshelf icon), search for a translation, and click Install." },
-                  { q: "How do I start a presentation?", a: "Click the slideshow icon in the top bar to open the Presentation window, then navigate verses from the reading view. Press Ctrl+Alt+Q to add the current verse to the service queue, and Ctrl+Q to open the queue panel." },
+                  { q: "How do I start a presentation?", a: "Click the slideshow icon in the top bar to open the Presentation window, then navigate verses from the reading view. Press Ctrl+Q to add the current verse or selected verse range to the schedule, and Ctrl+Shift+Q to open the queue panel." },
                   { q: "What are Strong's numbers?", a: "Strong's numbers link each word to its original Hebrew or Greek dictionary entry. Enable them in Study Tools settings." },
                   { q: "How do I change the font or size?", a: "Open Settings → Appearance → Text Settings to change the text you read in the app. The live output is styled by its theme instead — open Themes and edit the font, size and spacing there." },
                   { q: "How do I use the presentation verse context shortcuts?", a: "Press Ctrl+1–4 while presentation is active: 1 = active verse only, 2 = active + next, 3 = prev + active + next, 4 = full chapter scroll." },
@@ -711,11 +711,12 @@ const SHORTCUT_GROUPS: Array<{
     ],
   },
   {
-    label: "Service queue",
+    label: "Service queue / Schedule",
     icon: "queue_play_next",
     shortcuts: [
-      { keys: ["Ctrl", "Q"], description: "Toggle service queue panel" },
-      { keys: ["Ctrl", "Alt", "Q"], description: "Add current verse to queue" },
+      { keys: ["Ctrl", "Q"], description: "Add selected verse(s) to schedule" },
+      { keys: ["Ctrl", "Shift", "Q"], description: "Toggle service queue drawer" },
+      { keys: ["Shift", "Click"], description: "Select range of scriptures", note: "Live Show" },
     ],
   },
   {

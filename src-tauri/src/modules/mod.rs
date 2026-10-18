@@ -44,6 +44,14 @@ const REPOS: &[Repo] = &[
 
 const CATALOG_TTL: std::time::Duration = std::time::Duration::from_secs(3600);
 
+const SEED_CATALOG_GZ: &[u8] = include_bytes!("catalog_seed.json.gz");
+
+fn load_seed_catalog() -> Option<Vec<ModuleInfo>> {
+    use flate2::read::GzDecoder;
+    let gz = GzDecoder::new(SEED_CATALOG_GZ);
+    serde_json::from_reader(gz).ok()
+}
+
 // Hardcoded fallback used only when the live catalog fetch fails.
 // (module_id, display_name, description, category, iso_lang)
 const FREE_MODULES: &[(&str, &str, &str, &str, &str)] = &[
@@ -126,6 +134,7 @@ struct CatalogCache {
 
 pub struct ModuleRegistry {
     modules_dir: PathBuf,
+    cache_path: PathBuf,
     loaded: Mutex<HashMap<String, Arc<ModuleConf>>>,
     catalog_cache: Mutex<Option<CatalogCache>>,
     /// module_id -> index into REPOS, populated whenever fetch_available() runs.
@@ -133,15 +142,58 @@ pub struct ModuleRegistry {
     /// a module_id not present here (e.g. installed before ever browsing the
     /// catalog) defaults to REPOS[0] — CrossWire, matching prior single-repo behavior.
     module_repo: Mutex<HashMap<String, usize>>,
+    is_refreshing: std::sync::atomic::AtomicBool,
 }
 
 impl ModuleRegistry {
     pub fn new(modules_dir: PathBuf) -> Self {
+        let cache_path = modules_dir
+            .parent()
+            .unwrap_or(&modules_dir)
+            .join("catalog_cache.json");
+
+        // Try loading from on-disk cache first. If absent or corrupted, load embedded seed catalog.
+        let mut initial_modules: Option<Vec<ModuleInfo>> = None;
+        let mut fetched_at = std::time::Instant::now();
+
+        if cache_path.exists() {
+            if let Ok(file) = std::fs::File::open(&cache_path) {
+                if let Ok(modules) = serde_json::from_reader(file) {
+                    initial_modules = Some(modules);
+                }
+            }
+        }
+
+        if initial_modules.is_none() {
+            if let Some(seed) = load_seed_catalog() {
+                initial_modules = Some(seed);
+                // Mark seed as aged past CATALOG_TTL so it triggers background refresh when requested
+                fetched_at = fetched_at.checked_sub(CATALOG_TTL).unwrap_or(fetched_at);
+            }
+        }
+
+        let mut module_repo = HashMap::new();
+        let catalog_cache = if let Some(ref modules) = initial_modules {
+            for m in modules {
+                if let Some(idx) = REPOS.iter().position(|r| r.name == m.source) {
+                    module_repo.insert(m.id.clone(), idx);
+                }
+            }
+            Some(CatalogCache {
+                modules: modules.clone(),
+                fetched_at,
+            })
+        } else {
+            None
+        };
+
         Self {
             modules_dir,
+            cache_path,
             loaded: Mutex::new(HashMap::new()),
-            catalog_cache: Mutex::new(None),
-            module_repo: Mutex::new(HashMap::new()),
+            catalog_cache: Mutex::new(catalog_cache),
+            module_repo: Mutex::new(module_repo),
+            is_refreshing: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -196,7 +248,9 @@ impl ModuleRegistry {
     /// Returns None on any error so callers can fall back gracefully.
     fn fetch_live_catalog(repo: &Repo) -> Option<Vec<ModuleInfo>> {
         let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(20))
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .timeout(std::time::Duration::from_secs(15))
+            .user_agent("Scriptura/0.1 (Desktop; https://github.com/scriptura)")
             .build()
             .ok()?;
 
@@ -260,71 +314,123 @@ impl ModuleRegistry {
         }
     }
 
-    /// Return the full list of available free modules, marking which are installed.
-    /// Tries each repo's live catalog in order (see REPOS), merging and de-duplicating
-    /// by module_id; if even CrossWire's live fetch fails, falls back to the hardcoded
-    /// list so the app still shows something usable offline or if CrossWire is down.
-    pub fn fetch_available(&self) -> Vec<ModuleInfo> {
-        // Check cache (release the lock before any network I/O)
-        let cached: Option<Vec<ModuleInfo>> = {
-            let cache = self.catalog_cache.lock().unwrap();
-            if let Some(ref c) = *cache {
-                if c.fetched_at.elapsed() < CATALOG_TTL {
-                    Some(c.modules.clone())
-                } else {
-                    None
+    /// Fetches all configured module repositories in parallel and merges the result.
+    fn fetch_all_repos_parallel() -> (Vec<ModuleInfo>, HashMap<String, usize>) {
+        let results: Vec<Option<Vec<ModuleInfo>>> = std::thread::scope(|s| {
+            let handles: Vec<_> = REPOS
+                .iter()
+                .map(|repo| s.spawn(move || Self::fetch_live_catalog(repo)))
+                .collect();
+            handles.into_iter().map(|h| h.join().unwrap_or(None)).collect()
+        });
+
+        let mut merged: Vec<ModuleInfo> = Vec::new();
+        let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut module_repo = HashMap::new();
+
+        for (repo_idx, modules_opt) in results.into_iter().enumerate() {
+            let Some(modules) = modules_opt else { continue };
+            for m in modules {
+                if seen_ids.insert(m.id.clone()) {
+                    module_repo.insert(m.id.clone(), repo_idx);
+                    merged.push(m);
                 }
-            } else {
-                None
             }
+        }
+        (merged, module_repo)
+    }
+
+    /// Triggers a non-blocking background fetch if the catalog cache is stale or missing.
+    /// If an app handle is provided and new modules are discovered, emits "available-modules-updated".
+    pub fn trigger_background_refresh_if_stale(self: &Arc<Self>, app: Option<tauri::AppHandle>) {
+        let should_refresh = {
+            let cache = self.catalog_cache.lock().unwrap();
+            match &*cache {
+                Some(c) => c.fetched_at.elapsed() >= CATALOG_TTL,
+                None => true,
+            }
+        };
+
+        if !should_refresh {
+            return;
+        }
+
+        if self
+            .is_refreshing
+            .compare_exchange(
+                false,
+                true,
+                std::sync::atomic::Ordering::SeqCst,
+                std::sync::atomic::Ordering::SeqCst,
+            )
+            .is_err()
+        {
+            return;
+        }
+
+        let registry = Arc::clone(self);
+        std::thread::spawn(move || {
+            let (merged, module_repo) = Self::fetch_all_repos_parallel();
+            registry
+                .is_refreshing
+                .store(false, std::sync::atomic::Ordering::SeqCst);
+
+            if !merged.is_empty() {
+                // Save to disk cache atomically
+                let tmp_path = registry.cache_path.with_extension("tmp");
+                if let Ok(json) = serde_json::to_string(&merged) {
+                    if std::fs::write(&tmp_path, json.as_bytes()).is_ok() {
+                        let _ = std::fs::rename(&tmp_path, &registry.cache_path);
+                    }
+                }
+
+                *registry.module_repo.lock().unwrap() = module_repo;
+                {
+                    let mut cache = registry.catalog_cache.lock().unwrap();
+                    *cache = Some(CatalogCache {
+                        modules: merged,
+                        fetched_at: std::time::Instant::now(),
+                    });
+                }
+
+                if let Some(app) = app {
+                    use tauri::Emitter;
+                    let available = registry.fetch_available();
+                    let _ = app.emit("available-modules-updated", available);
+                }
+            }
+        });
+    }
+
+    /// Return the full list of available free modules, marking which are installed.
+    /// Always returns immediately using the in-memory/disk/seed cache (0–2ms).
+    pub fn fetch_available(&self) -> Vec<ModuleInfo> {
+        let cached = {
+            let cache = self.catalog_cache.lock().unwrap();
+            cache.as_ref().map(|c| c.modules.clone())
         };
 
         let raw_modules = if let Some(modules) = cached {
             modules
+        } else if let Some(seed) = load_seed_catalog() {
+            seed
         } else {
-            let mut merged: Vec<ModuleInfo> = Vec::new();
-            let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
-            let mut module_repo = HashMap::new();
-
-            for (repo_idx, repo) in REPOS.iter().enumerate() {
-                let Some(modules) = Self::fetch_live_catalog(repo) else {
-                    continue;
-                };
-                for m in modules {
-                    if seen_ids.insert(m.id.clone()) {
-                        module_repo.insert(m.id.clone(), repo_idx);
-                        merged.push(m);
-                    }
-                }
-            }
-
-            if merged.is_empty() {
-                log::info!("[modules] all repo fetches failed; using hardcoded fallback list");
-                merged = FREE_MODULES
-                    .iter()
-                    .map(|(id, name, desc, cat, lang)| ModuleInfo {
-                        id: id.to_string(),
-                        name: name.to_string(),
-                        description: desc.to_string(),
-                        language: lang.to_string(),
-                        version: "1.0".to_string(),
-                        category: parse_category(cat),
-                        installed: false,
-                        requires_key: false,
-                        has_strongs: matches!(*cat, "Lexicon"),
-                        size_bytes: None,
-                        source: REPOS[0].name.to_string(),
-                    })
-                    .collect();
-            } else {
-                *self.module_repo.lock().unwrap() = module_repo;
-                let mut cache = self.catalog_cache.lock().unwrap();
-                *cache = Some(CatalogCache {
-                    modules: merged.clone(),
-                    fetched_at: std::time::Instant::now(),
-                });
-            }
-            merged
+            FREE_MODULES
+                .iter()
+                .map(|(id, name, desc, cat, lang)| ModuleInfo {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    description: desc.to_string(),
+                    language: lang.to_string(),
+                    version: "1.0".to_string(),
+                    category: parse_category(cat),
+                    installed: false,
+                    requires_key: false,
+                    has_strongs: matches!(*cat, "Lexicon"),
+                    size_bytes: None,
+                    source: REPOS[0].name.to_string(),
+                })
+                .collect()
         };
 
         // Apply current installed status
@@ -845,5 +951,14 @@ mod tests {
         assert!(dest.join("small.txt").exists());
 
         let _ = std::fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn loads_seed_catalog_correctly() {
+        let seed = load_seed_catalog().expect("seed catalog must be valid");
+        assert!(seed.len() > 1000);
+        let registry = ModuleRegistry::new(std::env::temp_dir());
+        let available = registry.fetch_available();
+        assert!(available.len() >= seed.len());
     }
 }

@@ -28,7 +28,8 @@ Defined in `src/components/PresentationTopBar.tsx`. These work from anywhere in 
 |---|---|---|
 | `C` | Toggle BLACK: cut the output to a plain black screen and back | Not typing in a text field. No modifier held |
 | `Mod+Shift+E` | Toggle the emergency "One moment please" standby screen. It overrides black and live content | Always |
-| `Mod+Q` | Open or close the service queue drawer | Always |
+| `Mod+Q` | Add the previewed verse or selected scripture range to the schedule | Always |
+| `Mod+Shift+Q` | Open or close the service queue drawer | Always |
 | `Mod+1` | Verse context: active verse only | Output window is live |
 | `Mod+2` | Verse context: active verse + next | Output window is live |
 | `Mod+3` | Verse context: previous + active + next | Output window is live |
@@ -56,6 +57,7 @@ The console works on a **Preview** (what you have lined up) and a **Live** outpu
 | `Backspace` | **Back:** return to the previously live verse (history stack) |
 | `←` / `→` | Previous / next verse in Preview. Crosses into the adjacent chapter at the ends |
 | `↑` / `↓` | Previous / next item in the service queue, loaded into Preview |
+| `Shift + ←` / `→` / `↑` / `↓` | Select / extend a range of scriptures in the library |
 
 **Works even while typing:**
 
@@ -63,7 +65,9 @@ The console works on a **Preview** (what you have lined up) and a **Live** outpu
 |---|---|
 | `Mod+L` | Focus the verse-jump bar (switches it to verse mode) |
 | `Mod+K` | Focus the search bar in word-search mode |
-| `Mod+Alt+Q` | Add the previewed verse to the service queue (ignored if it is already queued) |
+| `Mod+Q` | Add the previewed verse or selected range of scriptures to the schedule |
+| `Mod+Alt+Q` | Add the previewed verse or selected range of scriptures to the schedule (alias) |
+| `Mod+Shift+Q` | Open or close the service queue drawer |
 | `Mod+N` / `Mod+P` | Next / previous chapter in Preview. Does nothing past the end of the book |
 | `Mod+↓` / `Mod+↑` | Next / previous verse in Preview (same as `→` / `←`) |
 
@@ -102,6 +106,7 @@ Words with apostrophes (`king's`, `king’s`) and hyphens match. Symbols such as
 | Gesture | Action |
 |---|---|
 | Click a verse | Select it into Preview. A split verse also unfolds its parts |
+| **Shift-click** a verse | **Select a range of scriptures** from the anchor verse to this verse |
 | Click a split verse again | Fold the parts back up |
 | Click a slide in the Preview column | Select that slide (part) of the previewed verse |
 | **Double-click** a slide in the Preview column, or an item in the Schedule | **Send it to the live output** |
@@ -124,7 +129,7 @@ Resizable panels and their saved settings (browser storage keys, default sizes):
 | Schedule column width | `scriptura.live.queueWidth` | 24% of window | 180 px to 40% of window |
 | Live column width | `scriptura.live.liveWidth` | 30% of window | 240 px to 50% of window |
 | Library height | `scriptura.live.bottomHeight` | 38% of window | 200 px to window height − 260 |
-| Queue drawer width (`Mod+Q`) | `scriptura.queueDrawerWidth` | 324 px | 280 px to 70% of window |
+| Queue drawer width (`Mod+Shift+Q`) | `scriptura.queueDrawerWidth` | 324 px | 280 px to 70% of window |
 
 The Preview column takes the remaining width. Stored sizes are clamped to these limits when the app starts, so a size saved in a different-sized window can't leave a panel collapsed.
 
@@ -166,8 +171,8 @@ Defined in `src/hooks/useReadingShortcuts.ts`. Active while the reading view is 
 | `Alt+H` | Open search history | Always |
 | `Alt+P` | Previous search result | A search has results |
 | `Alt+N` | Next search result | A search has results |
-| `Mod+Alt+Q` | Add the current verse to the service queue | Presentation workspace only |
-| `Mod+Q` | Open or close the service queue panel | Presentation workspace only |
+| `Mod+Q` | Add the current verse to the service queue / schedule | Presentation workspace only |
+| `Mod+Shift+Q` | Open or close the service queue panel | Presentation workspace only |
 | `Mod+1` to `Mod+4` | Presentation verse context | Output window is live |
 
 ### 2.3 Mouse gestures (reading view)
@@ -206,8 +211,9 @@ Defined in `src/components/VersePanes.tsx` and `src/components/VerseSplitPanel.t
 | `Mod+L` | Scripture navigator | Verse-jump mode in the Live Show bar |
 | `Mod+N` / `Mod+P` | Next / previous chapter | Next / previous chapter in Preview |
 | `Mod+↓` / `Mod+↑` | Next / previous verse (current verse) | Next / previous verse (Preview) |
-| `Mod+Q` | Queue panel (presentation only) | Queue drawer |
-| `Mod+Alt+Q` | Add current verse to queue | Add previewed verse to queue |
+| `Mod+Q` | Add to queue (presentation only) | Add selected verse(s) to schedule |
+| `Mod+Shift+Q` | Queue drawer | Queue drawer |
+| `Shift-Click` | none | Select range of scriptures |
 | `Mod+1`–`4` | Verse context (output live) | Verse context (output live) |
 | `Mod +/-` | Font size | Font size |
 | `Alt+H` | History | History |

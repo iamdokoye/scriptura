@@ -24,20 +24,34 @@ export default function ModuleManager() {
   const [cipherKey, setCipherKey] = useState("");
 
   useEffect(() => {
-    Promise.all([api.listAvailableModules(), api.listInstalledModules()]).then(
-      ([avail, inst]) => {
-        setAvailable(avail);
-        setInstalled(inst);
-        // The library only counts as ready once a Bible is in it — lexicons
-        // alone can't be read, and used to flip the app into a broken reader.
-        const bible = inst.find((m) => m.category === "Bible");
-        if (bible) {
-          setHasModules(true);
-          setPrimaryModule(bible.id);
-        }
-        setLoading(false);
+    // Load installed modules immediately (instant local database read)
+    api.listInstalledModules().then((inst) => {
+      setInstalled(inst);
+      // The library only counts as ready once a Bible is in it — lexicons
+      // alone can't be read, and used to flip the app into a broken reader.
+      const bible = inst.find((m) => m.category === "Bible");
+      if (bible) {
+        setHasModules(true);
+        setPrimaryModule(bible.id);
       }
-    );
+    });
+
+    // Load available modules (instant cached/seed catalog read)
+    api
+      .listAvailableModules()
+      .then((avail) => {
+        setAvailable(avail);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load available modules:", err);
+        setLoading(false);
+      });
+
+    // Listen for background catalog updates when a refresh completes
+    const unlistenUpdated = listen<ModuleInfo[]>("available-modules-updated", (event) => {
+      setAvailable(event.payload);
+    });
 
     // Listen for install progress events from Rust backend
     const unlisten = listen<{ module_id: string; progress: number; message: string }>(
@@ -66,7 +80,10 @@ export default function ModuleManager() {
       }
     );
 
-    return () => { unlisten.then((f) => f()); };
+    return () => {
+      unlisten.then((f) => f());
+      unlistenUpdated.then((f) => f());
+    };
   }, []);
 
   async function install(module_id: string, requires_key: boolean, name: string) {
@@ -159,14 +176,16 @@ export default function ModuleManager() {
 
         {/* Module list */}
         <div className="flex-1 overflow-y-auto p-6">
-          {loading ? (
+          {tab === "available" && loading && available.length === 0 ? (
             <div className="flex items-center justify-center h-32">
               <p className="font-body-ui text-body-ui text-on-surface-variant">Loading modules…</p>
             </div>
           ) : modules.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-32 text-center">
               <span className="material-symbols-outlined text-[48px] text-on-surface-variant mb-3">search_off</span>
-              <p className="font-body-ui text-body-ui text-on-surface-variant">No modules found.</p>
+              <p className="font-body-ui text-body-ui text-on-surface-variant">
+                {tab === "installed" ? "No installed modules." : "No modules found."}
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 max-w-3xl">

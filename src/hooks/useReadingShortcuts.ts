@@ -181,15 +181,15 @@ export function useReadingShortcuts(args: Args) {
         return;
       }
 
-      // Ctrl+Alt+Q: add the current verse to the service queue (Presentation workspace only)
-      if (ctrl && alt && e.code === "KeyQ" && workspace === "presentation") {
+      // Ctrl+Q / Ctrl+Alt+Q: add the current verse to the service queue (Presentation workspace only)
+      if (ctrl && !e.shiftKey && e.code === "KeyQ" && workspace === "presentation") {
         e.preventDefault();
         addCurrentVerseToQueue();
         return;
       }
 
-      // Ctrl+Q: toggle service order panel (Presentation workspace only)
-      if (ctrl && !alt && e.code === "KeyQ" && workspace === "presentation") {
+      // Ctrl+Shift+Q: toggle service order panel (Presentation workspace only)
+      if (ctrl && e.shiftKey && e.code === "KeyQ" && workspace === "presentation") {
         e.preventDefault();
         setServiceOrderOpen(!serviceOrderOpen);
         return;

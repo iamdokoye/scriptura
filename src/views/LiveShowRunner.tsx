@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAppStore, type VerseRef, type ServiceItem } from "../store/app";
+import { useAppStore, itemEndVerse, serviceItemLabel, type VerseRef, type ServiceItem } from "../store/app";
 import { api, type TextSpan } from "../lib/tauri";
 import { useChapterData } from "../hooks/useChapterData";
 import { usePresentationSync } from "../hooks/usePresentationSync";
@@ -27,6 +27,12 @@ function refLabel(ref: VerseRef) {
   return `${ref.book} ${ref.chapter}:${ref.verse}`;
 }
 
+function itemContainsRef(item: ServiceItem, ref: VerseRef) {
+  if (item.book !== ref.book || item.chapter !== ref.chapter) return false;
+  const end = itemEndVerse(item);
+  return ref.verse >= item.verse && ref.verse <= end;
+}
+
 export default function LiveShowRunner() {
   const {
     serviceOrder, clearServiceOrder, addToServiceOrder, setServiceOrderOpen, currentRef, setCurrentRef, primaryModule,
@@ -48,6 +54,14 @@ export default function LiveShowRunner() {
     setStrongsGroup(numbers.length > 1 ? numbers : null);
   }, [setSelectedStrongs, setStrongsGroup]);
 
+  // Active scheduled item in the Schedule list (if any)
+  const [activeQueueItemId, setActiveQueueItemId] = useState<string | null>(
+    () => serviceOrder[0]?.id ?? null,
+  );
+
+  // Active slide index in the Preview column (0-indexed)
+  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+
   // Defaults to whatever's live/current already, so opening the console never
   // silently changes what's on screen — the operator always previews before
   // anything moves.
@@ -62,6 +76,32 @@ export default function LiveShowRunner() {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const verseListRef = useRef<HTMLDivElement>(null);
   useEffect(() => setPreviewPart(0), [previewRef.book, previewRef.chapter, previewRef.verse]);
+
+  // Anchor verse for shift-click range selection.
+  const [selectionAnchor, setSelectionAnchor] = useState<number>(
+    () => serviceOrder[0]?.verse ?? currentRef.verse,
+  );
+  // Selected verse range [start, end] inclusive in the current preview chapter.
+  const [selectedRange, setSelectedRange] = useState<{ start: number; end: number }>(() => {
+    const first = serviceOrder[0];
+    if (first) {
+      return { start: first.verse, end: itemEndVerse(first) };
+    }
+    return { start: currentRef.verse, end: currentRef.verse };
+  });
+
+  // Reset range and anchor when preview book or chapter changes
+  useEffect(() => {
+    setSelectionAnchor(previewRef.verse);
+    setSelectedRange({ start: previewRef.verse, end: previewRef.verse });
+  }, [previewRef.book, previewRef.chapter]);
+
+  // Keep activeQueueItemId in sync if serviceOrder changes
+  useEffect(() => {
+    if (activeQueueItemId && !serviceOrder.some((it) => it.id === activeQueueItemId)) {
+      setActiveQueueItemId(serviceOrder[0]?.id ?? null);
+    }
+  }, [serviceOrder, activeQueueItemId]);
 
   const searchBarRef = useRef<PresentationSearchBarHandle>(null);
 
@@ -178,8 +218,10 @@ export default function LiveShowRunner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedKey]);
 
-  const previewQueueIndex = serviceOrder.findIndex((item) => sameRef(item, previewRef));
-  const liveQueueIndex = serviceOrder.findIndex((item) => sameRef(item, currentRef));
+  const previewQueueIndex = serviceOrder.findIndex((item) =>
+    activeQueueItemId ? item.id === activeQueueItemId : itemContainsRef(item, previewRef)
+  );
+  const liveQueueIndex = serviceOrder.findIndex((item) => itemContainsRef(item, currentRef));
 
   // Sends a specific verse/part to the output. Takes the target explicitly so
   // a double-click can send the row it landed on without waiting for the
@@ -192,51 +234,197 @@ export default function LiveShowRunner() {
     setVersePart(part);
   }, [currentRef, versePart, pushLiveHistory, setCurrentRef, setVersePart]);
 
-  const goLive = useCallback(() => sendLive(previewRef, previewPart), [sendLive, previewRef, previewPart]);
+  const selectQueueItem = useCallback((item: ServiceItem) => {
+    setActiveQueueItemId(item.id);
+    const end = itemEndVerse(item);
+    setPreviewRef({ book: item.book, chapter: item.chapter, verse: item.verse });
+    setSelectionAnchor(item.verse);
+    setSelectedRange({ start: item.verse, end });
+    setActiveSlideIndex(0);
+    setPreviewPart(0);
+  }, []);
+
+  // Verses within the current selected range
+  const selectedVerses = useMemo(() => {
+    if (!previewChapter?.verses) return [];
+    const min = Math.min(selectedRange.start, selectedRange.end);
+    const max = Math.max(selectedRange.start, selectedRange.end);
+    return previewChapter.verses.filter((v) => v.verse >= min && v.verse <= max);
+  }, [previewChapter?.verses, selectedRange]);
+
+  const selectedCount = selectedVerses.length > 0 ? selectedVerses.length : 1;
+  const isMultiSelect = selectedRange.start !== selectedRange.end && selectedVerses.length > 1;
+
+  // Formatted citation: e.g. "John 3:4–6" or "John 3:4"
+  const rangeCitation = useMemo(() => {
+    const min = Math.min(selectedRange.start, selectedRange.end);
+    const max = Math.max(selectedRange.start, selectedRange.end);
+    if (min !== max) {
+      return `${previewRef.book} ${previewRef.chapter}:${min}–${max}`;
+    }
+    return refLabel(previewRef);
+  }, [selectedRange, previewRef]);
+
+  // Check if current range/verse selection is already queued in serviceOrder
+  const allSelectedInQueue = useMemo(() => {
+    if (!primaryModule) return false;
+    const min = Math.min(selectedRange.start, selectedRange.end);
+    const max = Math.max(selectedRange.start, selectedRange.end);
+    return serviceOrder.some(
+      (item) =>
+        item.book === previewRef.book &&
+        item.chapter === previewRef.chapter &&
+        item.verse === min &&
+        itemEndVerse(item) === max &&
+        item.module === primaryModule,
+    );
+  }, [primaryModule, selectedRange, previewRef, serviceOrder]);
+
+  // Adds either the single active preview verse or the selected range of verses as a grouped item to the schedule
+  const addSelectedToQueue = useCallback(() => {
+    if (!primaryModule || !previewChapter?.verses) return;
+    const versesToQueue = selectedVerses.length > 0
+      ? selectedVerses
+      : previewChapter.verses.filter((v) => v.verse === previewRef.verse);
+
+    if (versesToQueue.length === 0) return;
+
+    if (versesToQueue.length === 1) {
+      const v = versesToQueue[0];
+      addToServiceOrder({
+        book: previewRef.book,
+        chapter: previewRef.chapter,
+        verse: v.verse,
+        text: v.spans.map((s) => s.text).join(""),
+        module: primaryModule,
+      });
+    } else {
+      const first = versesToQueue[0];
+      const last = versesToQueue[versesToQueue.length - 1];
+      addToServiceOrder({
+        book: previewRef.book,
+        chapter: previewRef.chapter,
+        verse: first.verse,
+        verse_end: last.verse,
+        text: first.spans.map((s) => s.text).join(""),
+        module: primaryModule,
+      });
+    }
+  }, [primaryModule, previewChapter?.verses, selectedVerses, previewRef, addToServiceOrder]);
+
+  const stepQueue = useCallback((delta: number) => {
+    if (serviceOrder.length === 0) return;
+    const currentIdx = activeQueueItemId
+      ? serviceOrder.findIndex((it) => it.id === activeQueueItemId)
+      : previewQueueIndex >= 0
+      ? previewQueueIndex
+      : -1;
+    const next = Math.min(Math.max(currentIdx + delta, 0), serviceOrder.length - 1);
+    const item = serviceOrder[next];
+    if (item) selectQueueItem(item);
+  }, [serviceOrder, activeQueueItemId, previewQueueIndex, selectQueueItem]);
+
+  // Individual slide entry for the Preview column
+  interface PreviewSlide {
+    ref: VerseRef;
+    part: number;
+    totalParts: number;
+    spans: TextSpan[];
+    text: string;
+    label: string;
+  }
+
+  const previewText = verseText(previewChapter?.verses, previewRef.verse);
+  const previewParts = previewPartsMap.get(previewRef.verse) ?? [previewText];
+  const previewSplit = previewParts.length > 1;
+
+  // Compute all preview slides: When a range is selected or a range schedule item is active,
+  // each verse in the range separates into its own slide (with split long verses if enabled).
+  const previewSlides: PreviewSlide[] = useMemo(() => {
+    if (!previewChapter?.verses || previewChapter.book !== previewRef.book || previewChapter.chapter !== previewRef.chapter) {
+      return [{
+        ref: previewRef,
+        part: 0,
+        totalParts: 1,
+        spans: [],
+        text: previewText || "",
+        label: refLabel(previewRef),
+      }];
+    }
+
+    const minVerse = Math.min(selectedRange.start, selectedRange.end);
+    const maxVerse = Math.max(selectedRange.start, selectedRange.end);
+
+    const targetVerses = previewChapter.verses.filter((v) => v.verse >= minVerse && v.verse <= maxVerse);
+    const versesToMap = targetVerses.length > 0
+      ? targetVerses
+      : (previewChapter.verses.filter((v) => v.verse === previewRef.verse) ?? []);
+
+    const slides: PreviewSlide[] = [];
+    for (const v of versesToMap) {
+      const vRef: VerseRef = { book: previewRef.book, chapter: previewRef.chapter, verse: v.verse };
+      const rawText = v.spans.map((s) => s.text).join("");
+      const parts = previewPartsMap.get(v.verse) ?? [rawText];
+      if (displayPrefs.splitLongVerses && parts.length > 1) {
+        for (let pIdx = 0; pIdx < parts.length; pIdx++) {
+          slides.push({
+            ref: vRef,
+            part: pIdx,
+            totalParts: parts.length,
+            spans: sliceSpansForPart(v.spans, parts, pIdx),
+            text: parts[pIdx],
+            label: slideLabel(vRef, pIdx, primaryModule),
+          });
+        }
+      } else {
+        slides.push({
+          ref: vRef,
+          part: 0,
+          totalParts: 1,
+          spans: v.spans,
+          text: rawText,
+          label: slideLabel(vRef, null, primaryModule),
+        });
+      }
+    }
+    return slides;
+  }, [previewChapter, previewRef, selectedRange, previewText, previewPartsMap, displayPrefs.splitLongVerses, primaryModule]);
+
+  const currentPreviewSlide = previewSlides[activeSlideIndex] ?? previewSlides[0];
+
+  useEffect(() => {
+    if (activeSlideIndex >= previewSlides.length) {
+      setActiveSlideIndex(0);
+    }
+  }, [previewSlides.length, activeSlideIndex]);
+
+  const goLive = useCallback(() => {
+    if (currentPreviewSlide) {
+      sendLive(currentPreviewSlide.ref, currentPreviewSlide.part);
+    } else {
+      sendLive(previewRef, previewPart);
+    }
+  }, [sendLive, currentPreviewSlide, previewRef, previewPart]);
 
   const goBack = useCallback(() => {
     const prev = popLiveHistory();
     if (prev) setCurrentRef(prev);
   }, [popLiveHistory, setCurrentRef]);
 
-  const selectQueueItem = useCallback((item: ServiceItem) => {
-    setPreviewRef({ book: item.book, chapter: item.chapter, verse: item.verse });
-  }, []);
-
-  const previewInQueue = previewQueueIndex >= 0;
-
-  // Same Ctrl+Alt+Q binding ReadingView uses to queue the verse it's showing —
-  // here it queues whatever's in Preview instead, since that's this console's
-  // equivalent of "the verse I'm currently looking at".
-  const addPreviewToQueue = useCallback(() => {
-    if (!primaryModule || previewInQueue) return;
-    addToServiceOrder({
-      book: previewRef.book,
-      chapter: previewRef.chapter,
-      verse: previewRef.verse,
-      text: verseText(previewChapter?.verses, previewRef.verse),
-      module: primaryModule,
-    });
-  }, [primaryModule, previewInQueue, previewRef, previewChapter, addToServiceOrder]);
-
-  const stepQueue = useCallback((delta: number) => {
-    if (serviceOrder.length === 0) return;
-    const from = previewQueueIndex >= 0 ? previewQueueIndex : -1;
-    const next = Math.min(Math.max(from + delta, 0), serviceOrder.length - 1);
-    const item = serviceOrder[next];
-    if (item) selectQueueItem(item);
-  }, [serviceOrder, previewQueueIndex, selectQueueItem]);
-
   // Steps by verse inside the current chapter, crossing into the adjacent
   // chapter at either boundary rather than stopping dead at verse 1 / the
-  // last verse — the whole point of keyboard-driven verse nav is not having
-  // to reach for the mouse right at a chapter break.
+  // last verse.
   const stepVerse = useCallback(async (delta: number) => {
     if (!previewChapter || !primaryModule) return;
     const idx = previewChapter.verses.findIndex((v) => v.verse === previewRef.verse);
     const nextIdx = idx + delta;
     if (idx >= 0 && nextIdx >= 0 && nextIdx < previewChapter.verses.length) {
-      setPreviewRef({ ...previewRef, verse: previewChapter.verses[nextIdx].verse });
+      const vNum = previewChapter.verses[nextIdx].verse;
+      setActiveQueueItemId(null);
+      setPreviewRef({ ...previewRef, verse: vNum });
+      setSelectionAnchor(vNum);
+      setSelectedRange({ start: vNum, end: vNum });
+      setActiveSlideIndex(0);
       return;
     }
     const nextChapterNum = previewRef.chapter + (delta > 0 ? 1 : -1);
@@ -245,15 +433,34 @@ export default function LiveShowRunner() {
       const ch = await api.getChapter(primaryModule, previewRef.book, nextChapterNum);
       if (ch.verses.length === 0) return;
       const verse = delta > 0 ? ch.verses[0].verse : ch.verses[ch.verses.length - 1].verse;
+      setActiveQueueItemId(null);
       setPreviewRef({ book: previewRef.book, chapter: nextChapterNum, verse });
+      setSelectionAnchor(verse);
+      setSelectedRange({ start: verse, end: verse });
+      setActiveSlideIndex(0);
     } catch {
       // Likely past the start/end of the book — nothing to step into.
     }
   }, [previewChapter, previewRef, primaryModule]);
 
-  // Ctrl+P / Ctrl+N: previous/next chapter, same as the reading view. Looks
-  // the chapter up first so stepping past the end of a book is a no-op
-  // instead of leaving Preview blank.
+  // Extends or shrinks the range selection when holding Shift + arrows
+  const stepVerseRange = useCallback((delta: number) => {
+    if (!previewChapter?.verses || previewChapter.verses.length === 0) return;
+    const currentTarget = previewRef.verse;
+    const idx = previewChapter.verses.findIndex((v) => v.verse === currentTarget);
+    const nextIdx = Math.min(Math.max(idx + delta, 0), previewChapter.verses.length - 1);
+    const nextVerse = previewChapter.verses[nextIdx].verse;
+    const anchor = selectionAnchor ?? previewRef.verse;
+    const start = Math.min(anchor, nextVerse);
+    const end = Math.max(anchor, nextVerse);
+    setActiveQueueItemId(null);
+    setSelectedRange({ start, end });
+    setPreviewRef((prev) => ({ ...prev, verse: nextVerse }));
+    const slideIdx = nextVerse >= start && nextVerse <= end ? nextVerse - start : 0;
+    setActiveSlideIndex(slideIdx);
+  }, [previewChapter?.verses, previewRef.verse, selectionAnchor]);
+
+  // Ctrl+P / Ctrl+N: previous/next chapter, same as the reading view.
   const stepChapter = useCallback(async (delta: number) => {
     if (!primaryModule) return;
     const chapter = previewRef.chapter + delta;
@@ -261,11 +468,45 @@ export default function LiveShowRunner() {
     try {
       const ch = await api.getChapter(primaryModule, previewRef.book, chapter);
       if (ch.verses.length === 0) return;
-      setPreviewRef({ book: previewRef.book, chapter, verse: ch.verses[0].verse });
+      const vNum = ch.verses[0].verse;
+      setActiveQueueItemId(null);
+      setPreviewRef({ book: previewRef.book, chapter, verse: vNum });
+      setSelectionAnchor(vNum);
+      setSelectedRange({ start: vNum, end: vNum });
+      setActiveSlideIndex(0);
     } catch {
       // Past the end of the book — nothing to step into.
     }
   }, [primaryModule, previewRef]);
+
+  const handleVerseClick = useCallback((verseNum: number, shiftKey: boolean) => {
+    setActiveQueueItemId(null);
+    if (shiftKey) {
+      const anchor = selectionAnchor ?? previewRef.verse;
+      const start = Math.min(anchor, verseNum);
+      const end = Math.max(anchor, verseNum);
+      setSelectedRange({ start, end });
+      setPreviewRef((prev) => ({ ...prev, verse: verseNum }));
+      setPreviewPart(0);
+      setExpandedKey(null);
+      const idx = verseNum >= start && verseNum <= end ? verseNum - start : 0;
+      setActiveSlideIndex(idx);
+    } else {
+      setSelectionAnchor(verseNum);
+      setSelectedRange({ start: verseNum, end: verseNum });
+      setPreviewRef((prev) => ({ ...prev, verse: verseNum }));
+      setPreviewPart(0);
+      setActiveSlideIndex(0);
+      const parts = previewPartsMap.get(verseNum) ?? [];
+      const split = parts.length > 1;
+      if (split) {
+        const key = `${previewRef.book}|${previewRef.chapter}|${verseNum}`;
+        setExpandedKey((prev) => (prev === key ? null : key));
+      } else {
+        setExpandedKey(null);
+      }
+    }
+  }, [selectionAnchor, previewRef, previewPartsMap]);
 
   // Keyboard shortcuts, scoped to this console only (not the global reading
   // shortcuts) — an operator running a live show wants Up/Down/Left/Right/
@@ -278,9 +519,15 @@ export default function LiveShowRunner() {
 
       // Modifier shortcuts work even while a text field has focus — the jump
       // input keeps focus after use and used to swallow every shortcut.
+      // Ctrl+Q / Cmd+Q (or Ctrl+Alt+Q): Add preview verse / selected range to schedule
+      if (mod && !e.shiftKey && e.code === "KeyQ") {
+        e.preventDefault();
+        addSelectedToQueue();
+        return;
+      }
       if (mod && e.altKey && e.code === "KeyQ") {
         e.preventDefault();
-        addPreviewToQueue();
+        addSelectedToQueue();
         return;
       }
       if (mod && !e.altKey && e.code === "KeyL") {
@@ -300,11 +547,29 @@ export default function LiveShowRunner() {
       }
       if (mod && !e.altKey && (e.code === "ArrowDown" || e.code === "ArrowUp")) {
         e.preventDefault();
-        stepVerse(e.code === "ArrowDown" ? 1 : -1);
+        if (e.shiftKey) {
+          stepVerseRange(e.code === "ArrowDown" ? 1 : -1);
+        } else {
+          stepVerse(e.code === "ArrowDown" ? 1 : -1);
+        }
         return;
       }
 
       if (typing || mod || e.altKey) return;
+
+      // Shift + Arrows to extend/shrink range selection in the library
+      if (e.shiftKey) {
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+          e.preventDefault();
+          stepVerseRange(1);
+          return;
+        }
+        if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+          e.preventDefault();
+          stepVerseRange(-1);
+          return;
+        }
+      }
 
       switch (e.key) {
         case "ArrowUp":
@@ -335,7 +600,7 @@ export default function LiveShowRunner() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [stepQueue, stepVerse, stepChapter, goLive, goBack, addPreviewToQueue]);
+  }, [stepQueue, stepVerse, stepVerseRange, stepChapter, goLive, goBack, addSelectedToQueue]);
 
   // Exactly what usePresentationSync sends the output window.
   const outputState: PresentState = useMemo(() => ({
@@ -356,90 +621,96 @@ export default function LiveShowRunner() {
     versePart: displayPrefs.splitLongVerses ? versePart : undefined,
   }), [currentRef, primaryModule, parallelModule, parallelMode, displayPrefs, readingFontSize, activePresentationTheme, liveBlack, liveEmergency, versePart]);
 
-  // What the Preview Output thumbnail shows: the previewed verse and part,
+  // What the Preview Output thumbnail shows: the previewed slide,
   // laid out exactly as it would go out (never black/emergency, no parallel).
-  const previewOutputState: PresentState = useMemo(() => ({
-    ...outputState,
-    book: previewRef.book,
-    chapter: previewRef.chapter,
-    verse: previewRef.verse,
-    parallelMode: false,
-    black: false,
-    emergency: false,
-    versePart: displayPrefs.splitLongVerses ? previewPart : undefined,
-  }), [outputState, previewRef, previewPart, displayPrefs.splitLongVerses]);
+  const previewOutputState: PresentState = useMemo(() => {
+    const sRef = currentPreviewSlide?.ref ?? previewRef;
+    const sPart = currentPreviewSlide?.part ?? previewPart;
+    return {
+      ...outputState,
+      book: sRef.book,
+      chapter: sRef.chapter,
+      verse: sRef.verse,
+      parallelMode: false,
+      black: false,
+      emergency: false,
+      versePart: displayPrefs.splitLongVerses ? sPart : undefined,
+    };
+  }, [outputState, currentPreviewSlide, previewRef, previewPart, displayPrefs.splitLongVerses]);
 
   const liveText = verseText(liveChapter?.verses, currentRef.verse);
   const liveParts = displayPrefs.splitLongVerses ? splitParts(liveText) : [liveText];
   const liveSplit = liveParts.length > 1;
 
-  const previewText = verseText(previewChapter?.verses, previewRef.verse);
-  const previewParts = previewPartsMap.get(previewRef.verse) ?? [previewText];
-  const previewVerseSpans = previewChapter?.verses.find((v) => v.verse === previewRef.verse)?.spans ?? [];
-  const previewSplit = previewParts.length > 1;
-
   const overridden = liveBlack || liveEmergency;
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-3 gap-3">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-2.5 gap-2.5">
       {/* Schedule | Preview | Live — each column ends in an output strip */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* ── Schedule (queue) ── */}
         <section style={{ width: queueW.size }} className="shrink-0 flex flex-col overflow-hidden panel rounded-3xl">
-          <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-outline-variant">
+          <div className="shrink-0 flex items-center justify-between gap-3 px-3.5 py-2.5 border-b border-outline-variant">
             <h2 className="font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide shrink-0">Schedule</h2>
-            <div className="flex items-center gap-3 whitespace-nowrap">
+            <div className="flex items-center gap-2 whitespace-nowrap">
               <button
                 onClick={() => setServiceOrderOpen(true)}
                 className="flex items-center gap-1 font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors"
-                title="Reorder or remove queue items (Ctrl+Q)"
+                title="Reorder or remove queue items (Ctrl+Shift+Q)"
               >
-                <span className="material-symbols-outlined text-[16px]">reorder</span>
+                <span className="material-symbols-outlined text-[15px]">reorder</span>
                 <span className="hidden min-[1100px]:inline">Edit</span>
               </button>
               {serviceOrder.length > 0 && (
                 <button
                   onClick={clearServiceOrder}
-                  className="flex items-center gap-1 px-1.5 py-1 -my-1 rounded-md font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-error ghost"
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-error ghost"
                   title="Clear the whole schedule"
                 >
-                  <span className="material-symbols-outlined text-[16px]">delete_sweep</span>
-                  <span className="hidden min-[1100px]:inline">Clear all</span>
+                  <span className="material-symbols-outlined text-[15px]">delete_sweep</span>
+                  <span className="hidden min-[1100px]:inline">Clear</span>
                 </button>
               )}
             </div>
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto p-1.5">
             {serviceOrder.length === 0 ? (
-              <div className="p-5 text-center">
+              <div className="p-4 text-center">
                 <p className="font-body-ui text-[12px] text-on-surface-variant leading-relaxed">
-                  Nothing scheduled yet. Add verses from the library below with the Queue button.
+                  Nothing scheduled yet. Add verses from the library below with Queue (Ctrl+Q).
                 </p>
               </div>
             ) : (
-              <ul className="py-2">
+              <ul className="space-y-1">
                 {serviceOrder.map((item, idx) => {
-                  const isPreview = idx === previewQueueIndex;
-                  const isLive = idx === liveQueueIndex;
+                  const isSelected = activeQueueItemId ? item.id === activeQueueItemId : idx === previewQueueIndex;
+                  const isLive = itemContainsRef(item, currentRef);
                   return (
                     <li key={item.id}>
                       <button
                         onClick={() => selectQueueItem(item)}
-                        onDoubleClick={() => { selectQueueItem(item); sendLive({ book: item.book, chapter: item.chapter, verse: item.verse }, 0); }}
-                        title="Double-click to send live"
-                        className={`w-full text-left px-3 py-2 mx-2 mb-1 rounded-md border border-transparent transition-colors select-none ${
-                          isPreview ? "row-selected" : "hover:bg-surface-container-low"
+                        onDoubleClick={() => {
+                          selectQueueItem(item);
+                          sendLive({ book: item.book, chapter: item.chapter, verse: item.verse }, 0);
+                        }}
+                        title="Click to preview slides • Double-click to send live"
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg border transition-colors select-none ${
+                          isSelected ? "row-selected border-primary/30" : "border-transparent hover:bg-surface-container-low"
                         }`}
-                        style={{ width: "calc(100% - 1rem)" }}
                       >
                         <div className="flex items-center gap-1.5">
                           <span className="font-metadata-mono text-[10px] text-on-surface-variant">{idx + 1}</span>
-                          <span className={`font-body-ui text-[13px] font-semibold truncate ${isPreview ? "text-primary" : "text-on-surface"}`}>
-                            {refLabel(item)} ({item.module})
+                          <span className={`font-body-ui text-[12px] font-semibold truncate ${isSelected ? "text-primary" : "text-on-surface"}`}>
+                            {serviceItemLabel(item)} {item.module ? `(${item.module})` : ""}
                           </span>
-                          {isLive && <span className="font-metadata-mono text-[9px] uppercase tracking-widest text-error ml-auto shrink-0">Live</span>}
+                          {isLive && (
+                            <span className="font-metadata-mono text-[9px] uppercase tracking-widest text-error ml-auto shrink-0 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse" />
+                              Live
+                            </span>
+                          )}
                         </div>
-                        <p className="font-body-ui text-[11px] text-on-surface-variant leading-snug mt-0.5 line-clamp-2">{item.text}</p>
+                        <p className="font-body-ui text-[11px] text-on-surface-variant/80 truncate mt-0.5 leading-tight">{item.text}</p>
                       </button>
                     </li>
                   );
@@ -453,19 +724,30 @@ export default function LiveShowRunner() {
 
         {/* ── Preview ── */}
         <section className="flex-1 min-w-0 flex flex-col overflow-hidden panel rounded-3xl">
-          <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-outline-variant">
+          <div className="shrink-0 flex items-center gap-3 px-3.5 py-2 border-b border-outline-variant">
             <h2 className="min-w-0 flex-1 font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide truncate">
-              Preview <span className="font-normal normal-case tracking-normal text-on-surface-variant">— {refLabel(previewRef)}{primaryModule ? ` (${primaryModule})` : ""}</span>
+              Preview <span className="font-normal normal-case tracking-normal text-on-surface-variant">— {rangeCitation}{primaryModule ? ` (${primaryModule})` : ""}</span>
             </h2>
             <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={addPreviewToQueue}
-                disabled={previewInQueue}
+                onClick={addSelectedToQueue}
+                disabled={allSelectedInQueue}
                 className="flex items-center gap-1 px-2 py-1 rounded-md ctl font-metadata-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                title={previewInQueue ? "Already in the schedule" : "Add to schedule (Ctrl+Alt+Q)"}
+                title={
+                  allSelectedInQueue
+                    ? "Already in the schedule"
+                    : isMultiSelect
+                    ? `Add ${selectedCount} verses to schedule (Ctrl+Q)`
+                    : "Add to schedule (Ctrl+Q)"
+                }
               >
                 <span className="material-symbols-outlined text-[14px]">playlist_add</span>
-                <span className="hidden min-[1400px]:inline">Queue</span>
+                <span className="hidden min-[1400px]:inline">
+                  Queue{isMultiSelect ? ` (${selectedCount})` : ""}
+                </span>
+                <span className="min-[1400px]:hidden">
+                  {isMultiSelect ? `(${selectedCount})` : ""}
+                </span>
               </button>
               <button
                 onClick={goBack}
@@ -477,7 +759,7 @@ export default function LiveShowRunner() {
               </button>
               <button
                 onClick={goLive}
-                disabled={sameRef(previewRef, currentRef) && previewPart === versePart}
+                disabled={currentPreviewSlide ? (sameRef(currentPreviewSlide.ref, currentRef) && currentPreviewSlide.part === versePart) : (sameRef(previewRef, currentRef) && previewPart === versePart)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md btn-primary font-body-ui text-[13px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
                 title="Send the previewed verse live (Enter, or double-click it)"
               >
@@ -487,32 +769,56 @@ export default function LiveShowRunner() {
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
-            {previewParts.map((_, i) => {
-              const active = i === previewPart;
-              const spans = previewParts.length > 1 ? sliceSpansForPart(previewVerseSpans, previewParts, i) : previewVerseSpans;
+          <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-1.5">
+            {previewSlides.map((slide, i) => {
+              const active = i === activeSlideIndex;
               return (
                 <div
-                  key={i}
+                  key={`${slide.ref.book}-${slide.ref.chapter}-${slide.ref.verse}-${slide.part}-${i}`}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setPreviewPart(i)}
-                  onDoubleClick={() => { setPreviewPart(i); sendLive(previewRef, i); }}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPreviewPart(i); } }}
-                  title="Double-click to send live"
-                  className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border transition-colors cursor-pointer select-none ${
-                    active ? "row-selected border-primary/30" : "border-outline-variant/60 hover:bg-surface-container-low"
+                  onClick={() => {
+                    setActiveSlideIndex(i);
+                    setPreviewRef(slide.ref);
+                    setPreviewPart(slide.part);
+                  }}
+                  onDoubleClick={() => {
+                    setActiveSlideIndex(i);
+                    setPreviewRef(slide.ref);
+                    setPreviewPart(slide.part);
+                    sendLive(slide.ref, slide.part);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setActiveSlideIndex(i);
+                      setPreviewRef(slide.ref);
+                      setPreviewPart(slide.part);
+                    }
+                  }}
+                  title="Click to preview • Double-click to send live"
+                  className={`flex items-start gap-2.5 px-3 py-2 rounded-lg border transition-colors cursor-pointer select-none ${
+                    active ? "row-selected border-primary/40 shadow-sm" : "border-outline-variant/50 hover:bg-surface-container-low"
                   }`}
                 >
-                  <span className={`font-metadata-mono text-[12px] shrink-0 mt-0.5 ${active ? "text-primary font-bold" : "text-on-surface-variant"}`}>{i + 1}</span>
-                  <div className="min-w-0">
-                    <p className={`font-body-ui text-[13px] font-bold ${active ? "text-primary" : "text-on-surface"}`}>
-                      {slideLabel(previewRef, previewParts.length > 1 ? i : null, primaryModule)}
+                  <span className={`font-metadata-mono text-[11px] shrink-0 mt-0.5 ${active ? "text-primary font-bold" : "text-on-surface-variant"}`}>
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className={`font-body-ui text-[12px] font-bold ${active ? "text-primary" : "text-on-surface"}`}>
+                      {slide.label}
                     </p>
-                    <p className={`font-body-reading text-[14px] ${showStrongs ? "leading-[1.9]" : "leading-snug"} text-on-surface`}>
-                      {spans.length > 0
-                        ? <VerseSpans spans={spans} showStrongs={showStrongs} showRedLetter={showRedLetter} onStrongsClick={handleStrongsClick} />
-                        : "—"}
+                    <p className={`font-body-reading text-[13px] ${showStrongs ? "leading-[1.8]" : "leading-snug"} text-on-surface mt-0.5`}>
+                      {slide.spans && slide.spans.length > 0 ? (
+                        <VerseSpans
+                          spans={slide.spans}
+                          showStrongs={showStrongs}
+                          showRedLetter={showRedLetter}
+                          onStrongsClick={handleStrongsClick}
+                        />
+                      ) : (
+                        slide.text || "—"
+                      )}
                     </p>
                   </div>
                 </div>
@@ -522,10 +828,17 @@ export default function LiveShowRunner() {
 
           <OutputStrip
             title="Preview Output"
-            label={slideLabel(previewRef, previewSplit ? previewPart : null, primaryModule)}
-            slide={previewPart}
-            slides={previewParts.length}
-            onSlide={(n) => setPreviewPart(n)}
+            label={currentPreviewSlide?.label ?? slideLabel(previewRef, previewSplit ? previewPart : null, primaryModule)}
+            slide={activeSlideIndex}
+            slides={previewSlides.length}
+            onSlide={(n) => {
+              setActiveSlideIndex(n);
+              const s = previewSlides[n];
+              if (s) {
+                setPreviewRef(s.ref);
+                setPreviewPart(s.part);
+              }
+            }}
             stage={stage}
           >
             <OutputPreview state={previewOutputState} chapter={previewChapter} parallelChapter={null} stage={stage} outputOpen />
@@ -536,7 +849,7 @@ export default function LiveShowRunner() {
 
         {/* ── Live ── */}
         <section style={{ width: liveW.size }} className="shrink-0 flex flex-col overflow-hidden panel rounded-3xl">
-          <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-outline-variant">
+          <div className="shrink-0 flex items-center gap-3 px-3.5 py-2.5 border-b border-outline-variant">
             <h2 className="font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide">Live</h2>
             {presentationActive && (
               <span className="flex items-center gap-1 font-metadata-mono text-[9px] uppercase tracking-widest text-error">
@@ -546,9 +859,9 @@ export default function LiveShowRunner() {
             )}
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
+          <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-1.5">
             {overridden && (
-              <div className="px-3 py-3 text-center ctl rounded-lg">
+              <div className="px-3 py-2 text-center ctl rounded-lg">
                 <p className="font-body-ui text-[12px] text-on-surface-variant">
                   {liveEmergency ? "Standby screen is showing on the output." : "Output is cut to black."}
                 </p>
@@ -563,16 +876,16 @@ export default function LiveShowRunner() {
                   tabIndex={0}
                   onClick={() => setVersePart(i)}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setVersePart(i); } }}
-                  className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border transition-colors cursor-pointer select-none ${
+                  className={`flex items-start gap-2.5 px-3 py-2 rounded-lg border transition-colors cursor-pointer select-none ${
                     active ? "row-selected border-primary/30" : "border-outline-variant/60 hover:bg-surface-container-low"
                   } ${overridden ? "opacity-50" : ""}`}
                 >
-                  <span className={`font-metadata-mono text-[12px] shrink-0 mt-0.5 ${active ? "text-primary font-bold" : "text-on-surface-variant"}`}>{i + 1}</span>
+                  <span className={`font-metadata-mono text-[11px] shrink-0 mt-0.5 ${active ? "text-primary font-bold" : "text-on-surface-variant"}`}>{i + 1}</span>
                   <div className="min-w-0">
-                    <p className={`font-body-ui text-[13px] font-bold ${active ? "text-primary" : "text-on-surface"}`}>
+                    <p className={`font-body-ui text-[12px] font-bold ${active ? "text-primary" : "text-on-surface"}`}>
                       {slideLabel(currentRef, liveSplit ? i : null, primaryModule)}
                     </p>
-                    <p className="font-body-reading text-[14px] leading-snug text-on-surface">{part || "—"}</p>
+                    <p className="font-body-reading text-[13px] leading-snug text-on-surface mt-0.5">{part || "—"}</p>
                   </div>
                 </div>
               );
@@ -596,18 +909,18 @@ export default function LiveShowRunner() {
 
       {/* ── Library: reference bar + verse list ── */}
       <div style={{ height: bottomH.size }} className="shrink-0 panel rounded-3xl flex flex-col overflow-hidden">
-        <div className="shrink-0 flex items-center gap-3 px-4 py-2.5">
+        <div className="shrink-0 flex items-center gap-3 px-3.5 py-2">
           {primaryModule && (
             <span className="font-metadata-mono text-[11px] font-bold text-on-surface-variant field px-2.5 py-1 rounded-lg shrink-0">
               {primaryModule}
             </span>
           )}
-          <span className="font-body-ui text-[13px] font-semibold text-on-surface shrink-0">{refLabel(previewRef)}</span>
+          <span className="font-body-ui text-[13px] font-semibold text-on-surface shrink-0">{rangeCitation}</span>
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => stepVerse(-1)} className="p-1 rounded-md ctl text-on-surface-variant" title="Previous verse (←)">
+            <button onClick={() => stepChapter(-1)} className="p-1 rounded-md ctl text-on-surface-variant" title="Previous chapter (Ctrl+P)">
               <span className="material-symbols-outlined text-[16px]">chevron_left</span>
             </button>
-            <button onClick={() => stepVerse(1)} className="p-1 rounded-md ctl text-on-surface-variant" title="Next verse (→)">
+            <button onClick={() => stepChapter(1)} className="p-1 rounded-md ctl text-on-surface-variant" title="Next chapter (Ctrl+N)">
               <span className="material-symbols-outlined text-[16px]">chevron_right</span>
             </button>
           </div>
@@ -616,7 +929,13 @@ export default function LiveShowRunner() {
             <PresentationSearchBar
               ref={searchBarRef}
               baseRef={previewRef}
-              onNavigate={(ref) => setPreviewRef(ref)}
+              onNavigate={(ref) => {
+                setActiveQueueItemId(null);
+                setPreviewRef(ref);
+                setSelectionAnchor(ref.verse);
+                setSelectedRange({ start: ref.verse, end: ref.verse });
+                setActiveSlideIndex(0);
+              }}
             />
           </div>
         </div>
@@ -628,12 +947,23 @@ export default function LiveShowRunner() {
               const parts = previewPartsMap.get(v.verse) ?? [text];
               const split = parts.length > 1;
               const isPreviewVerse = v.verse === previewRef.verse;
+              const isSelected = selectedRange
+                ? v.verse >= Math.min(selectedRange.start, selectedRange.end) &&
+                  v.verse <= Math.max(selectedRange.start, selectedRange.end)
+                : isPreviewVerse;
               // A split verse's parts stay folded away until it's clicked, and
               // fold again as soon as another verse becomes the preview —
               // however that happens (click, arrow keys, jump).
               const open = split && isPreviewVerse && expandedKey === `${previewRef.book}|${previewRef.chapter}|${v.verse}`;
-              const select = (part: number) => { setPreviewRef({ ...previewRef, verse: v.verse }); setPreviewPart(part); };
-              const headActive = isPreviewVerse && (open ? previewPart === 0 : true);
+              const select = (part: number) => {
+                setActiveQueueItemId(null);
+                setSelectionAnchor(v.verse);
+                setSelectedRange({ start: v.verse, end: v.verse });
+                setPreviewRef({ ...previewRef, verse: v.verse });
+                setPreviewPart(part);
+                setActiveSlideIndex(part);
+              };
+              const headActive = isSelected;
               const shownPart = isPreviewVerse ? previewPart : 0;
               return (
                 <div key={v.verse} data-verse={v.verse} className="mb-1">
@@ -647,22 +977,23 @@ export default function LiveShowRunner() {
                       // The second click of a double-click (which sends the verse
                       // live) must not also toggle the dropdown back shut.
                       if (e.detail > 1) return;
-                      if (split) {
-                        const key = `${previewRef.book}|${previewRef.chapter}|${v.verse}`;
-                        setExpandedKey(open ? null : key);
-                      } else {
-                        setExpandedKey(null);
-                      }
-                      select(open ? previewPart : 0);
+                      handleVerseClick(v.verse, e.shiftKey);
                     }}
                     onDoubleClick={() => {
                       const ref = { ...previewRef, verse: v.verse };
+                      setActiveQueueItemId(null);
                       setPreviewRef(ref);
                       setPreviewPart(0);
+                      setActiveSlideIndex(0);
                       sendLive(ref, 0);
                     }}
                     title="Double-click to send live"
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleVerseClick(v.verse, e.shiftKey);
+                      }
+                    }}
                     className={`w-full text-left flex items-start gap-2.5 px-3 py-2 rounded-md border border-transparent transition-colors cursor-pointer select-none ${
                       headActive ? "row-selected" : "border-transparent hover:bg-surface-container-low"
                     }`}

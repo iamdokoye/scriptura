@@ -1,13 +1,13 @@
 import type { StateCreator } from "zustand";
 import { api } from "../../lib/tauri";
-import type { AppState, ServiceItem } from "../app";
+import { itemEndVerse, type AppState, type ServiceItem } from "../app";
 import type { PresentationItemOverride } from "../../lib/tauri";
 
 export interface ServiceOrderSlice {
   serviceOrder: ServiceItem[];
   serviceOrderOpen: boolean;
   setServiceOrderOpen: (v: boolean) => void;
-  addToServiceOrder: (item: Omit<ServiceItem, "id">) => void;
+  addToServiceOrder: (item: Omit<ServiceItem, "id"> | Array<Omit<ServiceItem, "id">>) => void;
   removeFromServiceOrder: (id: string) => void;
   reorderServiceOrder: (fromIdx: number, toIdx: number) => void;
   clearServiceOrder: () => void;
@@ -27,14 +27,36 @@ export const createServiceOrderSlice: StateCreator<AppState, [], [], ServiceOrde
   serviceOrder: [],
   serviceOrderOpen: false,
   setServiceOrderOpen: (serviceOrderOpen) => set({ serviceOrderOpen }),
-  addToServiceOrder: (item) =>
+  addToServiceOrder: (itemOrItems) =>
     set((s) => {
-      // Deduplicate by same book+chapter+verse+module
-      const exists = s.serviceOrder.some(
-        (x) => x.book === item.book && x.chapter === item.chapter && x.verse === item.verse && x.module === item.module
-      );
-      if (exists) return s;
-      const next = [...s.serviceOrder, { ...item, id: crypto.randomUUID() }];
+      const items = Array.isArray(itemOrItems) ? itemOrItems : [itemOrItems];
+      let changed = false;
+      const next = [...s.serviceOrder];
+      for (const rawItem of items) {
+        const end = itemEndVerse(rawItem);
+        const isRange = end > rawItem.verse;
+        const baseId = (rawItem as any).id ?? crypto.randomUUID();
+        const id = isRange && !baseId.includes("#end:") ? `${baseId}#end:${end}` : baseId;
+        const item: ServiceItem = {
+          ...rawItem,
+          verse_end: isRange ? end : undefined,
+          id,
+        };
+        // Deduplicate by same book+chapter+verse+endVerse+module
+        const exists = next.some(
+          (x) =>
+            x.book === item.book &&
+            x.chapter === item.chapter &&
+            x.verse === item.verse &&
+            itemEndVerse(x) === itemEndVerse(item) &&
+            x.module === item.module
+        );
+        if (!exists) {
+          next.push(item);
+          changed = true;
+        }
+      }
+      if (!changed) return s;
       persist(next);
       return { serviceOrder: next };
     }),
@@ -63,5 +85,14 @@ export const createServiceOrderSlice: StateCreator<AppState, [], [], ServiceOrde
       return { serviceOrder: next };
     }),
 
-  hydrateServiceOrder: (serviceOrder) => set({ serviceOrder }),
+  hydrateServiceOrder: (serviceOrder) =>
+    set({
+      serviceOrder: serviceOrder.map((item) => {
+        const end = itemEndVerse(item);
+        return {
+          ...item,
+          verse_end: end > item.verse ? end : undefined,
+        };
+      }),
+    }),
 });

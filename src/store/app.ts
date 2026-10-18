@@ -45,9 +45,30 @@ export interface ServiceItem {
   book: string;
   chapter: number;
   verse: number;
+  verse_end?: number;
   text: string;   // plain-text preview (first ~100 chars of verse)
   module: string; // module ID active when added
   presentation_override?: PresentationItemOverride | null;
+}
+
+/** Extracts the end verse for an item (from verse_end or encoded in id "uuid#end:N") */
+export function itemEndVerse(item: { id?: string; verse: number; verse_end?: number }): number {
+  if (item.verse_end && item.verse_end >= item.verse) return item.verse_end;
+  if (item.id && item.id.includes("#end:")) {
+    const endStr = item.id.split("#end:")[1];
+    const parsed = parseInt(endStr, 10);
+    if (!isNaN(parsed) && parsed >= item.verse) return parsed;
+  }
+  return item.verse;
+}
+
+/** Returns formatted label like "John 3:4" or "John 3:4–7" */
+export function serviceItemLabel(item: { book: string; chapter: number; verse: number; verse_end?: number; id?: string }): string {
+  const end = itemEndVerse(item);
+  if (end > item.verse) {
+    return `${item.book} ${item.chapter}:${item.verse}–${end}`;
+  }
+  return `${item.book} ${item.chapter}:${item.verse}`;
 }
 
 export interface SearchHistoryEntry {

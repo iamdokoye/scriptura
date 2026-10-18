@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useAppStore } from "../store/app";
 import { api, type StrongsEntry } from "../lib/tauri";
 import { relayStrongsScroll } from "../lib/presentation";
 import { useSheetVisibility } from "../hooks/useSheetVisibility";
+import { findBooks } from "../data/books";
 
 // 0 means "never explicitly set" (the persisted preference's own default) —
 // resolved to half the viewport height instead of a fixed pixel value so it
@@ -75,74 +76,314 @@ const FROM_CONTEXT = /(?:from|same\s+as|see\s+\w+\s+for|akin\s+to|derivative\s+o
 // cross-reference rather than a derivation.
 const ETYMOLOGY_LEAD_RE = /^(?:from|same as|see\s+\w+\s+for|akin to|derivative of)\s+([HG]?\d{1,5}[a-z]?)\b/i;
 
-function TextWithLinks({
-  text,
-  prefix,
-  onLookup,
-}: {
-  text: string;
-  prefix: "H" | "G";
-  onLookup: (num: string) => void;
-}) {
-  // Split on patterns like "from 3667", "from H3667", "see HEBREW for 3667"
+const SINGLE_CHAPTER_BOOKS = new Set(["Obadiah", "Philemon", "2 John", "3 John", "Jude"]);
+
+const OSIS_BOOK_MAP: Record<string, string> = {
+  // OT
+  gen: "Genesis",
+  gene: "Genesis",
+  exo: "Exodus",
+  exod: "Exodus",
+  lev: "Leviticus",
+  num: "Numbers",
+  deu: "Deuteronomy",
+  deut: "Deuteronomy",
+  jos: "Joshua",
+  josh: "Joshua",
+  jdg: "Judges",
+  judg: "Judges",
+  rut: "Ruth",
+  ruth: "Ruth",
+  "1sa": "1 Samuel",
+  "1sam": "1 Samuel",
+  "2sa": "2 Samuel",
+  "2sam": "2 Samuel",
+  "1ki": "1 Kings",
+  "1kgs": "1 Kings",
+  "2ki": "2 Kings",
+  "2kgs": "2 Kings",
+  "1ch": "1 Chronicles",
+  "1chr": "1 Chronicles",
+  "2ch": "2 Chronicles",
+  "2chr": "2 Chronicles",
+  ezr: "Ezra",
+  ezra: "Ezra",
+  neh: "Nehemiah",
+  est: "Esther",
+  esth: "Esther",
+  job: "Job",
+  ps: "Psalms",
+  psa: "Psalms",
+  pss: "Psalms",
+  pro: "Proverbs",
+  prov: "Proverbs",
+  ecc: "Ecclesiastes",
+  eccl: "Ecclesiastes",
+  sng: "Song of Solomon",
+  song: "Song of Solomon",
+  cant: "Song of Solomon",
+  sos: "Song of Solomon",
+  isa: "Isaiah",
+  jer: "Jeremiah",
+  lam: "Lamentations",
+  eze: "Ezekiel",
+  ezek: "Ezekiel",
+  dan: "Daniel",
+  hos: "Hosea",
+  joe: "Joel",
+  joel: "Joel",
+  amo: "Amos",
+  amos: "Amos",
+  oba: "Obadiah",
+  obad: "Obadiah",
+  jon: "Jonah",
+  jonah: "Jonah",
+  mic: "Micah",
+  nah: "Nahum",
+  hab: "Habakkuk",
+  zep: "Zephaniah",
+  zeph: "Zephaniah",
+  hag: "Haggai",
+  zec: "Zechariah",
+  zech: "Zechariah",
+  mal: "Malachi",
+  // NT
+  mat: "Matthew",
+  matt: "Matthew",
+  mrk: "Mark",
+  mark: "Mark",
+  luk: "Luke",
+  luke: "Luke",
+  jhn: "John",
+  john: "John",
+  act: "Acts",
+  acts: "Acts",
+  rom: "Romans",
+  "1co": "1 Corinthians",
+  "1cor": "1 Corinthians",
+  "2co": "2 Corinthians",
+  "2cor": "2 Corinthians",
+  gal: "Galatians",
+  eph: "Ephesians",
+  php: "Philippians",
+  phil: "Philippians",
+  col: "Colossians",
+  "1th": "1 Thessalonians",
+  "1thess": "1 Thessalonians",
+  "2th": "2 Thessalonians",
+  "2thess": "2 Thessalonians",
+  "1ti": "1 Timothy",
+  "1tim": "1 Timothy",
+  "2ti": "2 Timothy",
+  "2tim": "2 Timothy",
+  tit: "Titus",
+  titus: "Titus",
+  phm: "Philemon",
+  phlm: "Philemon",
+  heb: "Hebrews",
+  jas: "James",
+  "1pe": "1 Peter",
+  "1pet": "1 Peter",
+  "2pe": "2 Peter",
+  "2pet": "2 Peter",
+  "1jn": "1 John",
+  "1john": "1 John",
+  "2jn": "2 John",
+  "2john": "2 John",
+  "3jn": "3 John",
+  "3john": "3 John",
+  jud: "Jude",
+  jude: "Jude",
+  rev: "Revelation",
+};
+
+export function parseScriptureRef(raw: string): { book: string; chapter: number; verse: number } | null {
+  if (!raw) return null;
+  const cleaned = raw.trim().replace(/[.,;:]+$/, "");
+  const first = cleaned.split(";")[0].trim();
+
+  // Pattern 1: Book + chapter + verse separator + verse (e.g. "Mrk.16.12", "Php.2.6-7", "John 13:35", "1Jn 2:5")
+  const m1 = first.match(/^([1-3]?\s*[A-Za-z]+)[\.\s]+(\d+)[\.:](\d+)/);
+  if (m1) {
+    const rawBook = m1[1].replace(/\s+/g, "").toLowerCase();
+    const chapter = parseInt(m1[2], 10);
+    const verse = parseInt(m1[3], 10);
+    const book = OSIS_BOOK_MAP[rawBook] || findBooks(rawBook)[0];
+    if (book && !isNaN(chapter) && !isNaN(verse)) {
+      return { book, chapter, verse };
+    }
+  }
+
+  // Pattern 2: Book + single number (e.g. "Jude 4" or "John 3")
+  const m2 = first.match(/^([1-3]?\s*[A-Za-z]+)[\.\s]+(\d+)/);
+  if (m2) {
+    const rawBook = m2[1].replace(/\s+/g, "").toLowerCase();
+    const num = parseInt(m2[2], 10);
+    const book = OSIS_BOOK_MAP[rawBook] || findBooks(rawBook)[0];
+    if (book && !isNaN(num)) {
+      if (SINGLE_CHAPTER_BOOKS.has(book)) {
+        return { book, chapter: 1, verse: num };
+      }
+      return { book, chapter: num, verse: 1 };
+    }
+  }
+
+  return null;
+}
+
+function linkifyStrongsText(
+  text: string,
+  prefix: "H" | "G",
+  onLookup: (num: string) => void,
+  keyPrefix: string = ""
+): React.ReactNode[] {
   const parts = text.split(
     /((?:(?:from|same\s+as|see\s+\w+\s+for|akin\s+to|derivative\s+of)\s+)[HG]?\d+[a-z]?)/gi
   );
 
-  return (
-    <>
-      {parts.map((part, i) => {
-        // Does this part contain a reference-like pattern?
-        const numMatch = part.match(/([HG]?\d+[a-z]?)$/i);
-        if (numMatch && FROM_CONTEXT.test(part)) {
-          FROM_CONTEXT.lastIndex = 0; // reset stateful regex
-          const rawNum = numMatch[1];
-          const isAlreadyPrefixed = /^[HG]/i.test(rawNum);
-          const fullNum = isAlreadyPrefixed
-            ? rawNum.toUpperCase()
-            : prefix + rawNum;
-          return (
-            <span key={i}>
-              {part.replace(/[HG]?\d+[a-z]?$/i, "")}
+  return parts.map((part, i) => {
+    const numMatch = part.match(/([HG]?\d+[a-z]?)$/i);
+    if (numMatch && FROM_CONTEXT.test(part)) {
+      FROM_CONTEXT.lastIndex = 0;
+      const rawNum = numMatch[1];
+      const isAlreadyPrefixed = /^[HG]/i.test(rawNum);
+      const fullNum = isAlreadyPrefixed
+        ? rawNum.toUpperCase()
+        : prefix + rawNum;
+      return (
+        <span key={`${keyPrefix}-p-${i}`}>
+          {part.replace(/[HG]?\d+[a-z]?$/i, "")}
+          <button
+            type="button"
+            className="underline decoration-dotted text-primary hover:text-primary/80 font-medium transition-colors cursor-pointer"
+            onClick={() => onLookup(fullNum)}
+          >
+            {rawNum}
+          </button>
+        </span>
+      );
+    }
+    FROM_CONTEXT.lastIndex = 0;
+    const pieces = part.split(REF_RE);
+    if (pieces.length === 1) return <span key={`${keyPrefix}-p-${i}`}>{part}</span>;
+    return (
+      <span key={`${keyPrefix}-p-${i}`}>
+        {pieces.map((piece, j) => {
+          if (j % 2 === 1) {
+            const isAlreadyPrefixed = /^[HG]/i.test(piece);
+            const fullNum = isAlreadyPrefixed
+              ? piece.toUpperCase()
+              : prefix + piece;
+            return (
               <button
-                className="underline decoration-dotted text-primary hover:text-primary/80 font-medium transition-colors"
+                type="button"
+                key={`${keyPrefix}-r-${j}`}
+                className="underline decoration-dotted text-primary hover:text-primary/80 font-medium transition-colors cursor-pointer"
                 onClick={() => onLookup(fullNum)}
               >
-                {rawNum}
+                {piece}
               </button>
-            </span>
-          );
-        }
-        FROM_CONTEXT.lastIndex = 0;
-        // Also linkify bare "H1234" / "G1234" patterns in remaining text
-        const pieces = part.split(REF_RE);
-        if (pieces.length === 1) return <span key={i}>{part}</span>;
-        return (
-          <span key={i}>
-            {pieces.map((piece, j) => {
-              if (j % 2 === 1) {
-                // Matched group
-                const isAlreadyPrefixed = /^[HG]/i.test(piece);
-                const fullNum = isAlreadyPrefixed
-                  ? piece.toUpperCase()
-                  : prefix + piece;
-                return (
-                  <button
-                    key={j}
-                    className="underline decoration-dotted text-primary hover:text-primary/80 font-medium transition-colors"
-                    onClick={() => onLookup(fullNum)}
-                  >
-                    {piece}
-                  </button>
-                );
-              }
-              return <span key={j}>{piece}</span>;
-            })}
-          </span>
-        );
-      })}
-    </>
-  );
+            );
+          }
+          return <span key={`${keyPrefix}-s-${j}`}>{piece}</span>;
+        })}
+      </span>
+    );
+  });
+}
+
+function renderDomNode(
+  node: Node,
+  key: string,
+  prefix: "H" | "G",
+  onLookup: (num: string) => void,
+  onRefClick?: (target: string, label: string) => void
+): React.ReactNode {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.textContent ?? "";
+    return <span key={key}>{linkifyStrongsText(text, prefix, onLookup, key)}</span>;
+  }
+
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const el = node as HTMLElement;
+    const tag = el.tagName.toUpperCase();
+    const children = Array.from(el.childNodes).map((child, idx) =>
+      renderDomNode(child, `${key}-${idx}`, prefix, onLookup, onRefClick)
+    );
+
+    if (tag === "B" || tag === "STRONG") {
+      return (
+        <strong key={key} className="font-semibold text-on-surface">
+          {children}
+        </strong>
+      );
+    }
+
+    if (tag === "I" || tag === "EM") {
+      return (
+        <em key={key} className="italic text-on-surface-variant/90">
+          {children}
+        </em>
+      );
+    }
+
+    if (tag === "REF") {
+      const target = el.getAttribute("target") || el.textContent || "";
+      const label = el.textContent || "";
+      const parsed = parseScriptureRef(target) || parseScriptureRef(label);
+      const tooltip = parsed
+        ? `Go to ${parsed.book} ${parsed.chapter}:${parsed.verse}`
+        : target
+        ? `Go to ${target}`
+        : undefined;
+
+      return (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onRefClick?.(target, label)}
+          className="inline-flex items-baseline px-1 py-0.5 rounded text-primary hover:text-primary/80 hover:bg-primary/10 font-medium underline decoration-dotted transition-colors cursor-pointer"
+          title={tooltip}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    return <span key={key}>{children}</span>;
+  }
+
+  return null;
+}
+
+function TextWithLinks({
+  text,
+  prefix,
+  onLookup,
+  onRefClick,
+}: {
+  text: string;
+  prefix: "H" | "G";
+  onLookup: (num: string) => void;
+  onRefClick?: (target: string, label: string) => void;
+}) {
+  const rendered = useMemo(() => {
+    if (!text) return null;
+    if (!text.includes("<")) {
+      return linkifyStrongsText(text, prefix, onLookup, "txt");
+    }
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<body>${text}</body>`, "text/html");
+      return Array.from(doc.body.childNodes).map((child, idx) =>
+        renderDomNode(child, `n-${idx}`, prefix, onLookup, onRefClick)
+      );
+    } catch {
+      return linkifyStrongsText(text, prefix, onLookup, "err");
+    }
+  }, [text, prefix, onLookup, onRefClick]);
+
+  return <>{rendered}</>;
 }
 
 const FONT_FAMILY_CSS: Record<string, string> = {
@@ -187,12 +428,37 @@ const LEXICON_PILLS: Record<"H" | "G", LexiconPill[]> = {
  * that window is activated.
  */
 export default function StrongsSheet({ immediate = false }: { immediate?: boolean }) {
-  const { selectedStrongs, setSelectedStrongs, strongsGroup, setStrongsGroup, strongsSource, setStrongsSource, primaryModule, readingFontSize, isFullscreen, displayPrefs, setDisplayPrefs } = useAppStore();
+  const {
+    selectedStrongs,
+    setSelectedStrongs,
+    strongsGroup,
+    setStrongsGroup,
+    strongsSource,
+    setStrongsSource,
+    primaryModule,
+    readingFontSize,
+    isFullscreen,
+    displayPrefs,
+    setDisplayPrefs,
+    setCurrentRef,
+    setView,
+  } = useAppStore();
   const fontFamily = FONT_FAMILY_CSS[displayPrefs.fontFamily] ?? FONT_FAMILY_CSS.system;
   const bodyFontSize = readingFontSize;
   const [entries, setEntries] = useState<StrongsEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleRefClick = useCallback(
+    (target: string, label: string) => {
+      const parsed = parseScriptureRef(target) || parseScriptureRef(label);
+      if (parsed) {
+        setCurrentRef(parsed);
+        setView("reading");
+      }
+    },
+    [setCurrentRef, setView]
+  );
   // Stack of sheets left behind by clicking a cross-reference from inside
   // the sheet — each entry is a snapshot of what was on screen *before*
   // that click, so Back can restore it exactly (including multi-number
@@ -659,6 +925,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                         text={entry.long_def}
                         prefix={prefix}
                         onLookup={lookup}
+                        onRefClick={handleRefClick}
                       />
                     </p>
                   </section>
@@ -683,7 +950,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                       )}
                     </div>
                     <p className="font-body-ui leading-relaxed text-on-surface" style={{ fontSize: `${bodyFontSize - 1}px`, fontFamily }}>
-                      <TextWithLinks text={extra.short_def} prefix={prefix} onLookup={lookup} />
+                      <TextWithLinks text={extra.short_def} prefix={prefix} onLookup={lookup} onRefClick={handleRefClick} />
                     </p>
                   </section>
                 ))}
@@ -712,7 +979,7 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
                               </span>
                             </div>
                             <p className="pl-3 font-body-ui text-[12px] text-on-surface-variant leading-relaxed">
-                              <TextWithLinks text={marker.short_def} prefix={prefix} onLookup={lookup} />
+                              <TextWithLinks text={marker.short_def} prefix={prefix} onLookup={lookup} onRefClick={handleRefClick} />
                             </p>
                           </div>
                         ))}

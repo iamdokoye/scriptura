@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useAppStore, type ServiceItem } from "../store/app";
+import { useAppStore, itemEndVerse, serviceItemLabel, type ServiceItem } from "../store/app";
 import type { PresentationItemOverride, PresentationTheme } from "../lib/tauri";
 
 export default function ServiceOrderPanel() {
@@ -27,12 +27,14 @@ export default function ServiceOrderPanel() {
     setServiceOrderOpen(false);
   }
 
-  // An item is "active" if the reader is currently on that exact verse+module
+  // An item is "active" if the reader is currently on that exact verse+module (or within its range)
   function isActive(item: ServiceItem) {
+    const end = itemEndVerse(item);
     return (
       item.book === currentRef.book &&
       item.chapter === currentRef.chapter &&
-      item.verse === currentRef.verse
+      currentRef.verse >= item.verse &&
+      currentRef.verse <= end
     );
   }
 
@@ -138,7 +140,7 @@ export default function ServiceOrderPanel() {
               className="px-1.5 py-1 -my-1 rounded-md font-metadata-mono text-[11px] text-secondary ghost"
               onClick={() => {
                 const text = serviceOrder
-                  .map((it) => `${it.book} ${it.chapter}:${it.verse}  ${it.text}`)
+                  .map((it) => `${serviceItemLabel(it)}  ${it.text}`)
                   .join("\n");
                 navigator.clipboard.writeText(text).catch(() => {});
               }}
@@ -244,7 +246,7 @@ function ServiceCard({
               {index + 1}
             </span>
             <span className={`font-body-ui text-[13px] font-semibold leading-tight ${active ? "text-primary" : "text-on-surface"}`}>
-              {item.book} {item.chapter}:{item.verse}
+              {serviceItemLabel(item)}
             </span>
             <span className="font-metadata-mono text-[10px] text-on-surface-variant truncate">
               {item.module}

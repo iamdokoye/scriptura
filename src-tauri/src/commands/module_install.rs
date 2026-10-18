@@ -51,12 +51,17 @@ pub fn list_installed_modules(
 
 #[tauri::command]
 pub async fn list_available_modules(
+    app: AppHandle,
     registry: State<'_, Arc<ModuleRegistry>>,
 ) -> std::result::Result<Vec<ModuleInfo>, AppError> {
     let registry = registry.inner().clone();
-    tokio::task::spawn_blocking(move || Ok(registry.fetch_available()))
-        .await
-        .map_err(|e| AppError::Other(e.to_string()))?
+    tokio::task::spawn_blocking(move || {
+        let modules = registry.fetch_available();
+        registry.trigger_background_refresh_if_stale(Some(app));
+        Ok(modules)
+    })
+    .await
+    .map_err(|e| AppError::Other(e.to_string()))?
 }
 
 /// Shared implementation for install_module and install_module_with_key.

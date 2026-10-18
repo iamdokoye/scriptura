@@ -21,129 +21,57 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use std::path::{Path, PathBuf};
 
-/// Strips TEI/HTML-ish markup the way `lexicon::strip_xml_tags` does, except
-/// it inserts a space at every tag boundary instead of deleting the tag
-/// outright. STEPBible's data uses bare `<br>` as its ONLY separator between
-/// numbered sub-senses ("lover<br>1) to love<br>1a) (Qal)") — removing the
-/// tag with nothing in its place glues adjacent words together
-/// ("lover1)  to love1a)"), which `strip_xml_tags` never has to handle
-/// because our other sources always have real whitespace around their tags.
-fn strip_stepbible_markup(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut in_tag = false;
-    for ch in s.chars() {
-        match ch {
-            '<' => {
-                in_tag = true;
-                out.push(' ');
+static REF_ATTR_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(?is)<ref(?:=['"]?([^'">]+)['"]?)?>(.*?)</ref>"#).unwrap()
+});
+
+fn normalize_ref_tags(s: &str) -> String {
+    REF_ATTR_RE
+        .replace_all(s, |caps: &regex::Captures| {
+            let target = caps.get(1).map(|m| m.as_str().trim()).unwrap_or("");
+            let content = caps.get(2).map(|m| m.as_str().trim()).unwrap_or("");
+            if target.is_empty() {
+                format!("<ref target=\"{content}\">{content}</ref>")
+            } else {
+                format!("<ref target=\"{target}\">{content}</ref>")
             }
-            '>' => in_tag = false,
-            c if !in_tag => out.push(c),
-            _ => {}
-        }
-    }
-    out.split_whitespace().collect::<Vec<_>>().join(" ")
+        })
+        .to_string()
 }
 
-/// Removes a `<tag ...>...</tag>` element (the tag AND its content, unlike
-/// `strip_stepbible_markup` which keeps the content) — used for `<ref>`
-/// verse-citation elements, which read as pure clutter inline in a
-/// definition ("Jo 13:35", "Ro 5:8") rather than part of the meaning.
-///
-/// STEPBible chains multiple `<ref>` citations as a comma-separated list
-/// ("of things: <ref>Mat.5:29</ref>, <ref>Jhn.6:12</ref>, <ref>Heb.1:11</ref>
-/// (LXX"), so deleting just the tag+content leaves every list separator
-/// behind as an orphaned ", " with nothing left to separate — the source of
-/// the "of things :, (LXX" artifact. Consuming one trailing ", " (or "; ")
-/// right after a removed citation collapses the whole list down to the
-/// single separator that belonged to the real prose around it (the
-/// citation's own comma, not the list's).
-fn remove_tag_and_content(xml: &str, tag: &str) -> String {
-    let open = format!("<{tag}");
-    let close = format!("</{tag}>");
-    let mut out = String::with_capacity(xml.len());
-    let mut pos = 0;
-    while let Some(rel) = xml[pos..].find(&open) {
-        let abs = pos + rel;
-        out.push_str(&xml[pos..abs]);
-        match xml[abs..].find(&close) {
-            Some(end_rel) => {
-                pos = abs + end_rel + close.len();
-                if let Some(rest) = xml[pos..].strip_prefix(", ") {
-                    pos = xml.len() - rest.len();
-                } else if let Some(rest) = xml[pos..].strip_prefix("; ") {
-                    pos = xml.len() - rest.len();
-                }
-            }
-            None => {
-                pos = xml.len();
-                break;
-            }
-        }
-    }
-    out.push_str(&xml[pos..]);
-    out
+static A_TAG_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"(?is)<a[^>]*>(.*?)</a>"#).unwrap());
+
+fn unwrap_a_tags(s: &str) -> String {
+    A_TAG_RE.replace_all(s, "$1").to_string()
 }
 
-/// Removes every `[...]` bracketed aside — Abbott-Smith and LSJ both use
-/// square brackets for etymological/Septuagint cross-references and source
-/// citations ("[in LXX for אַהֲבָה, which is also rendered by ἀγάπησις and
-/// φιλία;]", "[LXX+2nd c.BC+]") that interrupt the actual meaning with
-/// citation detail most readers don't need.
-fn remove_bracketed_spans(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut depth = 0u32;
-    for ch in s.chars() {
-        match ch {
-            '[' => depth += 1,
-            ']' if depth > 0 => depth -= 1,
-            c if depth == 0 => out.push(c),
-            _ => {}
-        }
-    }
-    out
+static BR_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"(?i)<br\s*/?>"#).unwrap());
+
+fn replace_br_with_newline(s: &str) -> String {
+    BR_RE.replace_all(s, "\n").to_string()
 }
 
-/// Removes inline runs of Greek or Hebrew script — Abbott-Smith and LSJ both
-/// weave the original word's synonyms and cross-references directly into
-/// English prose in their own script ("distinct from φιλία, friendship").
-/// The lemma is already shown in its own script in the sheet's header, so
-/// this only ever removes *extra* foreign words mixed into the body text,
-/// which are unreadable clutter for anyone who doesn't read Greek/Hebrew.
-fn remove_foreign_script_words(s: &str) -> String {
-    fn is_foreign(c: char) -> bool {
-        let cp = c as u32;
-        (0x0370..=0x03FF).contains(&cp) // Greek and Coptic
-            || (0x1F00..=0x1FFF).contains(&cp) // Greek Extended
-            || (0x0590..=0x05FF).contains(&cp) // Hebrew (incl. points/cantillation)
-    }
-    fn continues_foreign(chars: &[char], i: usize) -> bool {
-        is_foreign(chars[i])
-            || ((chars[i] == '-' || chars[i] == '\'')
-                && chars.get(i + 1).is_some_and(|&c| is_foreign(c)))
-    }
+static HTML_TAG_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(?is)</?([a-zA-Z0-9_-]+)(?:[\s/=][^>]*)?>"#).unwrap()
+});
 
-    let chars: Vec<char> = s.chars().collect();
-    let mut out = String::with_capacity(s.len());
-    let mut i = 0;
-    while i < chars.len() {
-        if continues_foreign(&chars, i) {
-            while i < chars.len() && continues_foreign(&chars, i) {
-                i += 1;
+fn strip_unsupported_tags(s: &str) -> String {
+    HTML_TAG_RE
+        .replace_all(s, |caps: &regex::Captures| {
+            let tag_name = caps
+                .get(1)
+                .map(|m| m.as_str().to_ascii_lowercase())
+                .unwrap_or_default();
+            match tag_name.as_str() {
+                "b" | "i" | "ref" => caps.get(0).unwrap().as_str().to_string(),
+                _ => String::new(),
             }
-        } else {
-            out.push(chars[i]);
-            i += 1;
-        }
-    }
-    out
+        })
+        .to_string()
 }
 
-/// Cleans up the orphaned punctuation left behind once bracketed asides and
-/// foreign words have been removed (e.g. "love, , esteem" -> "love, esteem",
-/// or a leading ", " where the sentence used to open with a removed word).
 fn cleanup_punctuation(s: &str) -> String {
-    let mut out = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut out = s.to_string();
     loop {
         let replaced = out
             .replace(" , ", ", ")
@@ -158,16 +86,7 @@ fn cleanup_punctuation(s: &str) -> String {
             .replace(" ,", ",")
             .replace(" ;", ";")
             .replace(" .", ".")
-            // A closing </b> right before ":" (e.g. "<b>of things</b>:")
-            // becomes a space via strip_stepbible_markup's tag-boundary
-            // space, stranding it as "things :".
             .replace(" :", ":")
-            // The last citation in a list has no trailing ", " for
-            // remove_tag_and_content to consume (it's followed by real
-            // punctuation instead, e.g. "...life, <ref>...</ref>. In" ->
-            // "...life, . In", collapsed by whitespace normalization to
-            // "...life,. In") — collapse that dangling comma into the
-            // period that actually ends the clause, spaced or not.
             .replace(", .", ".")
             .replace(",.", ".");
         if replaced == out {
@@ -175,34 +94,16 @@ fn cleanup_punctuation(s: &str) -> String {
         }
         out = replaced;
     }
-    out.trim_start_matches([',', ';', ':', ' ']).to_string()
+    out
 }
 
-/// Matches every numbered/lettered sense-outline marker across all three
-/// STEPBible sources, in one pass so the markers stay in their original
-/// left-to-right order:
-///   - BDB (TBESH): bare "1)", "1a)", "1a1)" — no prefix at all.
-///   - Abbott-Smith/LSJ (TBESG/TFLSJ): "__1.", "__2" (bare), "__(a)",
-///     "__II"/"__III" (roman numerals for LSJ's major sense divisions).
-/// Capture groups: 1=roman, 2=arabic-with-period, 3=arabic-bare,
-/// 4=lettered-paren, 5=BDB-digits, 6=BDB-letters (optional),
-/// 7=BDB-second-digits (optional).
 static SENSE_MARKER_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r"__([IVXLCDM]+)\b|__(\d+)\.|__(\d+)\b|__\(([a-z])\)|\b(\d{1,3})([a-z]{1,3})?(\d{1,3})?\)",
+        r"__([IVXLCDM]+)\b|__(\d+)\.|__(\d+)\b|__\(([a-z])\)|(?:\n|^)\s*(\d{1,2})([a-z]{1,2})?(\d{1,2})?\)",
     )
     .unwrap()
 });
 
-/// Reformats a flattened sense outline ("1) name 1a) name 1b) reputation...")
-/// into an actual indented outline, one sense per line:
-///   1) name
-///     1a) name
-///     1b) reputation
-/// Run-together numbered/lettered senses are the single biggest readability
-/// problem in these richer lexicons — this is what makes BDB's own outline
-/// structure ("1) ... 1a) ... 1b) ...") legible instead of one run-on
-/// paragraph of clashing numbers.
 fn format_sense_outline(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut last_end = 0;
@@ -216,16 +117,10 @@ fn format_sense_outline(s: &str) -> String {
         } else if let Some(n) = caps.get(2) {
             (n.as_str().to_string(), 0)
         } else if let Some(n) = caps.get(3) {
-            // Bare "__N" nests one level under its enclosing "__N." group
-            // (e.g. Abbott-Smith's "Act."/"Mid." voice groupings) — giving
-            // it the same depth (0) made "2) Mid." and its own first
-            // sub-sense "1) to perish" print as if they were siblings at
-            // the same level, reading like sense 2 came before sense 1.
             (n.as_str().to_string(), 1)
         } else if let Some(letter) = caps.get(4) {
             (letter.as_str().to_string(), 2)
         } else {
-            // BDB form: digits, optional letters, optional second digits.
             let digits = caps.get(5).unwrap().as_str();
             let letters = caps.get(6).map(|m| m.as_str());
             let digits2 = caps.get(7).map(|m| m.as_str());
@@ -246,6 +141,7 @@ fn format_sense_outline(s: &str) -> String {
         out.push_str(&"  ".repeat(depth));
         out.push_str(&label);
         out.push(')');
+        out.push(' ');
         last_end = m.end();
     }
     out.push_str(s[last_end..].trim_end());
@@ -253,10 +149,11 @@ fn format_sense_outline(s: &str) -> String {
     out.lines()
         .map(|l| {
             let indent = l.len() - l.trim_start().len();
+            let trimmed = l.trim();
             format!(
                 "{}{}",
-                &l[..indent],
-                l[indent..].split_whitespace().collect::<Vec<_>>().join(" ")
+                &" ".repeat(indent),
+                trimmed.split_whitespace().collect::<Vec<_>>().join(" ")
             )
         })
         .filter(|l| !l.trim().is_empty())
@@ -264,16 +161,16 @@ fn format_sense_outline(s: &str) -> String {
         .join("\n")
 }
 
-/// Converts STEPBible's "Meaning" column — TEI/HTML-ish markup weaving
-/// together English prose, bracketed citations, verse references, and
-/// inline Greek/Hebrew script — into plain, readable English. See the
-/// individual helpers above for what each pass removes and why.
+/// Converts STEPBible's "Meaning" column into formatted rich text preserving
+/// Greek and Hebrew text, Septuagint references, Scripture citations, and
+/// hierarchical sense outlines.
 fn clean_stepbible_prose(raw_html: &str) -> String {
-    let without_refs = remove_tag_and_content(raw_html, "ref");
-    let plain = strip_stepbible_markup(&without_refs);
-    let without_brackets = remove_bracketed_spans(&plain);
-    let without_foreign = remove_foreign_script_words(&without_brackets);
-    let cleaned = cleanup_punctuation(&without_foreign);
+    let unwrap_a = unwrap_a_tags(raw_html);
+    let norm_refs = normalize_ref_tags(&unwrap_a);
+    let with_re = norm_refs.replace("<re>", "\n\n").replace("</re>", "\n\n");
+    let with_br = replace_br_with_newline(&with_re);
+    let stripped = strip_unsupported_tags(&with_br);
+    let cleaned = cleanup_punctuation(&stripped);
     format_sense_outline(&cleaned)
 }
 
@@ -421,58 +318,55 @@ mod tests {
         assert_eq!(entry.lemma, "ἀγάπη");
         assert_eq!(entry.short_def, "love");
         assert!(entry.long_def.contains("love, goodwill, esteem"));
-        assert!(!entry.long_def.contains('<'));
-        // The bracketed LXX/Septuagint cross-reference and the lemma's own
-        // repeated Greek script are exactly the "languages and refs" clutter
-        // this parser is meant to strip from the readable definition.
-        assert!(!entry.long_def.contains('['));
-        assert!(!entry.long_def.contains("LXX"));
-        assert!(!entry
-            .long_def
-            .chars()
-            .any(|c| (0x0370..=0x03FF).contains(&(c as u32))));
+        assert!(entry.long_def.contains("<b>ἀγάπη</b>"));
+        assert!(entry.long_def.contains("LXX"));
+        assert!(entry.long_def.contains("אַהֲבָה"));
+        assert!(entry.long_def.contains("ἀγάπησις"));
+        assert!(entry.long_def.contains("φιλία"));
     }
 
     #[test]
-    fn real_abbott_smith_entry_reads_as_plain_english() {
-        // The actual raw TBESG row for G26 — mixes English prose with a
-        // bracketed LXX cross-reference, inline Greek synonym words in the
-        // SYN. discussion, and <ref> verse citations throughout.
+    fn real_abbott_smith_entry_preserves_greek_and_verse_citations() {
         let line = "G0026\tG0026 =\tG0026\tἀγάπη\tagapē\tG:N-F\tlove\t <b>ἀγάπη</b>, -ης, ἡ <BR /> [in LXX for אַהֲבָה, which is also rendered by ἀγάπησις and φιλία ;] <BR /> <b>love, goodwill, esteem</b>. Outside of bibl. and eccl. books, there is no clear instance. In NT, like ἀγαπάω, -ῶ, <BR />__1. <b>Of men's love</b>: <BR />__(a) to one another, <ref='John.13.35'>Jhn 13:35;</ref> <BR /> __(b) to God, <ref='1Jn.2.5.'>1Jn 2:5.</ref><BR /> <re><i>SYN.</i>: φιλία. It is thus distinct from φιλία, <b>friendship</b>, στοργή, <b>natural affection</b>, and ἔρως, <b>sexual love</b>.</re>";
         let entry = parse_row("G26", line).unwrap();
         assert!(entry.long_def.contains("love, goodwill, esteem"));
         assert!(entry.long_def.contains("Of men's love"));
         assert!(entry.long_def.contains("distinct from"));
         assert!(entry.long_def.contains("friendship"));
-        // No verse citations, no brackets, no leftover Greek script anywhere.
-        assert!(!entry.long_def.contains("13:35"));
-        assert!(!entry.long_def.contains("2:5"));
-        assert!(!entry.long_def.contains('['));
-        assert!(!entry.long_def.contains('<'));
-        assert!(!entry
-            .long_def
-            .chars()
-            .any(|c| (0x0370..=0x03FF).contains(&(c as u32))));
-        // No orphaned punctuation left behind by the removed words.
+        assert!(entry.long_def.contains("<ref target=\"John.13.35\">Jhn 13:35;</ref>"));
+        assert!(entry.long_def.contains("<ref target=\"1Jn.2.5.\">1Jn 2:5.</ref>"));
+        assert!(entry.long_def.contains("φιλία"));
+        assert!(entry.long_def.contains("στοργή"));
+        assert!(entry.long_def.contains("ἔρως"));
+        assert!(entry.long_def.contains("אַהֲבָה"));
+        assert!(entry.long_def.contains("<b>love, goodwill, esteem</b>"));
+        assert!(entry.long_def.contains("<i>SYN.</i>"));
         assert!(!entry.long_def.contains(" ,"));
         assert!(!entry.long_def.contains(", ,"));
-        assert!(!entry.long_def.starts_with(','));
     }
 
     #[test]
-    fn strips_tflsj_hover_tooltip_citations_entirely() {
-        // TFLSJ's hover-tooltip citations are always bracket-wrapped in the
-        // source text, so once bracket-stripping is in the pipeline the
-        // whole citation — both the hidden title and the visible bracketed
-        // text — should read as pure clutter and disappear, leaving only
-        // the actual English meaning.
+    fn parses_morphe_g3444_with_citations_and_greek_synonyms() {
+        let line = "G3444\tG3444G =\tG3444G\tμορφή\tmorphē\tG:N-F\tform\t <b>μορφή</b>, -ῆς, ἡ, <BR /> [in LXX for תְּמוּנָה, תֹּאַר, etc. ;] <BR />__1. properly, <b>form, shape, outward appearance</b>: <ref='Mrk.16.12'>Mrk 16:12</ref> (cf. Westc., Intr., 338; Milligan, NTD, 44). <BR />__2. In philos. language, <b>the form</b> (ἡ μορφὴ ἡ κατὰ τὸν λόγον, Arist., Phys., ii, 1), <b>the character or sort:</b> <ref='Php.2.6-7'>Php 2:6, 7</ref>. <BR /> <re><i>SYN.</i>: σχῆμα, which see for distinctions; also Gifford, Incarn., 22 ff.; Lft., Notes, 262 f.; Trench, Syn., § lxx.</re>";
+        let entry = parse_row("G3444", line).unwrap();
+        assert!(entry.long_def.contains("<ref target=\"Mrk.16.12\">Mrk 16:12</ref>"));
+        assert!(entry.long_def.contains("<ref target=\"Php.2.6-7\">Php 2:6, 7</ref>"));
+        assert!(entry.long_def.contains("μορφή"));
+        assert!(entry.long_def.contains("σχῆμα"));
+        assert!(entry.long_def.contains("תְּמוּנָה"));
+        assert!(entry.long_def.contains("1) properly, <b>form, shape, outward appearance</b>"));
+        assert!(entry.long_def.contains("2) In philos. language"));
+        assert!(entry.long_def.contains("Notes, 262 f."));
+    }
+
+    #[test]
+    fn unwraps_tflsj_hover_tooltip_citations() {
         let line = "G0026\tG0026 =\tG0026\tἀγάπη\tagapē\tG:N-F\tlove\t<b>love,</b> [<a href=\"javascript:void(0)\" title=\"LXX.Jer.2.2\">LXX+2nd c.BC+</a>] used of divine love.";
         let entry = parse_row("G26", line).unwrap();
         assert!(entry.long_def.contains("used of divine love"));
-        assert!(!entry.long_def.contains("LXX"));
+        assert!(entry.long_def.contains("LXX+2nd c.BC+"));
         assert!(!entry.long_def.contains("javascript"));
-        assert!(!entry.long_def.contains("Jer.2.2"));
-        assert!(!entry.long_def.contains('['));
+        assert!(!entry.long_def.contains("<a"));
     }
 
     #[test]
@@ -522,12 +416,6 @@ mod sense_outline_tests {
 
     #[test]
     fn formats_abbott_smith_groups_with_nested_sub_senses_in_order() {
-        // Real TBESG row for G0622 (apollymi) — this exact "Act."/"Mid."
-        // group + bare sub-sense + lettered sub-sub-sense shape produced the
-        // reported bug: "2) Mid., 1) to perish; a) of things :, (LXX..."
-        // (group and its own first sub-sense rendered as same-depth
-        // siblings, reading as if sense 2 preceded sense 1) plus dangling
-        // punctuation left behind by stripped <ref> citation lists.
         let line = "G0622\tG0622G =\tG0622G\tἀπόλλυμι\tapollymi\tG:V\tto destroy\t__1. Act., <BR /> __1 <b>to destroy</b>; <BR /> __2 <b>to lose</b>. <BR /> __2. Mid., <BR /> __1 <b>to perish</b>; <BR /> __(a) <b>of things</b>: <ref='Mat.5.29'>Mat.5:29</ref>, <ref='Jhn.6.12'>Jhn.6:12</ref>, <ref='Heb.1.11'>Heb.1:11</ref> (LXX, al.; <BR /> __(b) <b>of persons</b>: <ref='Mat.8.26'>Mat.8:26</ref>, al. Metaphorical, of loss of eternal life, <ref='Jhn.3.15-16; 10.28; 17.12'>Jhn.3:15-16 10:28 17:12</ref>, <ref='Rom.2.12'>Rom.2:12</ref>. In the perishing, contrasted in <ref='1Co.1.18'>1Co.1:18</ref>, al., with the saved.";
         let entry = parse_row("G622", line).unwrap();
         eprintln!("=== FORMATTED ===\n{}\n", entry.long_def);
@@ -544,16 +432,13 @@ mod sense_outline_tests {
             .unwrap();
         let sub1 = lines
             .iter()
-            .position(|l| l.trim_start() == "1) to perish;")
+            .position(|l| l.trim_start() == "1) <b>to perish</b>;")
             .unwrap();
         let sub_a = lines
             .iter()
-            .position(|l| l.trim_start().starts_with("a) of things"))
+            .position(|l| l.trim_start().starts_with("a) <b>of things</b>"))
             .unwrap();
 
-        // "2) Mid." (the group) still prints before its own first
-        // sub-sense "1) to perish" — but nested one level deeper, not as
-        // an equal-depth sibling that reads like sense 2 before sense 1.
         assert!(group2 < sub1);
         let indent_of = |l: &str| l.len() - l.trim_start().len();
         assert!(indent_of(lines[sub1]) > indent_of(lines[group2]));

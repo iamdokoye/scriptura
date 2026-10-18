@@ -111,19 +111,23 @@ export default function App() {
         const installedIds = new Set(modules.map((m) => m.id));
         const hadBible = modules.some((m) => m.category === "Bible");
         const wanted = hadBible ? ["StrongsGreek", "StrongsHebrew", "TSK"] : ["KJV", "StrongsGreek", "StrongsHebrew", "TSK"];
-        const installs: Promise<unknown>[] = [];
-        for (const id of wanted) {
-          if (!installedIds.has(id)) {
-            installs.push(api.installModule(id).catch((e) => console.error(`[auto-install ${id}]`, e)));
+        const missing = wanted.filter((id) => !installedIds.has(id));
+        const installsPromise = (async () => {
+          for (const id of missing) {
+            try {
+              await api.installModule(id);
+            } catch (e) {
+              console.error(`[auto-install ${id}]`, e);
+            }
           }
-        }
+        })();
 
         // Grammatical markers (G3588, H853…) are left out of the clickable
         // Strong's tags. On a first launch the lexicons are still being
         // installed, so look again once those installs settle.
         const loadMarkers = () => api.listMarkerStrongs().then(setMarkerStrongs).catch(() => {});
         loadMarkers();
-        if (installs.length > 0) Promise.allSettled(installs).then(loadMarkers);
+        if (missing.length > 0) installsPromise.then(loadMarkers);
 
         // STEPBible-Data's richer companion lexicons (see the Strong's sheet's
         // pill switcher) aren't SWORD modules, so they don't go through
@@ -162,7 +166,7 @@ export default function App() {
           setView("modules");
           // First launch: once the KJV (and lexicons) finish installing, open
           // straight into reading.
-          Promise.allSettled(installs).then(async () => {
+          installsPromise.then(async () => {
             const after = await api.listInstalledModules().catch(() => []);
             start(after);
           });
