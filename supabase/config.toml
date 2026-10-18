@@ -1,0 +1,7 @@
+# Supabase project settings used by the CLI (`supabase db push`, `supabase functions deploy`).
+# The hosted project's auth and email settings are configured in the dashboard instead.
+project_id = "scriptura"
+
+[functions.search]
+# Supabase checks the caller's session token before the function runs.
+verify_jwt = true

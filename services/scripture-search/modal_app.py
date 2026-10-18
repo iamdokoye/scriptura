@@ -143,6 +143,9 @@ def main():
     # live service, raise min_containers to 1 for the hours you need it (see README).
     scaledown_window=300,
     min_containers=0,
+    # Hard ceiling on spend: one L4 running all day is about $19, however much traffic
+    # arrives. Raise it if searches start queueing at peak times.
+    max_containers=1,
 )
 @modal.concurrent(max_inputs=8)
 class ScriptureSearch:

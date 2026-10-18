@@ -114,7 +114,7 @@ Words with apostrophes (`king's`, `king’s`) and hyphens match. Symbols such as
 
 Defined in `src/components/aiSearch/`. Opens beside the verse list with the **Ask** button, `Mod+Shift+K`, or `?` in the search bar. Describe what you're looking for and press Enter (Shift+Enter adds a line). Click a result to load that verse into Preview and select it. `Esc` closes the panel. Its width is resizable and remembered (`scriptura.live.aiWidth`, 340 px default).
 
-Results show text from the Bible you have open. A result that doesn't exist in that translation is hidden. The first time, the panel asks for the service URL and access token; see `services/scripture-search/README.md`.
+Results show text from the Bible you have open. A result that doesn't exist in that translation is hidden. The first time, the panel asks you to sign in with your email (a one-time code is sent to you; there is no password). The gear icon shows your account, how many searches you have left today, and lets you sign out or connect your own search server instead. Setup for the service itself is in `supabase/README.md`.
 
 ### 1.4 Mouse gestures (Live Show verse list)
 

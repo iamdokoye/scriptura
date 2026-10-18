@@ -73,6 +73,11 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Public values (the anon key is safe to ship; row-level security protects the
+          # data). Set them as repository *variables*. Without them the build has no
+          # accounts and Ask Scripture offers only the own-server option.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
           # Signs the updater artifacts (.sig files + latest.json) so the in-app
           # updater can verify downloads against the pubkey in tauri.conf.json.
           # Generate with `npx tauri signer generate` and store the key as this secret.

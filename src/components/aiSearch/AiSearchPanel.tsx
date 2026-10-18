@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppStore, type VerseRef } from "../../store/app";
 import { useAiSearchStore } from "../../store/aiSearchStore";
-import { errorMessage, type AiHit } from "../../lib/aiSearch";
+import { useAccountStore } from "../../store/accountStore";
+import type { AiHit } from "../../lib/aiSearch";
 import { useVerseTexts } from "./useVerseTexts";
+import SignInForm from "./SignInForm";
+import CustomServerForm from "./CustomServerForm";
+import ConnectionSettings from "./ConnectionSettings";
 
 const EXAMPLES = [
   "Jesus calms the storm",
@@ -21,17 +25,25 @@ interface Props {
 
 /** Natural-language scripture search: describe a passage, click a result to preview it. */
 export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props) {
-  const { config, phase, query, hits, error, ask, loadConfig, warmUp } = useAiSearchStore();
+  const { config, phase, query, hits, error, quota, ask, ensureReady, warmUp } = useAiSearchStore();
+  const accountStatus = useAccountStore((s) => s.status);
   const primaryModule = useAppStore((s) => s.primaryModule);
   const [draft, setDraft] = useState(query);
-  const [editingConfig, setEditingConfig] = useState(false);
+  const [view, setView] = useState<"main" | "settings">("main");
+  const [ownServer, setOwnServer] = useState(false); // sign-in screen: show the own-server form instead
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => { loadConfig(); }, [loadConfig]);
-  useEffect(() => { if (config?.configured) warmUp(); }, [config?.configured, warmUp]);
+  useEffect(() => { ensureReady(); }, [ensureReady]);
+
+  // Neither an own server nor an account yet → the person has to connect one first.
+  const loaded = config !== null && accountStatus !== "unknown";
+  const source = config?.configured ? "custom" : accountStatus === "signedIn" ? "account" : null;
+  const needsConnection = loaded && !source;
+
+  useEffect(() => { if (source) warmUp(); }, [source, warmUp]);
   // `ask` from the search bar's "?" prefix changes the stored query; show it here.
   useEffect(() => { setDraft(query); }, [query]);
-  useEffect(() => { inputRef.current?.focus(); }, [config?.configured, editingConfig]);
+  useEffect(() => { if (source && view === "main") inputRef.current?.focus(); }, [source, view]);
 
   const { texts, missing, keyOf } = useVerseTexts(hits, primaryModule);
   const visible = hits.filter((h) => !missing.has(keyOf(h)));
@@ -40,19 +52,17 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
     if (draft.trim()) ask(draft);
   }
 
-  const showSetup = config !== null && (!config.configured || editingConfig);
-
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="shrink-0 flex items-center gap-2 px-3.5 py-2.5 border-b border-outline-variant">
         <span className="material-symbols-outlined text-[18px] text-primary">auto_awesome</span>
         <h2 className="flex-1 font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide">Ask Scripture</h2>
-        {config?.configured && (
+        {source && (
           <button
-            onClick={() => setEditingConfig((v) => !v)}
+            onClick={() => setView((v) => (v === "settings" ? "main" : "settings"))}
             className="p-1 rounded-md ghost text-on-surface-variant"
-            title="Connection settings"
-            aria-label="Connection settings"
+            title="Account and connection"
+            aria-label="Account and connection"
           >
             <span className="material-symbols-outlined text-[16px]">settings</span>
           </button>
@@ -62,8 +72,16 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
         </button>
       </div>
 
-      {config === null ? null : showSetup ? (
-        <SetupForm onDone={() => setEditingConfig(false)} canCancel={config.configured} />
+      {!loaded ? null : needsConnection ? (
+        accountStatus === "unavailable" || ownServer ? (
+          <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+            <CustomServerForm canCancel={ownServer && accountStatus !== "unavailable"} onDone={() => setOwnServer(false)} />
+          </div>
+        ) : (
+          <SignInForm onUseOwnServer={() => setOwnServer(true)} />
+        )
+      ) : view === "settings" ? (
+        <ConnectionSettings onDone={() => setView("main")} />
       ) : (
         <>
           <div className="shrink-0 p-2.5 border-b border-outline-variant">
@@ -91,12 +109,17 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
                 <span className="material-symbols-outlined text-[16px]">arrow_upward</span>
               </button>
             </div>
+            {source === "account" && quota && (
+              <p className={`mt-1.5 px-1 font-body-ui text-[11px] ${quota.remaining === 0 ? "text-error" : "text-on-surface-variant"}`}>
+                {quota.remaining} of {quota.limit} searches left today
+              </p>
+            )}
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto p-1.5">
             {phase === "idle" && <Examples onPick={(t) => { setDraft(t); ask(t); }} />}
             {phase === "loading" && <Loading />}
-            {phase === "error" && <ErrorNote message={error ?? "Something went wrong"} onRetry={() => ask(query)} />}
+            {phase === "error" && <ErrorNote message={error ?? "Something went wrong"} onRetry={quota?.remaining === 0 ? undefined : () => ask(query)} />}
             {phase === "done" && visible.length === 0 && (
               <p className="px-3 py-4 font-body-ui text-[12px] text-on-surface-variant text-center">
                 No matching verses found{primaryModule ? ` in ${primaryModule}` : ""}. Try describing it differently.
@@ -182,75 +205,11 @@ function Loading() {
   );
 }
 
-function ErrorNote({ message, onRetry }: { message: string; onRetry: () => void }) {
+function ErrorNote({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="m-2 p-3 rounded-lg bg-error-container text-on-error-container space-y-2" role="alert">
       <p className="font-body-ui text-[12px]">{message}</p>
-      <button onClick={onRetry} className="ctl rounded-md px-2.5 py-1 font-body-ui text-[12px]">Try again</button>
+      {onRetry && <button onClick={onRetry} className="ctl rounded-md px-2.5 py-1 font-body-ui text-[12px]">Try again</button>}
     </div>
-  );
-}
-
-/** Connection details for the deployed Modal endpoint (see services/scripture-search/README.md). */
-function SetupForm({ onDone, canCancel }: { onDone: () => void; canCancel: boolean }) {
-  const { config, saveConfig, clearConfig } = useAiSearchStore();
-  const [endpoint, setEndpoint] = useState(config?.endpoint ?? "");
-  const [keyId, setKeyId] = useState(config?.key_id ?? "");
-  const [secret, setSecret] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function save() {
-    setBusy(true);
-    setErr(null);
-    try {
-      await saveConfig(endpoint, keyId, secret);
-      setSecret("");
-      onDone();
-    } catch (e) {
-      setErr(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form
-      className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3"
-      onSubmit={(e) => { e.preventDefault(); save(); }}
-    >
-      <p className="font-body-ui text-[12px] text-on-surface-variant leading-relaxed">
-        Connect the search service you deployed on Modal. Setup steps are in <code className="font-metadata-mono">services/scripture-search/README.md</code>.
-      </p>
-      <label className="block">
-        <span className="field-label">Endpoint URL</span>
-        <input className="field-input" value={endpoint} onChange={(e) => setEndpoint(e.target.value)}
-          placeholder="https://your-workspace--scriptura-scripture-search-scripturesearch-search.modal.run"
-          spellCheck={false} autoComplete="off" />
-      </label>
-      <label className="block">
-        <span className="field-label">Token ID</span>
-        <input className="field-input" value={keyId} onChange={(e) => setKeyId(e.target.value)} placeholder="wk-…" spellCheck={false} autoComplete="off" />
-      </label>
-      <label className="block">
-        <span className="field-label">Token secret</span>
-        <input className="field-input" type="password" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="ws-…" spellCheck={false} autoComplete="off" />
-      </label>
-      {err && <p className="font-body-ui text-[12px] text-error" role="alert">{err}</p>}
-      <div className="flex items-center gap-2">
-        <button type="submit" disabled={busy || !endpoint.trim() || !keyId.trim() || !secret.trim()} className="btn-primary rounded-md px-3 py-1.5 font-body-ui text-[13px] font-bold disabled:opacity-40 disabled:cursor-not-allowed">
-          {busy ? "Saving…" : "Save"}
-        </button>
-        {canCancel && (
-          <>
-            <button type="button" onClick={onDone} className="ctl rounded-md px-3 py-1.5 font-body-ui text-[13px]">Cancel</button>
-            <button type="button" onClick={() => clearConfig().then(onDone)} className="ghost rounded-md px-2 py-1.5 font-body-ui text-[12px] text-error ml-auto">Disconnect</button>
-          </>
-        )}
-      </div>
-      <p className="font-body-ui text-[11px] text-on-surface-variant/80 leading-relaxed">
-        The secret is stored on this computer only, in a file readable by your user account.
-      </p>
-    </form>
   );
 }

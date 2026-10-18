@@ -34,14 +34,20 @@ modal deploy modal_app.py         # publish the endpoint
 ## Protect it
 
 The endpoint uses Modal **proxy auth**, so anyone without a token gets a 401 and can't run up your bill.
+This token belongs to *you*: it goes into the Supabase gateway's secrets (see `supabase/README.md`), never
+into the app.
 
 1. Open the Modal dashboard → **Settings → Proxy Auth Tokens** → create a token.
 2. Copy the **Token ID** (`wk-…`) and **Token Secret** (`ws-…`). The secret is shown once.
 
 ## Connect the app
 
-In Scriptura (Presentation workspace → Live Show), click **Ask** (or press `Ctrl/Cmd+Shift+K`), then
-paste the endpoint URL, Token ID and Token Secret into the setup form. They're stored in
+**For everyone else's copy of Scriptura**, set up the account gateway in `supabase/README.md`. People sign
+in with their email, and the gateway calls this service for them.
+
+**To use this service directly** (for yourself, or if you're self-hosting): in Scriptura (Presentation
+workspace → Live Show), click **Ask** (or press `Ctrl/Cmd+Shift+K`), choose "Use my own search server
+instead", then paste the endpoint URL, Token ID and Token Secret. They're stored in
 `ai_search.json` in the app's data folder, readable only by your user account. The secret never enters
 the web view; the request is made by the Rust side of the app.
 
