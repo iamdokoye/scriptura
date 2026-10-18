@@ -4,6 +4,7 @@ pub mod crossref;
 pub mod file_cache;
 pub mod lexicon;
 pub mod stepbible;
+pub mod thayer;
 
 pub use bible::BibleReader;
 #[allow(unused_imports)]

@@ -19,7 +19,7 @@ const DEFAULT_DISPLAY_PREFS: DisplayPrefs = {
 const FONT_FAMILIES: readonly FontFamily[] = ["system", "serif", "times", "mono"];
 const TEXT_ALIGNS: readonly TextAlign[] = ["left", "justify"];
 const PRESENTATION_CONTEXTS = [1, 2, 3, 4] as const;
-const LEXICON_SOURCES = ["ours", "rich", "lsj"] as const;
+const LEXICON_SOURCES = ["ours", "rich", "thayer", "lsj"] as const;
 
 /**
  * The backend's Preferences row stores font_family/text_align/presentation_context
@@ -44,7 +44,7 @@ function fromPreferences(prefs: Preferences): DisplayPrefs {
       ? (prefs.presentation_context as 1 | 2 | 3 | 4)
       : DEFAULT_DISPLAY_PREFS.presentationContext,
     defaultLexiconSource: (LEXICON_SOURCES as readonly string[]).includes(prefs.default_lexicon_source)
-      ? (prefs.default_lexicon_source as "ours" | "rich" | "lsj")
+      ? (prefs.default_lexicon_source as "ours" | "rich" | "thayer" | "lsj")
       : DEFAULT_DISPLAY_PREFS.defaultLexiconSource,
     splitLongVerses: prefs.split_long_verses,
   };

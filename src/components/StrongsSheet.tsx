@@ -418,7 +418,11 @@ interface LexiconPill {
 //   NT usage), Greek only.
 const LEXICON_PILLS: Record<"H" | "G", LexiconPill[]> = {
   H: [{ id: "TBESH", label: "BDB" }],
-  G: [{ id: "TBESG", label: "Abbott-Smith" }, { id: "TFLSJ", label: "Full LSJ" }],
+  G: [
+    { id: "TBESG", label: "Abbott-Smith" },
+    { id: "THAYER", label: "Thayer" },
+    { id: "TFLSJ", label: "Full LSJ" },
+  ],
 };
 
 /**
@@ -491,6 +495,9 @@ export default function StrongsSheet({ immediate = false }: { immediate?: boolea
   const defaultSourceFor = useCallback(
     (lang: "H" | "G"): LexiconSourceId => {
       if (displayPrefs.defaultLexiconSource === "ours") return "ours";
+      if (displayPrefs.defaultLexiconSource === "thayer") {
+        return lang === "G" ? "THAYER" : "TBESH";
+      }
       if (displayPrefs.defaultLexiconSource === "lsj") {
         return lang === "G" ? "TFLSJ" : "TBESH";
       }

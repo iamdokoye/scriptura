@@ -336,6 +336,7 @@ export default function Settings() {
                 {([
                   { id: "ours", label: "Scriptura" },
                   { id: "rich", label: "BDB / Abbott-Smith" },
+                  { id: "thayer", label: "Thayer" },
                   { id: "lsj", label: "Full LSJ" },
                 ] as const).map((opt) => (
                   <ChipButton

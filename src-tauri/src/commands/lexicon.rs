@@ -1,6 +1,6 @@
 use crate::db::Database;
 use crate::modules::ModuleRegistry;
-use crate::sword::{stepbible, LexiconReader};
+use crate::sword::{stepbible, thayer, LexiconReader};
 use crate::types::*;
 use std::sync::Arc;
 use tauri::State;
@@ -79,7 +79,13 @@ pub fn get_strongs_entry(
     db: State<'_, Arc<Database>>,
     registry: State<Arc<ModuleRegistry>>,
 ) -> std::result::Result<StrongsEntry, AppError> {
-    let mut entry = if let Some(source) = stepbible::source_for_id(&module_id) {
+    let mut entry = if module_id.eq_ignore_ascii_case("THAYER") {
+        let mut entry = thayer::get_entry(&strongs_number)?;
+        if bundled_marker_flag(&registry, &strongs_number).unwrap_or(false) {
+            entry.is_untranslated_marker = true;
+        }
+        entry
+    } else if let Some(source) = stepbible::source_for_id(&module_id) {
         let cache_dir = stepbible_cache_dir(&registry)?;
         stepbible::ensure_downloaded(&cache_dir, source)?;
         let mut entry = stepbible::get_entry(&cache_dir, source, &strongs_number)?;

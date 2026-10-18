@@ -92,7 +92,7 @@ export interface DisplayPrefs {
   /** Presentation verse context: 1=active only, 2=active+next, 3=prev+active+next, 4=full chapter scroll */
   presentationContext: 1 | 2 | 3 | 4;
   /** Which lexicon the Strong's sheet opens to by default — the pill switcher can still override per-lookup */
-  defaultLexiconSource: "ours" | "rich" | "lsj";
+  defaultLexiconSource: "ours" | "rich" | "thayer" | "lsj";
   /**
    * When true, long verses are split into labelled parts (a, b, c…) so each
    * part fits the presentation screen at the configured font size.
