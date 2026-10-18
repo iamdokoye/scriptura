@@ -2,6 +2,15 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
+## [0.1.32] - 2026-10-18
+
+### Added
+- The Live Show console now has an EasyWorship-style **Schedule | Preview | Live** layout: three columns across the top, with the verse library full-width below. Preview and Live each end in an output strip with a thumbnail of the real output screen, "Slide n of N" and previous/next arrows. Double-click a slide or a Schedule item to send it live, and the Live column's slides and arrows change the part on screen. This replaces the old Live display card, Main Output panel and "Next in queue" bar. Header buttons go icon-only below 1100 px so everything still fits the 900 px minimum width.
+
+### Fixed
+- The light/dark fade stuttered. It now cross-fades a snapshot of the old screen into the new one instead of repainting every frosted-glass layer each frame. Browsers without support for it, and people who ask their OS for reduced motion, switch instantly.
+- In the new Live Show layout the columns touched each other and the headers were cramped. The columns now have a proper gutter between them, the Preview title no longer truncates, and the Preview and Live thumbnails are the same size.
+
 ## [0.1.31] - 2026-10-11
 
 ### Added
