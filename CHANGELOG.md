@@ -9,6 +9,7 @@ All notable changes to Scriptura are listed here, newest first.
 - **Ask Scripture** in the Live Show console: a panel beside the verse list where you describe a passage, topic or feeling in plain words and get matching verses. Click a result to load it into Preview and select it. Sign in with your email (a one-time code, no password) and it searches through the Scriptura gateway, with a daily limit per account. Open it with the **Ask** button or `Mod+Shift+K`. Anyone who runs their own search server on Modal can connect it instead (`services/scripture-search/README.md`). Accounts, usage limits and the gateway live in `supabase/` (see its README).
 
 ### Changed
+- Ask Scripture checks its own answers: Claude reads the real text of each candidate verse and only passages it judges a match or related are shown, labelled in the panel. If nothing fits it says so instead of guessing, and if the check can't run the results are marked as unchecked. The search service also uses a larger embedding model (Qwen3-Embedding-4B) and matches each verse together with its neighbours, so stories can be found by describing them.
 - The Live Show search bar is now a single input with no modes. What you type decides what happens: `jn 3:16` or `v5` jumps to a verse, anything else searches the text, `/john` forces a text search for a word that is also a book name, and starting with `?` asks Ask Scripture. The icon and the tag at the right edge show what the bar decided. `Mod+K` and `Mod+L` both just focus the bar.
 
 ## [0.1.34] - 2026-10-18

@@ -42,15 +42,26 @@ function fail(status: number, error: string, message: string): Response {
   return json(status, { error, message });
 }
 
+const CONFIDENCES = new Set(["match", "related", "unverified"]);
+
+export interface Hit {
+  book: string;
+  chapter: number;
+  verse: number;
+  score: number;
+  /** How sure the service is: "match" and "related" were checked against the real text. */
+  confidence?: string;
+}
+
 /** Keeps only well-formed hits. The upstream is ours, but its answer is still just input. */
-export function cleanHits(raw: unknown): { book: string; chapter: number; verse: number; score: number }[] {
+export function cleanHits(raw: unknown): Hit[] {
   if (!raw || typeof raw !== "object") return [];
   const results = (raw as { results?: unknown }).results;
   if (!Array.isArray(results)) return [];
-  const hits = [];
+  const hits: Hit[] = [];
   for (const h of results.slice(0, MAX_TOP_K)) {
     if (!h || typeof h !== "object") continue;
-    const { book, chapter, verse, score } = h as Record<string, unknown>;
+    const { book, chapter, verse, score, confidence } = h as Record<string, unknown>;
     if (typeof book !== "string" || book.length === 0 || book.length > 40) continue;
     if (!Number.isInteger(chapter) || (chapter as number) < 1) continue;
     if (!Number.isInteger(verse) || (verse as number) < 1) continue;
@@ -59,6 +70,7 @@ export function cleanHits(raw: unknown): { book: string; chapter: number; verse:
       chapter: chapter as number,
       verse: verse as number,
       score: typeof score === "number" ? score : 0,
+      confidence: typeof confidence === "string" && CONFIDENCES.has(confidence) ? confidence : undefined,
     });
   }
   return hits;

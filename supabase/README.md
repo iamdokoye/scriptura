@@ -11,6 +11,7 @@ Scriptura app ──(signed-in session)──▶ Edge Function "search" ──�
 
 - **Sign-in** is a one-time code sent by email. There are no passwords to store or reset.
 - **The Modal token lives only in Supabase secrets.** The app never contains it, so there's nothing to extract from the download.
+- **Results carry a `confidence` label** (match, related or unchecked) from the service's accuracy check. The gateway passes it through and the app shows it.
 - **You can see your users** in the dashboard (Authentication → Users) and with the queries at the bottom of this page.
 
 | File | What it is |

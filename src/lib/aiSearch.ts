@@ -3,9 +3,16 @@ import { BIBLE_BOOKS } from "../data/books";
 import type { VerseRef } from "../store/app";
 import { getSupabase } from "./supabase";
 
+/**
+ * How sure the service is about a result. "match" and "related" were checked against the real
+ * text of the passage; "unverified" means that check couldn't run, so look before you show it.
+ */
+export type Confidence = "match" | "related" | "unverified";
+
 /** A verse the search service believes matches the question. Text comes from the user's own module. */
 export interface AiHit extends VerseRef {
   score: number;
+  confidence?: Confidence;
 }
 
 export interface AiSearchStatus {
@@ -81,14 +88,17 @@ export function sanitizeHits(raw: unknown): AiHit[] {
   const hits: AiHit[] = [];
   for (const h of raw) {
     if (!h || typeof h !== "object") continue;
-    const { book, chapter, verse, score } = h as Record<string, unknown>;
+    const { book, chapter, verse, score, confidence } = h as Record<string, unknown>;
     if (typeof book !== "string" || !BOOK_SET.has(book)) continue;
     if (!Number.isInteger(chapter) || (chapter as number) < 1) continue;
     if (!Number.isInteger(verse) || (verse as number) < 1) continue;
     const key = `${book}|${chapter}|${verse}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    hits.push({ book, chapter: chapter as number, verse: verse as number, score: typeof score === "number" ? score : 0 });
+    hits.push({
+      book, chapter: chapter as number, verse: verse as number, score: typeof score === "number" ? score : 0,
+      confidence: confidence === "match" || confidence === "related" || confidence === "unverified" ? confidence : undefined,
+    });
   }
   return hits;
 }

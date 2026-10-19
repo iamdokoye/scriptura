@@ -122,7 +122,12 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
             {phase === "error" && <ErrorNote message={error ?? "Something went wrong"} onRetry={quota?.remaining === 0 ? undefined : () => ask(query)} />}
             {phase === "done" && visible.length === 0 && (
               <p className="px-3 py-4 font-body-ui text-[12px] text-on-surface-variant text-center">
-                No matching verses found{primaryModule ? ` in ${primaryModule}` : ""}. Try describing it differently.
+                No confident match found{primaryModule ? ` in ${primaryModule}` : ""}. Try describing it differently, or search the text with / in the search bar.
+              </p>
+            )}
+            {phase === "done" && visible.some((h) => h.confidence === "unverified") && (
+              <p className="mx-1 mb-1.5 px-2.5 py-1.5 rounded-lg border border-error/40 font-body-ui text-[11px] text-error" role="note">
+                The accuracy check couldn't run, so these results are unchecked. Read each one before using it.
               </p>
             )}
             {phase === "done" && visible.length > 0 && (
@@ -145,7 +150,14 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
   );
 }
 
+const CONFIDENCE_LABEL: Record<string, { text: string; className: string; title: string }> = {
+  match: { text: "Match", className: "bg-primary/15 text-primary", title: "Checked against the passage text: this is what you described" },
+  related: { text: "Related", className: "bg-on-surface/10 text-on-surface-variant", title: "Checked: same subject, but not exactly what you described" },
+  unverified: { text: "Unchecked", className: "border border-error/50 text-error", title: "The accuracy check couldn't run. Read the verse before using it" },
+};
+
 function ResultRow({ hit, text, selected, onPick }: { hit: AiHit; text: string | undefined; selected: boolean; onPick: () => void }) {
+  const badge = hit.confidence ? CONFIDENCE_LABEL[hit.confidence] : undefined;
   return (
     <li>
       <button
@@ -155,8 +167,15 @@ function ResultRow({ hit, text, selected, onPick }: { hit: AiHit; text: string |
           selected ? "row-selected border-primary/30" : "border-transparent hover:bg-surface-container-low"
         }`}
       >
-        <span className={`font-metadata-mono text-[11px] font-bold ${selected ? "text-primary" : "text-on-surface"}`}>
-          {hit.book} {hit.chapter}:{hit.verse}
+        <span className="flex items-center gap-2">
+          <span className={`font-metadata-mono text-[11px] font-bold ${selected ? "text-primary" : "text-on-surface"}`}>
+            {hit.book} {hit.chapter}:{hit.verse}
+          </span>
+          {badge && (
+            <span title={badge.title} className={`rounded-full px-1.5 py-px font-metadata-mono text-[9px] uppercase tracking-widest ${badge.className}`}>
+              {badge.text}
+            </span>
+          )}
         </span>
         <p className="font-body-reading text-[13px] leading-snug text-on-surface-variant mt-0.5 line-clamp-3">
           {text ?? "…"}
