@@ -2,7 +2,7 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
-## [Unreleased]
+## [0.1.35] - 2026-10-21
 
 ### Added
 - **Ask Scripture Claude Gateway**: Ask Scripture no longer requires a GPU service. Searches run through a Supabase Edge Function gateway backed directly by Anthropic Claude (Haiku 5.5). Users sign in with a 6-digit email code and search without needing to configure or supply any API keys.
