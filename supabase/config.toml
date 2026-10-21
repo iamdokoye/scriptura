@@ -5,3 +5,6 @@ project_id = "scriptura"
 [functions.search]
 # Supabase checks the caller's session token before the function runs.
 verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true
