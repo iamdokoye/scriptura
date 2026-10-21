@@ -5,6 +5,11 @@ All notable changes to Scriptura are listed here, newest first.
 ## [Unreleased]
 
 ### Added
+- **Ask Scripture Claude Gateway**: Ask Scripture no longer requires a GPU service. Searches run through a Supabase Edge Function gateway backed directly by Anthropic Claude (Haiku 5.5). Users sign in with a 6-digit email code and search without needing to configure or supply any API keys.
+- **Strict KJV Database Verification**: Every reference nominated by the AI is cross-checked against the 31,102 verses in the King James Bible (`kjv_verses` in Postgres). Hallucinated books or chapters are discarded, verse numbers are clamped, and passages are checked against real scripture text before reaching the user.
+- **Privacy & Account Deletion**: Users can delete their account directly from Settings, cascading the deletion across all user data on the server. Question text is never stored in the database or logged in server telemetry.
+- **Token & Cost Tracking**: Atomically tracks token usage per user with daily plan limits and a global spend circuit breaker, with live cost estimation based on active Anthropic model rates.
+- **Advanced Connections**: Users can bring their own Anthropic Claude API key stored locally in Rust or connect to an own Modal search server.
 - **Thayer's Greek Lexicon**: Full New Testament Greek Thayer definitions bundled offline (all 5,523 Strong's numbers G1–G5624) with hierarchical sense outlines and clickable Scripture references. Select "Thayer" via the pill toggle or set it as default in Settings.
 - **Ask Scripture** in the Live Show console: a panel beside the verse list where you describe a passage, topic or feeling in plain words and get matching verses. Click a result to load it into Preview and select it. Sign in with your email (a one-time code, no password) and it searches through the Scriptura gateway, with a daily limit per account. Open it with the **Ask** button or `Mod+Shift+K`. Anyone who runs their own search server on Modal can connect it instead (`services/scripture-search/README.md`). Accounts, usage limits and the gateway live in `supabase/` (see its README).
 

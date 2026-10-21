@@ -1,134 +1,243 @@
-# Scriptura accounts and the Ask Scripture gateway (Supabase)
+# Scriptura Backend: Supabase Gateway & Database
 
-This folder is the backend for **accounts** and for **Ask Scripture** when people use it through their account:
+This directory contains the complete backend for Scriptura's **Accounts** and **Ask Scripture** ("Ask Scripture" natural-language verse finder):
 
 ```
-Scriptura app ──(signed-in session)──▶ Edge Function "search" ──▶ Modal GPU service
-                                          │  checks the session, applies the daily limit
-                                          ▼
-                                       Postgres (profiles, usage counters)
+Scriptura Desktop App ──(user session JWT)──▶ Supabase Edge Function `search` ──▶ Anthropic API (Haiku 5.5)
+                                                      │                      └─▶ (optional) Modal GPU service
+                                                      ▼
+                                   Postgres: profiles, plans, usage counters, kjv_verses
 ```
 
-- **Sign-in** is a one-time code sent by email. There are no passwords to store or reset.
-- **The Modal token lives only in Supabase secrets.** The app never contains it, so there's nothing to extract from the download.
-- **Results carry a `confidence` label** (match, related or unchecked) from the service's accuracy check. The gateway passes it through and the app shows it.
-- **You can see your users** in the dashboard (Authentication → Users) and with the queries at the bottom of this page.
+### Highlights
+- **Zero-knowledge on the client**: Users sign in with their email address (one-time code, no password). They never enter an API key or touch a console.
+- **Third-party credentials live only in Supabase secrets**: The Anthropic API key (`ANTHROPIC_API_KEY`) and optional Modal credentials never ship in the client app or enter the webview.
+- **Strict verification against ground truth**: Model nominations are cross-referenced with `kjv_verses` in Postgres to drop hallucinated books or chapters and clamp verses before a second Claude pass verifies them against the real King James text.
+- **Privacy & cost control**: The user's question text is sent in-memory over TLS to Anthropic to locate passages and is **never stored in the database, never written to function logs, and never retained by Scriptura**.
+- **Transparent cost tracking**: Token usage is captured atomically per user in `search_usage`, with live daily cost estimates computed against `model_prices`.
 
-| File | What it is |
+---
+
+## What each search costs
+
+Ask Scripture uses **Claude Haiku 5.5** by default:
+- **Input rate**: $0.10 per million tokens ($0.0000001 / token)
+- **Output rate**: $0.50 per million tokens ($0.0000005 / token)
+
+A typical search performs two small stages:
+1. **Nomination**: Haiku reads the description and nominates up to 12 candidate passages (~250 input tokens, ~80 output tokens) ≈ **$0.000065**
+2. **Verification**: Haiku reads the real KJV text of the candidates and rules `match`, `related`, or `no` (~1,200 input tokens, ~50 output tokens) ≈ **$0.000145**
+
+**Total cost per search**: **~$0.00021** (roughly **one fiftieth of a single US cent**).
+5,000 natural-language scripture searches cost approximately **$1.00**.
+
+---
+
+## Directory Structure
+
+| Path | Purpose |
 |---|---|
-| `migrations/…_accounts_and_search_usage.sql` | Profiles, per-day usage counters, limit checks, row-level security |
-| `functions/search/handler.ts` | The gateway's logic (auth check, limits, forwarding to Modal) |
-| `functions/search/index.ts` | Wires the logic to Supabase and Modal |
-| `config.toml` | CLI settings; the function requires a valid session |
+| `migrations/20261018000000_accounts_and_search_usage.sql` | Initial schema: profiles, usage tables, row-level security. |
+| `migrations/20261021000000_kjv_verses_plans_costs.sql` | KJV database table (31,102 verses), plans table, cost estimation, retention. |
+| `seed/seed_kjv.ts` | Seed script for KJV verses with canonical checksum verification. |
+| `functions/search/` | Edge Function gateway (`handler.ts` pure logic + `index.ts` Deno wiring). |
+| `functions/delete-account/` | Edge Function for privacy-compliant user deletion via Supabase Admin API. |
+| `tests/` | SQL security and migration tests via PGlite. |
+| `config.toml` | Supabase CLI project and function configuration. |
 
-## Set up
+---
 
-You need the [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) and the Modal service from `services/scripture-search` already deployed, with its proxy token.
+## Step-by-Step Runbook: Deployment & Operations
 
-### 1. Create the project and push the schema
+### 1. Create your Supabase project
+1. Go to [database.new](https://database.new) and create a new project.
+2. Note your **Project Reference ID** (e.g. `abcdefghijklmnopqrst`), located in Project Settings.
 
-Create a project at supabase.com and note its **project ref** (the part before `.supabase.co`). Then:
-
+### 2. Install CLI and link project
+Ensure you have the [Supabase CLI](https://supabase.com/docs/guides/cli) installed:
 ```bash
 supabase login
 supabase link --project-ref YOUR-PROJECT-REF
+```
+
+### 3. Push database migrations
+Apply the migrations to create `profiles`, `plans`, `search_usage`, `model_prices`, and `kjv_verses`:
+```bash
 supabase db push
 ```
 
-### 2. Make the emails send a code
+### 4. Seed the King James Bible (31,102 verses)
+Run the seed script to populate `public.kjv_verses`. It downloads the public-domain KJV dataset, formats canonical book names, strips translator markers, and asserts exactly 31,102 verses and 66 books:
 
-Dashboard → **Authentication → Emails**. Edit **both** the *Magic Link* and the *Confirm signup* templates so they include the code. A returning user gets one, a brand-new user gets the other:
-
-```html
-<h2>Your Scriptura sign-in code</h2>
-<p>Enter this code in the app: <strong>{{ .Token }}</strong></p>
+**Option A — Direct via Supabase Service Role:**
+```bash
+SUPABASE_URL="https://YOUR-PROJECT-REF.supabase.co" \
+SUPABASE_SERVICE_ROLE_KEY="ey..." \
+node --experimental-strip-types supabase/seed/seed_kjv.ts
 ```
 
-### 3. Set up real email sending (do this before launch)
+**Option B — Export and execute SQL:**
+```bash
+node --experimental-strip-types supabase/seed/seed_kjv.ts --sql-file supabase/seed/kjv_verses.sql
+supabase db query < supabase/seed/kjv_verses.sql
+```
 
-Supabase's built-in email sender allows only **2 emails per hour** for the whole project. That is fine while you test and useless for real users. Dashboard → **Authentication → Emails → SMTP Settings**: connect an email provider (Resend, Postmark, SES and similar all work) and use an address on a domain you own.
+The script prints the SHA-256 content checksum:
+```
+[seed] Parsed verses:  31102
+[seed] Canonical books: 66
+[seed] SHA-256 digest:  0849b9da4dc28fe738832c7cc38193666800e3dd45cc52453118344ba86be867
+```
 
-### 4. Give the gateway its secrets
+### 5. Configure Auth & Email (OTP One-Time Code)
 
-Use the endpoint URL and the proxy token you created for the Modal service:
+#### Email Templates
+In the Supabase Dashboard, go to **Authentication → Email Templates**:
+1. Open **Magic Link**:
+   - Subject: `Your Scriptura sign-in code`
+   - Body:
+     ```html
+     <h2>Your Scriptura sign-in code</h2>
+     <p>Enter this 6-digit code in the app to sign in:</p>
+     <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">{{ .Token }}</p>
+     <p>This code expires in 10 minutes.</p>
+     ```
+2. Open **Confirm signup**:
+   - Subject: `Confirm your Scriptura account`
+   - Body:
+     ```html
+     <h2>Welcome to Scriptura</h2>
+     <p>Enter this 6-digit code to complete sign-in:</p>
+     <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">{{ .Token }}</p>
+     ```
 
+#### Custom SMTP (Required for Production)
+> [!IMPORTANT]
+> The default Supabase email service is strictly capped at **2 emails per hour**. For real users, you must configure a custom SMTP provider (e.g. Resend, Postmark, SendGrid, or AWS SES).
+- In Dashboard, go to **Authentication → SMTP Settings**.
+- Enable **Custom SMTP** and enter your provider's host, port, username, and password.
+- Use a sender address on a verified domain you own (e.g. `auth@scriptura.app`).
+
+#### Rate Limiting & Expiry
+- In **Authentication → Rate Limits**:
+  - Email rate limit: 30 emails per hour per IP.
+  - OTP expiry: set to `600` seconds (10 minutes).
+
+### 6. Set Edge Function Secrets
+Set your Anthropic API key and configuration secrets in Supabase:
 ```bash
 supabase secrets set \
-  MODAL_URL="https://YOUR-WORKSPACE--scriptura-scripture-search-scripturesearch-search.modal.run" \
-  MODAL_KEY="wk-…" \
-  MODAL_SECRET="ws-…"
+  ANTHROPIC_API_KEY="sk-ant-api03-..." \
+  NOMINATE_MODEL="claude-haiku-5-5" \
+  VERIFY_MODEL="claude-haiku-5-5" \
+  FREE_DAILY_LIMIT=50 \
+  GLOBAL_DAILY_LIMIT=3000 \
+  SEARCH_BACKEND="claude"
 ```
 
-Optional limits (the defaults are shown):
+*(Optional: If routing to a Modal GPU deployment, set `SEARCH_BACKEND="modal"`, `MODAL_URL="..."`, `MODAL_KEY="..."`, and `MODAL_SECRET="..."`)*.
 
-```bash
-supabase secrets set FREE_DAILY_LIMIT=50 GLOBAL_DAILY_LIMIT=3000
-```
-
-`FREE_DAILY_LIMIT` is searches per user per day. `GLOBAL_DAILY_LIMIT` is the circuit breaker for everyone combined.
-
-### 5. Deploy the function
-
+### 7. Deploy Edge Functions
+Deploy the `search` gateway and `delete-account` functions:
 ```bash
 supabase functions deploy search
+supabase functions deploy delete-account
 ```
 
-### 6. Point the app at the project
+### 8. Point the Scriptura App at the Project
+Retrieve your public values from **Project Settings → API**:
+- **Project URL**: `https://YOUR-PROJECT-REF.supabase.co`
+- **Anon / Public Key**: `ey...`
 
-Dashboard → **Project Settings → API**. Copy the **Project URL** and the **anon / publishable key**. Both are public values, safe to ship. Never put the `service_role` key in the app.
+1. **Local Development**:
+   Create `.env.local` in the project root:
+   ```bash
+   VITE_SUPABASE_URL="https://YOUR-PROJECT-REF.supabase.co"
+   VITE_SUPABASE_ANON_KEY="eyJhbGciOi..."
+   ```
+   Start the app:
+   ```bash
+   npm run tauri dev
+   ```
 
-For development, copy `.env.example` to `.env.local` and fill them in, then `npm run tauri dev`.
+2. **CI / Production Builds**:
+   Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as repository variables in GitHub (**Settings → Secrets and variables → Actions → Variables**). The release workflow embeds them during `npm run build`.
 
-For release builds, add two **repository variables** in GitHub (Settings → Secrets and variables → Actions → Variables): `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. The build workflow passes them in.
+---
 
-## How the limits work
+## Key Rotation Procedure
 
-- Each search counts against the user's daily allowance (UTC day) and against the global one. If the Modal service fails, the search is given back.
-- The silent "wake the GPU" ping when the panel opens isn't a search, but it is capped (20 a day per user) so it can't be used to keep the GPU running.
-- The counters are updated in one locked database step, so two searches sent at the same instant can't both squeeze under a limit.
-- Cost is bounded on the Modal side too: `max_containers=1` in `modal_app.py` means the GPU can never cost more than one L4 running all day.
+To rotate your Anthropic API key without downtime:
+1. Create a new API key in the [Anthropic Console](https://console.anthropic.com/).
+2. Update the secret in Supabase:
+   ```bash
+   supabase secrets set ANTHROPIC_API_KEY="sk-ant-new-key-..."
+   ```
+3. Supabase automatically restarts Edge Function workers with the new environment variable within seconds.
+4. Verify by running a test search in the app.
+5. Deactivate and delete the old key in the Anthropic Console.
 
-Users can't change their own plan or counters. The app's key can only *read* a user's own profile and usage, and only the gateway can write.
+---
 
-## See your users
+## Monitoring: Users, Searches, and Costs
 
-Dashboard → **SQL Editor**:
+Run these queries in the Supabase **SQL Editor**:
 
+### Total registered accounts
 ```sql
--- how many accounts
 select count(*) as total_users from public.profiles;
-
--- sign-ups per day
-select created_at::date as day, count(*) as signups
-from public.profiles group by 1 order by 1 desc limit 30;
-
--- active users and searches per day
-select * from public.admin_daily_stats limit 30;
-
--- your heaviest users this week
-select p.email, sum(u.searches) as searches
-from public.search_usage u join public.profiles p on p.id = u.user_id
-where u.day > now()::date - 7
-group by p.email order by searches desc limit 20;
 ```
 
-The gateway stores counts, never the text of anyone's questions.
-
-## Check it from a terminal
-
-Get a session token by signing in through the app, or in the dashboard under Authentication → Users. Then:
-
-```bash
-curl -X POST "https://YOUR-PROJECT-REF.supabase.co/functions/v1/search" \
-  -H "Authorization: Bearer $USER_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "Jesus calms the storm", "top_k": 5}'
+### Active users and searches today
+```sql
+select
+  count(*) filter (where searches > 0) as active_users_today,
+  coalesce(sum(searches), 0)           as total_searches_today
+from public.search_usage
+where day = (now() at time zone 'utc')::date;
 ```
 
-A missing or invalid token returns `401`; hitting the daily limit returns `429`.
+### Daily active users, total searches, tokens, and estimated cost (Last 30 days)
+```sql
+select
+  day,
+  active_users,
+  searches,
+  input_tokens,
+  output_tokens,
+  estimated_cost_usd
+from public.admin_daily_stats
+order by day desc
+limit 30;
+```
 
-## Things to know
+### Top active users today
+```sql
+select
+  p.email,
+  p.plan,
+  u.searches,
+  u.input_tokens,
+  u.output_tokens,
+  p.last_seen_at
+from public.search_usage u
+join public.profiles p on p.id = u.user_id
+where u.day = (now() at time zone 'utc')::date
+order by u.searches desc
+limit 20;
+```
 
-- **Cold starts.** After a quiet spell the first search waits for the GPU container to boot. The function allows up to 120 seconds; Supabase's own limit is 150 seconds on the free plan.
-- **Free projects pause** after a period of inactivity, which would take sign-in down with it. Check Supabase's current rules and move to a paid plan before you have real users.
-- **Plans.** `profiles.plan` is `free` for everyone today and nothing checks it yet. When you add paid plans, the gateway can read it and raise the limit.
+---
+
+## Troubleshooting
+
+- **User receives 401 Unauthorized**:
+  - The JWT session has expired or is invalid. The app prompts the user to re-authenticate.
+- **User receives 429 Limit Exceeded**:
+  - `user_limit`: The user exceeded their plan's daily limit (50 on the free plan). Counters reset at 00:00 UTC.
+  - `global_limit`: The total searches across all users reached `GLOBAL_DAILY_LIMIT` (circuit breaker). Increase the secret if capacity allows:
+    `supabase secrets set GLOBAL_DAILY_LIMIT=5000`
+- **User receives 502 Bad Gateway / Nominate Failed**:
+  - The Anthropic API call failed or timed out. The user's search was automatically refunded by `refund_search`.
+- **Database seed row count mismatch**:
+  - If `seed_kjv.ts` fails, verify that your source file wasn't truncated. The seed requires exactly 31,102 rows across all 66 canonical books.
