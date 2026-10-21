@@ -18,6 +18,10 @@ export type AccountStatus =
 interface AccountState {
   status: AccountStatus;
   email: string | null;
+  /** The sign-in / account window (opened from the top bar or Settings). */
+  modalOpen: boolean;
+  openModal: () => void;
+  closeModal: () => void;
 
   /** Idempotent: restores any saved session and starts listening for changes. */
   init: () => Promise<void>;
@@ -32,6 +36,9 @@ let initPromise: Promise<void> | null = null;
 export const useAccountStore = create<AccountState>()((set) => ({
   status: "unknown",
   email: null,
+  modalOpen: false,
+  openModal: () => set({ modalOpen: true }),
+  closeModal: () => set({ modalOpen: false }),
 
   init: () => {
     initPromise ??= (async () => {

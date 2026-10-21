@@ -3,6 +3,7 @@ import { useAppStore, type Theme } from "../store/app";
 import { api } from "../lib/tauri";
 import ScriptureNav from "./ScriptureNav";
 import SettingsSheet from "./Settings";
+import AccountButton from "./account/AccountButton";
 
 export default function TopBar() {
   const {
@@ -157,6 +158,7 @@ export default function TopBar() {
         >
           <span className="material-symbols-outlined text-[20px]">{themeIcon}</span>
         </button>
+        <AccountButton />
         <button
           aria-label="Settings"
           onClick={() => setSettingsOpen(true)}

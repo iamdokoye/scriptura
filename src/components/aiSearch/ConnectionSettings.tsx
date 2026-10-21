@@ -3,33 +3,17 @@ import { useAccountStore } from "../../store/accountStore";
 import { useAiSearchStore } from "../../store/aiSearchStore";
 import CustomServerForm from "./CustomServerForm";
 import ClaudeSettingsForm from "./ClaudeSettingsForm";
+import AccountDetails from "../account/AccountDetails";
 
 /** Who searches run as: the signed-in account, or advanced custom options. */
 export default function ConnectionSettings({ onDone }: { onDone: () => void }) {
-  const { status, email, signOut, deleteAccount } = useAccountStore();
+  const { status, openModal } = useAccountStore();
   const { config, quota, reset } = useAiSearchStore();
   const [editingServer, setEditingServer] = useState(false);
   const [editingClaude, setEditingClaude] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
   const usingOwnServer = !!config?.configured;
   const usingClaudeKey = !!config?.claude_configured;
   const usingDirect = usingOwnServer || usingClaudeKey;
-
-  async function handleDelete() {
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      await deleteAccount();
-      reset();
-      onDone();
-    } catch (e: any) {
-      setDeleteError(e?.message ?? "Failed to delete account");
-      setDeleting(false);
-    }
-  }
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto p-3.5 space-y-5">
@@ -37,63 +21,22 @@ export default function ConnectionSettings({ onDone }: { onDone: () => void }) {
         <section className="space-y-2">
           <h3 className="field-label">Scriptura Account</h3>
           {status === "signedIn" ? (
-            <div className="space-y-2">
-              <p className="font-body-ui text-[13px] text-on-surface break-all">{email}</p>
+            <AccountDetails onGone={() => { reset(); onDone(); }}>
               {quota && !usingDirect && (
                 <p className={`font-body-ui text-[11px] ${quota.remaining === 0 ? "text-error" : "text-on-surface-variant"}`}>
                   {quota.remaining} of {quota.limit} searches left today
                 </p>
               )}
-
-              {confirmDelete ? (
-                <div className="p-3 rounded-lg border border-error/30 bg-error/10 space-y-2">
-                  <p className="font-body-ui text-[12px] font-medium text-on-surface">
-                    Are you sure you want to delete your account?
-                  </p>
-                  <p className="font-body-ui text-[11px] text-on-surface-variant leading-relaxed">
-                    This permanently deletes your profile and all search counters from the server.
-                  </p>
-                  {deleteError && (
-                    <p className="font-body-ui text-[11px] text-error font-medium">{deleteError}</p>
-                  )}
-                  <div className="flex items-center gap-2 pt-1">
-                    <button
-                      onClick={handleDelete}
-                      disabled={deleting}
-                      className="px-3 py-1 rounded bg-error text-white font-body-ui text-[11px] font-semibold hover:opacity-90 disabled:opacity-40"
-                    >
-                      {deleting ? "Deleting…" : "Yes, delete account"}
-                    </button>
-                    <button
-                      onClick={() => { setConfirmDelete(false); setDeleteError(null); }}
-                      disabled={deleting}
-                      className="px-2 py-1 rounded ghost font-body-ui text-[11px]"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    onClick={async () => { await signOut(); reset(); onDone(); }}
-                    className="ctl rounded-md px-3 py-1.5 font-body-ui text-[12px]"
-                  >
-                    Sign out
-                  </button>
-                  <button
-                    onClick={() => setConfirmDelete(true)}
-                    className="ghost text-error rounded-md px-2 py-1.5 font-body-ui text-[12px]"
-                  >
-                    Delete account
-                  </button>
-                </div>
-              )}
-            </div>
+            </AccountDetails>
           ) : (
-            <p className="font-body-ui text-[12px] text-on-surface-variant">
-              Not signed in. Connect below or sign in to use Ask Scripture.
-            </p>
+            <div className="space-y-2">
+              <p className="font-body-ui text-[12px] text-on-surface-variant">
+                Not signed in. Connect below or sign in to use Ask Scripture.
+              </p>
+              <button onClick={openModal} className="btn-primary rounded-md px-3 py-1.5 font-body-ui text-[12px] font-bold">
+                Sign in
+              </button>
+            </div>
           )}
         </section>
       )}

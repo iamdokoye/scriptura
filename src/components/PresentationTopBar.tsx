@@ -5,6 +5,7 @@ import { api } from "../lib/tauri";
 import { usePresentationOutput } from "../hooks/usePresentationOutput";
 import OutputsPanel from "./OutputsPanel";
 import SettingsSheet from "./Settings";
+import AccountButton from "./account/AccountButton";
 
 type PresentationTab = "scriptures" | "slides" | "songs";
 
@@ -185,6 +186,7 @@ export default function PresentationTopBar() {
           label={isDark ? "Switch to light mode" : "Switch to dark mode"}
           onClick={toggleTheme}
         />
+        <AccountButton />
         <IconButton icon="settings" label="Settings" active={settingsOpen} onClick={() => setSettingsOpen(true)} />
       </div>
 

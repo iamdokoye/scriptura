@@ -7,6 +7,8 @@ import { checkForUpdate, downloadAndInstall, getVersion } from "../lib/updater";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { ACCENTS, isAccentId } from "../lib/accents";
 import ClaudeSettingsForm from "./aiSearch/ClaudeSettingsForm";
+import AccountSettingsRow from "./account/AccountSettingsRow";
+import { useAccountStore } from "../store/accountStore";
 
 const FONT_SIZE_PRESETS = [14, 16, 32, 48, 64, 72, 98];
 
@@ -45,6 +47,7 @@ const FONTS: { id: DisplayPrefs["fontFamily"]; label: string }[] = [
 
 
 export default function Settings() {
+  const accountStatus = useAccountStore((s) => s.status);
   const {
     settingsOpen, setSettingsOpen,
     setTheme, setAccent, setShowStrongs, setReadingFontSize,
@@ -382,6 +385,18 @@ export default function Settings() {
               <Toggle value={displayPrefs.splitLongVerses} onChange={(v) => setDisplayPrefs({ splitLongVerses: v })} />
             </SubRow>
           </AccordionSection>
+
+          {/* ── Account ──────────────────────────────────────────────── */}
+          {accountStatus !== "unavailable" && (
+            <AccordionSection
+              id="account" icon="account_circle" label="Account"
+              open={isOpen("account")} onToggle={() => toggleSection("account")}
+            >
+              <div className="px-6 py-4">
+                <AccountSettingsRow />
+              </div>
+            </AccordionSection>
+          )}
 
           {/* ── AI Scripture Search ──────────────────────────────────── */}
           <AccordionSection

@@ -5,6 +5,7 @@ All notable changes to Scriptura are listed here, newest first.
 ## [0.1.35] - 2026-10-21
 
 ### Added
+- **Account button and sign-in window**: a Sign in button in the top bar (your initial once signed in) opens a window where you enter your email and the code we send you. It also shows who you're signed in as, with Sign out and Delete account. There is an Account row in Settings too, and the Ask Scripture panel uses the same sign-in form.
 - **Ask Scripture Claude Gateway**: Ask Scripture no longer requires a GPU service. Searches run through a Supabase Edge Function gateway backed directly by Anthropic Claude (Haiku 5.5). Users sign in with a 6-digit email code and search without needing to configure or supply any API keys.
 - **Strict KJV Database Verification**: Every reference nominated by the AI is cross-checked against the 31,102 verses in the King James Bible (`kjv_verses` in Postgres). Hallucinated books or chapters are discarded, verse numbers are clamped, and passages are checked against real scripture text before reaching the user.
 - **Privacy & Account Deletion**: Users can delete their account directly from Settings, cascading the deletion across all user data on the server. Question text is never stored in the database or logged in server telemetry.

@@ -1,17 +1,31 @@
 import { useEffect, useState } from "react";
 import { useAccountStore } from "../../store/accountStore";
-import { errorMessage } from "../../lib/aiSearch";
-import { resumePendingQuestion } from "../../store/aiSearchStore";
 
 const RESEND_SECONDS = 60; // Supabase allows one code per address per minute
 
 interface Props {
-  onUseOwnServer: () => void;
+  /** Why the person is being asked to sign in; shown above the email box. */
+  intro?: string;
+  /** Called once the code is accepted, so the caller can carry on (e.g. send a waiting question). */
+  onSignedIn?: () => void;
+  /** Alternatives to an account, offered as small links. Omit them where they don't apply. */
+  onUseOwnServer?: () => void;
   onUseClaudeKey?: () => void;
+  /** Layout classes for the form wrapper. */
+  className?: string;
+}
+
+const DEFAULT_INTRO = "We'll email you a one-time code. No password needed, and new accounts are created automatically.";
+
+function messageOf(e: unknown): string {
+  if (e instanceof Error && e.message) return e.message;
+  return typeof e === "string" && e ? e : "Something went wrong. Please try again.";
 }
 
 /** Email → one-time code. No password: the code is the whole sign-in. */
-export default function SignInForm({ onUseOwnServer, onUseClaudeKey }: Props) {
+export default function SignInForm({
+  intro = DEFAULT_INTRO, onSignedIn, onUseOwnServer, onUseClaudeKey, className = "flex-1 min-h-0 overflow-y-auto p-3 space-y-3",
+}: Props) {
   const { sendCode, verifyCode } = useAccountStore();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
@@ -38,7 +52,7 @@ export default function SignInForm({ onUseOwnServer, onUseClaudeKey }: Props) {
       setResendAt(Date.now() + RESEND_SECONDS * 1000);
       setNow(Date.now());
     } catch (e) {
-      setErr(errorMessage(e));
+      setErr(messageOf(e));
     } finally {
       setBusy(false);
     }
@@ -49,10 +63,10 @@ export default function SignInForm({ onUseOwnServer, onUseClaudeKey }: Props) {
     setErr(null);
     try {
       await verifyCode(email, code);
-      // The account store now reports signed-in, and the panel swaps this form out.
-      resumePendingQuestion();
+      // The account store now reports signed-in, and whoever shows this form swaps it out.
+      onSignedIn?.();
     } catch (e) {
-      setErr(errorMessage(e));
+      setErr(messageOf(e));
       setBusy(false);
     }
   }
@@ -62,14 +76,12 @@ export default function SignInForm({ onUseOwnServer, onUseClaudeKey }: Props) {
 
   return (
     <form
-      className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3"
+      className={className}
       onSubmit={(e) => { e.preventDefault(); if (step === "email" ? emailOk : codeOk) (step === "email" ? send : verify)(); }}
     >
       {step === "email" ? (
         <>
-          <p className="font-body-ui text-[12px] text-on-surface-variant leading-relaxed">
-            Sign in to find verses by describing them. We'll email you a code. No password needed, and new accounts are created automatically.
-          </p>
+          <p className="font-body-ui text-[12px] text-on-surface-variant leading-relaxed">{intro}</p>
           <label className="block">
             <span className="field-label">Email</span>
             <input className="field-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
@@ -112,16 +124,18 @@ export default function SignInForm({ onUseOwnServer, onUseClaudeKey }: Props) {
         )}
       </div>
 
-      <div className="pt-2 flex flex-col items-start gap-1">
+      {(onUseClaudeKey || onUseOwnServer) && <div className="pt-2 flex flex-col items-start gap-1">
         {onUseClaudeKey && (
           <button type="button" onClick={onUseClaudeKey} className="font-body-ui text-[11px] text-on-surface-variant underline underline-offset-2 hover:text-primary">
             Bring my own Claude API key instead
           </button>
         )}
-        <button type="button" onClick={onUseOwnServer} className="font-body-ui text-[11px] text-on-surface-variant underline underline-offset-2 hover:text-primary">
-          Use my own search server instead
-        </button>
-      </div>
+        {onUseOwnServer && (
+          <button type="button" onClick={onUseOwnServer} className="font-body-ui text-[11px] text-on-surface-variant underline underline-offset-2 hover:text-primary">
+            Use my own search server instead
+          </button>
+        )}
+      </div>}
     </form>
   );
 }

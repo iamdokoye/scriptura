@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppStore, type VerseRef } from "../../store/app";
-import { useAiSearchStore, activeSource } from "../../store/aiSearchStore";
+import { useAiSearchStore, activeSource, resumePendingQuestion } from "../../store/aiSearchStore";
 import { useAccountStore } from "../../store/accountStore";
 import type { AiHit } from "../../lib/aiSearch";
 import { useVerseTexts } from "./useVerseTexts";
-import SignInForm from "./SignInForm";
+import SignInForm from "../account/SignInForm";
 import CustomServerForm from "./CustomServerForm";
 import ClaudeSettingsForm from "./ClaudeSettingsForm";
 import ConnectionSettings from "./ConnectionSettings";
@@ -105,6 +105,8 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
           </div>
         ) : (
           <SignInForm
+            intro="Sign in to find verses by describing them. We'll email you a code. No password needed, and new accounts are created automatically."
+            onSignedIn={resumePendingQuestion}
             onUseOwnServer={() => setOwnOption("server")}
             onUseClaudeKey={() => setOwnOption("claude")}
           />
