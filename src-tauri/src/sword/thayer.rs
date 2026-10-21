@@ -52,7 +52,9 @@ mod tests {
         assert_eq!(entry.number, "G3444");
         assert!(entry.lemma.contains("μορφ"));
         assert!(entry.short_def.contains("form"));
-        assert!(entry.long_def.contains("the form by which a person or thing strikes the vision"));
+        assert!(entry
+            .long_def
+            .contains("the form by which a person or thing strikes the vision"));
         assert!(entry.long_def.contains("external appearance"));
         assert!(entry.long_def.contains("Origin:"));
     }

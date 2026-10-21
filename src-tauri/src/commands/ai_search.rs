@@ -20,12 +20,17 @@ pub fn normalize_claude_model(raw: &str) -> String {
     let s = raw.trim();
     let lower = s.to_lowercase();
     match lower.as_str() {
-        "haiku 5.5" | "haiku-5.5" | "haiku 5-5" | "haiku5.5" | "claude 5.5 haiku" | "claude 5.5" | "claude-haiku-5-5" => "claude-haiku-5-5".to_string(),
-        "haiku 5" | "haiku-5" | "haiku5" | "claude 5 haiku" | "claude 5" | "claude-haiku-5" => "claude-haiku-5".to_string(),
+        "haiku 5.5" | "haiku-5.5" | "haiku 5-5" | "haiku5.5" | "claude 5.5 haiku"
+        | "claude 5.5" | "claude-haiku-5-5" => "claude-haiku-5-5".to_string(),
+        "haiku 5" | "haiku-5" | "haiku5" | "claude 5 haiku" | "claude 5" | "claude-haiku-5" => {
+            "claude-haiku-5".to_string()
+        }
         "haiku 4.5" | "haiku-4.5" | "claude-haiku-4-5" => "claude-haiku-4-5".to_string(),
         "sonnet 5.5" | "sonnet-5.5" | "claude-sonnet-5-5" => "claude-sonnet-5-5".to_string(),
         // Migrate deprecated / invalid 3.5 haiku model IDs to 5.5
-        "haiku 3.5" | "haiku-3.5" | "claude-3-5-haiku-20241022" | "claude-3-5-haiku-latest" => "claude-haiku-5-5".to_string(),
+        "haiku 3.5" | "haiku-3.5" | "claude-3-5-haiku-20241022" | "claude-3-5-haiku-latest" => {
+            "claude-haiku-5-5".to_string()
+        }
         _ => {
             if s.is_empty() {
                 CLAUDE_MODEL.to_string()
@@ -175,7 +180,11 @@ pub fn claude_api_key_save(
 
     if let Some(m) = model {
         let m_trimmed = m.trim();
-        config.claude_model = if m_trimmed.is_empty() { None } else { Some(m_trimmed.to_string()) };
+        config.claude_model = if m_trimmed.is_empty() {
+            None
+        } else {
+            Some(m_trimmed.to_string())
+        };
     }
 
     let json = serde_json::to_string(&config).map_err(|e| AppError::Other(e.to_string()))?;
@@ -290,7 +299,9 @@ pub async fn ai_search_query(
     if !status.is_success() {
         return Err(match status.as_u16() {
             401 | 403 => AppError::Other("Invalid search token. Check your credentials.".into()),
-            429 => AppError::Other("The search service is busy. Please try again in a moment.".into()),
+            429 => {
+                AppError::Other("The search service is busy. Please try again in a moment.".into())
+            }
             _ => AppError::Network(format!("Search service error (HTTP {})", status)),
         });
     }
@@ -369,8 +380,12 @@ pub fn normalize_bible_book(raw: &str) -> Option<&'static str> {
         "eph" | "ephesians" => Some("Ephesians"),
         "phil" | "philippians" | "php" => Some("Philippians"),
         "col" | "colossians" => Some("Colossians"),
-        "1thess" | "1thessalonians" | "1stthessalonians" | "ithessalonians" => Some("1 Thessalonians"),
-        "2thess" | "2thessalonians" | "2ndthessalonians" | "iithessalonians" => Some("2 Thessalonians"),
+        "1thess" | "1thessalonians" | "1stthessalonians" | "ithessalonians" => {
+            Some("1 Thessalonians")
+        }
+        "2thess" | "2thessalonians" | "2ndthessalonians" | "iithessalonians" => {
+            Some("2 Thessalonians")
+        }
         "1tim" | "1timothy" | "1sttimothy" | "itimothy" => Some("1 Timothy"),
         "2tim" | "2timothy" | "2ndtimothy" | "iitimothy" => Some("2 Timothy"),
         "titus" | "tit" => Some("Titus"),
@@ -402,7 +417,10 @@ fn parse_u32_val(val: &serde_json::Value) -> Option<u32> {
     None
 }
 
-fn parse_end_verse_val(val: &serde_json::Value, start_verse_val: &serde_json::Value) -> Option<u32> {
+fn parse_end_verse_val(
+    val: &serde_json::Value,
+    start_verse_val: &serde_json::Value,
+) -> Option<u32> {
     if let Some(ev) = parse_u32_val(val) {
         return Some(ev);
     }
@@ -427,15 +445,20 @@ pub fn parse_claude_response(text: &str) -> Vec<AiHit> {
         .strip_prefix("```json")
         .or_else(|| trimmed.strip_prefix("```"))
         .unwrap_or(trimmed);
-    let cleaned = unquoted
-        .strip_suffix("```")
-        .unwrap_or(unquoted)
-        .trim();
+    let cleaned = unquoted.strip_suffix("```").unwrap_or(unquoted).trim();
 
     let json_candidate = if let (Some(s), Some(e)) = (cleaned.find('['), cleaned.rfind(']')) {
-        if s <= e { Some(&cleaned[s..=e]) } else { None }
+        if s <= e {
+            Some(&cleaned[s..=e])
+        } else {
+            None
+        }
     } else if let (Some(s), Some(e)) = (cleaned.find('{'), cleaned.rfind('}')) {
-        if s <= e { Some(&cleaned[s..=e]) } else { None }
+        if s <= e {
+            Some(&cleaned[s..=e])
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -474,7 +497,8 @@ pub fn parse_claude_response(text: &str) -> Vec<AiHit> {
                             _ => continue,
                         };
 
-                        let end_verse_val = obj.get("end_verse").unwrap_or(&serde_json::Value::Null);
+                        let end_verse_val =
+                            obj.get("end_verse").unwrap_or(&serde_json::Value::Null);
                         let end_verse = match parse_end_verse_val(end_verse_val, verse_val) {
                             Some(ev) if ev > verse => Some(ev),
                             _ => None,
@@ -504,7 +528,9 @@ pub fn parse_claude_response(text: &str) -> Vec<AiHit> {
 
     // ── Strategy 2: Fallback regex scripture citation parser ───────────────────
     // Matches references like: "Exodus 23:2", "Psalm 1:1", "Proverbs 4:14-15", "1 Corinthians 15:33"
-    let re = regex::Regex::new(r"(?i)\b([1-3]?\s*[A-Za-z]+(?:\s+of\s+[A-Za-z]+)?)\s+(\d+):(\d+)(?:[-–](\d+))?\b");
+    let re = regex::Regex::new(
+        r"(?i)\b([1-3]?\s*[A-Za-z]+(?:\s+of\s+[A-Za-z]+)?)\s+(\d+):(\d+)(?:[-–](\d+))?\b",
+    );
     if let Ok(re) = re {
         let mut score = 0.95;
         for cap in re.captures_iter(text) {
@@ -637,7 +663,10 @@ pub async fn claude_search_query(
 
     let hits = parse_claude_response(&text);
     if hits.is_empty() && !text.trim().is_empty() {
-        log::warn!("Claude search returned text but no hits were parsed: {}", text);
+        log::warn!(
+            "Claude search returned text but no hits were parsed: {}",
+            text
+        );
     }
 
     Ok(hits)
@@ -739,7 +768,10 @@ Matthew 7:13-14 is also relevant: it warns that the broad road is taken by many,
         assert_eq!(hits[1].verse, 1);
 
         // Check Proverbs 4:14-15 range
-        let prov4 = hits.iter().find(|h| h.book == "Proverbs" && h.chapter == 4).unwrap();
+        let prov4 = hits
+            .iter()
+            .find(|h| h.book == "Proverbs" && h.chapter == 4)
+            .unwrap();
         assert_eq!(prov4.verse, 14);
         assert_eq!(prov4.end_verse, Some(15));
 
@@ -753,7 +785,10 @@ Matthew 7:13-14 is also relevant: it warns that the broad road is taken by many,
     fn normalizes_claude_models() {
         assert_eq!(normalize_claude_model("haiku 5.5"), "claude-haiku-5-5");
         assert_eq!(normalize_claude_model("haiku 5"), "claude-haiku-5");
-        assert_eq!(normalize_claude_model("claude-3-5-haiku-20241022"), "claude-haiku-5-5");
+        assert_eq!(
+            normalize_claude_model("claude-3-5-haiku-20241022"),
+            "claude-haiku-5-5"
+        );
         assert_eq!(normalize_claude_model(""), "claude-haiku-5-5");
     }
 }
