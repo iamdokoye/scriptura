@@ -34,3 +34,8 @@ __pycache__/
 # Logs
 *.log
 npm-debug.log*
+
+# Supabase generated / temp
+supabase/.temp/
+supabase/seed/*.sql
+supabase/.env.local
