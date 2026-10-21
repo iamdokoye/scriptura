@@ -24,6 +24,7 @@ interface AccountState {
   sendCode: (email: string) => Promise<void>;
   verifyCode: (email: string, code: string) => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 let initPromise: Promise<void> | null = null;
@@ -70,6 +71,21 @@ export const useAccountStore = create<AccountState>()((set) => ({
     const supabase = getSupabase();
     if (!supabase) return;
     // "local" ends this device's session without signing the account out everywhere.
+    await supabase.auth.signOut({ scope: "local" });
+  },
+
+  deleteAccount: async () => {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error("Accounts aren't available in this build.");
+    const { error } = await supabase.functions.invoke("delete-account");
+    if (error) {
+      const ctx = (error as { context?: unknown }).context;
+      if (ctx instanceof Response) {
+        const body = (await ctx.json().catch(() => null)) as { message?: unknown } | null;
+        if (typeof body?.message === "string") throw new Error(body.message);
+      }
+      throw new Error("Couldn't delete account. Please try again.");
+    }
     await supabase.auth.signOut({ scope: "local" });
   },
 }));

@@ -6,6 +6,7 @@ import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import { checkForUpdate, downloadAndInstall, getVersion } from "../lib/updater";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { ACCENTS, isAccentId } from "../lib/accents";
+import ClaudeSettingsForm from "./aiSearch/ClaudeSettingsForm";
 
 const FONT_SIZE_PRESETS = [14, 16, 32, 48, 64, 72, 98];
 
@@ -380,6 +381,16 @@ export default function Settings() {
             >
               <Toggle value={displayPrefs.splitLongVerses} onChange={(v) => setDisplayPrefs({ splitLongVerses: v })} />
             </SubRow>
+          </AccordionSection>
+
+          {/* ── AI Scripture Search ──────────────────────────────────── */}
+          <AccordionSection
+            id="ai-search" icon="auto_awesome" label="AI Scripture Search"
+            open={isOpen("ai-search")} onToggle={() => toggleSection("ai-search")}
+          >
+            <div className="px-6 py-4">
+              <ClaudeSettingsForm />
+            </div>
           </AccordionSection>
 
           {/* ── Sync & Backup ────────────────────────────────────────── */}

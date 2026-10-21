@@ -41,7 +41,10 @@ export default function AiSearchDock({ onNavigate, activeRef }: Props) {
   return (
     <>
       <ResizeHandle axis="x" label="Ask Scripture" dragging={width.dragging} handleProps={width.handleProps} />
-      <aside style={{ width: width.size }} className="shrink-0 min-h-0 my-1 mr-1 rounded-2xl overflow-hidden border border-outline-variant bg-surface-container-lowest/60">
+      <aside
+        style={{ width: width.size }}
+        className="shrink-0 h-full min-h-0 flex flex-col border-l border-outline-variant bg-surface-container-lowest/60 overflow-hidden"
+      >
         <ErrorBoundary compact label="Ask Scripture">
           <AiSearchPanel onNavigate={onNavigate} activeRef={activeRef} onClose={() => setOpen(false)} />
         </ErrorBoundary>

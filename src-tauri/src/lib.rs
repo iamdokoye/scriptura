@@ -174,6 +174,10 @@ pub fn run() {
             commands::ai_search_configure,
             commands::ai_search_clear,
             commands::ai_search_query,
+            commands::claude_api_key_status,
+            commands::claude_api_key_save,
+            commands::claude_api_key_clear,
+            commands::claude_search_query,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -5,8 +5,13 @@ import { resumePendingQuestion } from "../../store/aiSearchStore";
 
 const RESEND_SECONDS = 60; // Supabase allows one code per address per minute
 
+interface Props {
+  onUseOwnServer: () => void;
+  onUseClaudeKey?: () => void;
+}
+
 /** Email → one-time code. No password: the code is the whole sign-in. */
-export default function SignInForm({ onUseOwnServer }: { onUseOwnServer: () => void }) {
+export default function SignInForm({ onUseOwnServer, onUseClaudeKey }: Props) {
   const { sendCode, verifyCode } = useAccountStore();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
@@ -107,9 +112,16 @@ export default function SignInForm({ onUseOwnServer }: { onUseOwnServer: () => v
         )}
       </div>
 
-      <button type="button" onClick={onUseOwnServer} className="font-body-ui text-[11px] text-on-surface-variant underline underline-offset-2 hover:text-primary">
-        Use my own search server instead
-      </button>
+      <div className="pt-2 flex flex-col items-start gap-1">
+        {onUseClaudeKey && (
+          <button type="button" onClick={onUseClaudeKey} className="font-body-ui text-[11px] text-on-surface-variant underline underline-offset-2 hover:text-primary">
+            Bring my own Claude API key instead
+          </button>
+        )}
+        <button type="button" onClick={onUseOwnServer} className="font-body-ui text-[11px] text-on-surface-variant underline underline-offset-2 hover:text-primary">
+          Use my own search server instead
+        </button>
+      </div>
     </form>
   );
 }

@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppStore, type VerseRef } from "../../store/app";
-import { useAiSearchStore } from "../../store/aiSearchStore";
+import { useAiSearchStore, activeSource } from "../../store/aiSearchStore";
 import { useAccountStore } from "../../store/accountStore";
 import type { AiHit } from "../../lib/aiSearch";
 import { useVerseTexts } from "./useVerseTexts";
 import SignInForm from "./SignInForm";
 import CustomServerForm from "./CustomServerForm";
+import ClaudeSettingsForm from "./ClaudeSettingsForm";
 import ConnectionSettings from "./ConnectionSettings";
 
 const EXAMPLES = [
+  "man and woman that lied in church and died for it",
   "Jesus calms the storm",
   "what to do when I'm afraid",
   "forgiving someone who hurt me",
-  "the parable of the lost sheep",
 ];
 
 interface Props {
@@ -28,22 +29,36 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
   const { config, phase, query, hits, error, quota, ask, ensureReady, warmUp } = useAiSearchStore();
   const accountStatus = useAccountStore((s) => s.status);
   const primaryModule = useAppStore((s) => s.primaryModule);
+
   const [draft, setDraft] = useState(query);
   const [view, setView] = useState<"main" | "settings">("main");
-  const [ownServer, setOwnServer] = useState(false); // sign-in screen: show the own-server form instead
+  const [ownOption, setOwnOption] = useState<"server" | "claude" | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => { ensureReady(); }, [ensureReady]);
+  useEffect(() => {
+    ensureReady();
+  }, [ensureReady]);
 
-  // Neither an own server nor an account yet → the person has to connect one first.
+  const source = activeSource();
   const loaded = config !== null && accountStatus !== "unknown";
-  const source = config?.configured ? "custom" : accountStatus === "signedIn" ? "account" : null;
   const needsConnection = loaded && !source;
 
-  useEffect(() => { if (source) warmUp(); }, [source, warmUp]);
+  useEffect(() => {
+    if (source === "account" || source === "custom") {
+      warmUp();
+    }
+  }, [source, warmUp]);
+
   // `ask` from the search bar's "?" prefix changes the stored query; show it here.
-  useEffect(() => { setDraft(query); }, [query]);
-  useEffect(() => { if (source && view === "main") inputRef.current?.focus(); }, [source, view]);
+  useEffect(() => {
+    setDraft(query);
+  }, [query]);
+
+  useEffect(() => {
+    if (source && view === "main") {
+      inputRef.current?.focus();
+    }
+  }, [source, view]);
 
   const { texts, missing, keyOf } = useVerseTexts(hits, primaryModule);
   const visible = hits.filter((h) => !missing.has(keyOf(h)));
@@ -56,29 +71,43 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
     <div className="h-full flex flex-col overflow-hidden">
       <div className="shrink-0 flex items-center gap-2 px-3.5 py-2.5 border-b border-outline-variant">
         <span className="material-symbols-outlined text-[18px] text-primary">auto_awesome</span>
-        <h2 className="flex-1 font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide">Ask Scripture</h2>
+        <h2 className="flex-1 font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide">
+          Ask Scripture
+        </h2>
         {source && (
           <button
             onClick={() => setView((v) => (v === "settings" ? "main" : "settings"))}
-            className="p-1 rounded-md ghost text-on-surface-variant"
-            title="Account and connection"
-            aria-label="Account and connection"
+            className="p-1 rounded-md ghost text-on-surface-variant hover:text-on-surface"
+            title="Account & connections"
+            aria-label="Account & connections"
           >
             <span className="material-symbols-outlined text-[16px]">settings</span>
           </button>
         )}
-        <button onClick={onClose} className="p-1 rounded-md ghost text-on-surface-variant" title="Close" aria-label="Close Ask Scripture">
+        <button
+          onClick={onClose}
+          className="p-1 rounded-md ghost text-on-surface-variant hover:text-on-surface"
+          title="Close"
+          aria-label="Close Ask Scripture"
+        >
           <span className="material-symbols-outlined text-[16px]">close</span>
         </button>
       </div>
 
       {!loaded ? null : needsConnection ? (
-        accountStatus === "unavailable" || ownServer ? (
-          <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
-            <CustomServerForm canCancel={ownServer && accountStatus !== "unavailable"} onDone={() => setOwnServer(false)} />
+        ownOption === "server" ? (
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5">
+            <CustomServerForm canCancel onDone={() => setOwnOption(null)} />
+          </div>
+        ) : ownOption === "claude" ? (
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5">
+            <ClaudeSettingsForm canCancel onDone={() => setOwnOption(null)} />
           </div>
         ) : (
-          <SignInForm onUseOwnServer={() => setOwnServer(true)} />
+          <SignInForm
+            onUseOwnServer={() => setOwnOption("server")}
+            onUseClaudeKey={() => setOwnOption("claude")}
+          />
         )
       ) : view === "settings" ? (
         <ConnectionSettings onDone={() => setView("main")} />
@@ -92,8 +121,12 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
-                  else if (e.key === "Escape") onClose();
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    submit();
+                  } else if (e.key === "Escape") {
+                    onClose();
+                  }
                 }}
                 placeholder="Describe what you're looking for…"
                 maxLength={500}
@@ -109,25 +142,45 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
                 <span className="material-symbols-outlined text-[16px]">arrow_upward</span>
               </button>
             </div>
+
             {source === "account" && quota && (
-              <p className={`mt-1.5 px-1 font-body-ui text-[11px] ${quota.remaining === 0 ? "text-error" : "text-on-surface-variant"}`}>
+              <p
+                className={`mt-1.5 px-1 font-body-ui text-[11px] ${
+                  quota.remaining === 0 ? "text-error font-medium" : "text-on-surface-variant"
+                }`}
+              >
                 {quota.remaining} of {quota.limit} searches left today
+              </p>
+            )}
+            {source === "claude" && (
+              <p className="mt-1.5 px-1 font-body-ui text-[11px] text-on-surface-variant flex items-center gap-1">
+                <span className="material-symbols-outlined text-[12px] text-primary">auto_awesome</span>
+                Using Claude ({config?.claude_model || "claude-haiku-5-5"}) · KJV
+              </p>
+            )}
+            {source === "custom" && (
+              <p className="mt-1.5 px-1 font-body-ui text-[11px] text-on-surface-variant truncate">
+                Server: {config?.endpoint}
               </p>
             )}
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto p-1.5">
-            {phase === "idle" && <Examples onPick={(t) => { setDraft(t); ask(t); }} />}
-            {phase === "loading" && <Loading />}
-            {phase === "error" && <ErrorNote message={error ?? "Something went wrong"} onRetry={quota?.remaining === 0 ? undefined : () => ask(query)} />}
-            {phase === "done" && visible.length === 0 && (
-              <p className="px-3 py-4 font-body-ui text-[12px] text-on-surface-variant text-center">
-                No confident match found{primaryModule ? ` in ${primaryModule}` : ""}. Try describing it differently, or search the text with / in the search bar.
-              </p>
+            {phase === "idle" && (
+              <Examples
+                onPick={(t) => {
+                  setDraft(t);
+                  ask(t);
+                }}
+              />
             )}
-            {phase === "done" && visible.some((h) => h.confidence === "unverified") && (
-              <p className="mx-1 mb-1.5 px-2.5 py-1.5 rounded-lg border border-error/40 font-body-ui text-[11px] text-error" role="note">
-                The accuracy check couldn't run, so these results are unchecked. Read each one before using it.
+            {phase === "loading" && <Loading />}
+            {phase === "error" && (
+              <ErrorNote message={error ?? "Something went wrong"} onRetry={() => ask(query)} />
+            )}
+            {phase === "done" && visible.length === 0 && (
+              <p className="px-3 py-6 font-body-ui text-[12px] text-on-surface-variant text-center">
+                No confident match found{primaryModule ? ` in ${primaryModule}` : ""}. Try describing it differently, or search the text with / in the search bar.
               </p>
             )}
             {phase === "done" && visible.length > 0 && (
@@ -137,7 +190,11 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
                     key={keyOf(h)}
                     hit={h}
                     text={texts.get(keyOf(h))}
-                    selected={h.book === activeRef.book && h.chapter === activeRef.chapter && h.verse === activeRef.verse}
+                    selected={
+                      h.book === activeRef.book &&
+                      h.chapter === activeRef.chapter &&
+                      h.verse === activeRef.verse
+                    }
                     onPick={() => onNavigate({ book: h.book, chapter: h.chapter, verse: h.verse })}
                   />
                 ))}
@@ -150,36 +207,59 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
   );
 }
 
-const CONFIDENCE_LABEL: Record<string, { text: string; className: string; title: string }> = {
-  match: { text: "Match", className: "bg-primary/15 text-primary", title: "Checked against the passage text: this is what you described" },
-  related: { text: "Related", className: "bg-on-surface/10 text-on-surface-variant", title: "Checked: same subject, but not exactly what you described" },
-  unverified: { text: "Unchecked", className: "border border-error/50 text-error", title: "The accuracy check couldn't run. Read the verse before using it" },
-};
+function ResultRow({
+  hit,
+  text,
+  selected,
+  onPick,
+}: {
+  hit: AiHit;
+  text: string | undefined;
+  selected: boolean;
+  onPick: () => void;
+}) {
+  const refLabel = `${hit.book} ${hit.chapter}:${hit.verse}${
+    hit.endVerse && hit.endVerse !== hit.verse ? `-${hit.endVerse}` : ""
+  }`;
 
-function ResultRow({ hit, text, selected, onPick }: { hit: AiHit; text: string | undefined; selected: boolean; onPick: () => void }) {
-  const badge = hit.confidence ? CONFIDENCE_LABEL[hit.confidence] : undefined;
   return (
     <li>
       <button
         onClick={onPick}
-        title="Open in Preview"
-        className={`w-full text-left px-2.5 py-2 rounded-lg border transition-colors ${
-          selected ? "row-selected border-primary/30" : "border-transparent hover:bg-surface-container-low"
+        className={`w-full text-left p-2 rounded-lg transition-colors flex flex-col gap-1 ${
+          selected
+            ? "bg-primary/15 border border-primary/40"
+            : "hover:bg-surface-container-high border border-transparent"
         }`}
       >
-        <span className="flex items-center gap-2">
-          <span className={`font-metadata-mono text-[11px] font-bold ${selected ? "text-primary" : "text-on-surface"}`}>
-            {hit.book} {hit.chapter}:{hit.verse}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="font-metadata-mono text-[12px] font-bold text-primary">{refLabel}</span>
+            {hit.confidence === "match" && (
+              <span className="px-1 py-0.2 rounded text-[9px] font-metadata-mono font-semibold bg-primary/15 text-primary border border-primary/30 uppercase tracking-wider">
+                Match
+              </span>
+            )}
+            {hit.confidence === "related" && (
+              <span className="px-1 py-0.2 rounded text-[9px] font-metadata-mono font-semibold bg-surface-container-highest text-on-surface-variant border border-outline-variant uppercase tracking-wider">
+                Related
+              </span>
+            )}
+            {hit.confidence === "unverified" && (
+              <span className="px-1 py-0.2 rounded text-[9px] font-metadata-mono font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase tracking-wider">
+                Unchecked
+              </span>
+            )}
+          </div>
+          <span className="font-metadata-mono text-[10px] text-on-surface-variant/70">
+            {Math.round(hit.score * 100)}%
           </span>
-          {badge && (
-            <span title={badge.title} className={`rounded-full px-1.5 py-px font-metadata-mono text-[9px] uppercase tracking-widest ${badge.className}`}>
-              {badge.text}
-            </span>
-          )}
-        </span>
-        <p className="font-body-reading text-[13px] leading-snug text-on-surface-variant mt-0.5 line-clamp-3">
-          {text ?? "…"}
-        </p>
+        </div>
+        {text && (
+          <p className="font-body-ui text-[11px] text-on-surface-variant line-clamp-2 leading-snug">
+            {text}
+          </p>
+        )}
       </button>
     </li>
   );
@@ -187,14 +267,18 @@ function ResultRow({ hit, text, selected, onPick }: { hit: AiHit; text: string |
 
 function Examples({ onPick }: { onPick: (text: string) => void }) {
   return (
-    <div className="px-2 py-3 space-y-2">
-      <p className="font-body-ui text-[12px] text-on-surface-variant leading-relaxed">
-        Describe a passage, a topic or a feeling in your own words. Click a result to load it into Preview.
+    <div className="p-2 space-y-1.5">
+      <p className="px-1 text-[11px] font-body-ui text-on-surface-variant uppercase tracking-wider font-semibold">
+        Try asking
       </p>
-      <div className="flex flex-wrap gap-1.5">
-        {EXAMPLES.map((t) => (
-          <button key={t} onClick={() => onPick(t)} className="ctl rounded-full px-2.5 py-1 font-body-ui text-[11px] text-on-surface">
-            {t}
+      <div className="flex flex-col gap-1">
+        {EXAMPLES.map((ex) => (
+          <button
+            key={ex}
+            onClick={() => onPick(ex)}
+            className="text-left px-2.5 py-1.5 rounded-md text-[12px] font-body-ui text-on-surface hover:bg-surface-container-high transition-colors"
+          >
+            “{ex}”
           </button>
         ))}
       </div>
@@ -203,32 +287,26 @@ function Examples({ onPick }: { onPick: (text: string) => void }) {
 }
 
 function Loading() {
-  // The first question after a quiet spell can wait on a GPU container starting up.
-  const [slow, setSlow] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setSlow(true), 4000);
-    return () => clearTimeout(t);
-  }, []);
   return (
-    <div className="px-3 py-4 space-y-3" role="status">
-      <p className="font-body-ui text-[12px] text-on-surface-variant flex items-center gap-2">
-        <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
-        Searching Scripture…
-      </p>
-      {slow && (
-        <p className="font-body-ui text-[11px] text-on-surface-variant/80 leading-relaxed">
-          The search service is waking up after a quiet spell. This can take up to a minute the first time.
-        </p>
-      )}
+    <div className="p-6 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
+      <span className="material-symbols-outlined animate-spin text-[24px] text-primary">
+        progress_activity
+      </span>
+      <p className="font-body-ui text-[12px]">Searching scripture…</p>
     </div>
   );
 }
 
 function ErrorNote({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="m-2 p-3 rounded-lg bg-error-container text-on-error-container space-y-2" role="alert">
-      <p className="font-body-ui text-[12px]">{message}</p>
-      {onRetry && <button onClick={onRetry} className="ctl rounded-md px-2.5 py-1 font-body-ui text-[12px]">Try again</button>}
+    <div className="p-4 flex flex-col items-center gap-2 text-center">
+      <span className="material-symbols-outlined text-[24px] text-error">error</span>
+      <p className="font-body-ui text-[12px] text-error">{message}</p>
+      {onRetry && (
+        <button onClick={onRetry} className="ctl rounded-md px-3 py-1 font-body-ui text-[12px] mt-1">
+          Try again
+        </button>
+      )}
     </div>
   );
 }

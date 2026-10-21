@@ -1,49 +1,38 @@
 import { create } from "zustand";
 import {
-  aiSearchApi, AiSearchError, errorMessage, sanitizeHits, searchViaAccount,
-  type AiHit, type AiSearchStatus, type Quota,
+  aiSearchApi, claudeApi, searchViaAccount, errorMessage, sanitizeHits,
+  AiSearchError, type AiHit, type AiSearchStatus, type Quota,
 } from "../lib/aiSearch";
 import { useAccountStore } from "./accountStore";
 
-/**
- * State for natural-language scripture search, kept out of the app-wide store: the
- * panel, the search bar's "?" prefix and the toolbar button all talk to this one
- * feature, and nothing else in the app needs to know it exists.
- *
- * A search goes one of two ways. A person who connected their own server (the advanced
- * option) uses that. Everyone else uses their Scriptura account, whose gateway holds the
- * Modal credentials so no key ever ships in the app.
- */
-
-// A Modal container stays up a few minutes after its last request (see modal_app.py),
-// so one warm-up ping per this interval keeps the first real question fast.
-const WARM_INTERVAL_MS = 4 * 60 * 1000;
-
 type Phase = "idle" | "loading" | "done" | "error";
-export type SearchSource = "custom" | "account";
+
+export type SearchSource = "claude" | "custom" | "account";
+
+const WARM_INTERVAL_MS = 60_000;
 
 interface AiSearchState {
   open: boolean;
-  /** Own-server connection. null until the first status check completes. */
   config: AiSearchStatus | null;
   query: string;
   phase: Phase;
   hits: AiHit[];
   error: string | null;
-  /** Searches left today, when searching through an account. */
   quota: Quota | null;
 
   setOpen: (open: boolean) => void;
   toggle: () => void;
   /** Opens the panel and runs `query` (or just opens it when empty). */
   ask: (query: string) => void;
-  /** Loads the saved own-server config and the account session; safe to call repeatedly. */
+  /** Loads the saved config and inits account store; safe to call repeatedly. */
   ensureReady: () => Promise<void>;
   saveConfig: (endpoint: string, keyId: string, keySecret: string) => Promise<void>;
   clearConfig: () => Promise<void>;
-  /** Forget results and errors (after signing out, for instance). */
+  saveClaudeKey: (apiKey: string, model?: string) => Promise<void>;
+  clearClaudeKey: () => Promise<void>;
+  /** Forget results and errors. */
   reset: () => void;
-  /** Fire-and-forget ping so the GPU container is loaded before the first question. */
+  /** Silent ping to check quota / warm up gateway. */
   warmUp: () => void;
 }
 
@@ -52,16 +41,22 @@ let latest = 0;
 let lastWarm = 0;
 let readyPromise: Promise<void> | null = null;
 
-/** Which route a search would take right now, or null when neither is set up. */
+/**
+ * Which route a search would take right now, or null when neither is set up.
+ * Priority: a connected own server or own Anthropic key (advanced, deliberate) first,
+ * otherwise the signed-in account.
+ */
 export function activeSource(): SearchSource | null {
-  if (useAiSearchStore.getState().config?.configured) return "custom";
+  const config = useAiSearchStore.getState().config;
+  if (config?.claude_configured) return "claude";
+  if (config?.configured) return "custom";
   if (useAccountStore.getState().status === "signedIn") return "account";
   return null;
 }
 
 /**
  * A question asked before the person was signed in or connected waits in the prompt box.
- * The connect forms call this once they succeed, to send it.
+ * The connect forms call this once they succeed, to send it immediately.
  */
 export function resumePendingQuestion() {
   const { query, phase, hits, ask } = useAiSearchStore.getState();
@@ -69,7 +64,13 @@ export function resumePendingQuestion() {
 }
 
 async function runSearch(source: SearchSource, query: string): Promise<{ hits: unknown; quota?: Quota }> {
-  return source === "custom" ? { hits: await aiSearchApi.query(query) } : searchViaAccount(query);
+  if (source === "claude") {
+    return { hits: await claudeApi.query(query) };
+  }
+  if (source === "custom") {
+    return { hits: await aiSearchApi.query(query) };
+  }
+  return searchViaAccount(query);
 }
 
 export const useAiSearchStore = create<AiSearchState>()((set, get) => ({
@@ -96,8 +97,6 @@ export const useAiSearchStore = create<AiSearchState>()((set, get) => ({
       await get().ensureReady();
       if (id !== latest) return;
 
-      // Not signed in or connected: the panel shows the sign-in form. The question
-      // stays in the prompt box, ready for when that's done.
       const source = activeSource();
       if (!source) return;
 
@@ -105,8 +104,8 @@ export const useAiSearchStore = create<AiSearchState>()((set, get) => ({
       try {
         const { hits, quota } = await runSearch(source, query);
         if (id !== latest) return;
-        lastWarm = Date.now(); // the service just answered, so it's warm
-        set({ phase: "done", hits: sanitizeHits(hits), quota: quota ?? null });
+        lastWarm = Date.now();
+        set({ phase: "done", hits: sanitizeHits(hits), quota: quota ?? get().quota });
       } catch (e) {
         if (id !== latest) return;
         set({
@@ -122,8 +121,20 @@ export const useAiSearchStore = create<AiSearchState>()((set, get) => ({
   ensureReady: () => {
     readyPromise ??= (async () => {
       const loadConfig = aiSearchApi.status()
-        .then((config) => set({ config }))
-        .catch(() => set({ config: { configured: false, endpoint: "", key_id: "" } }));
+        .then((config) => {
+          set({ config });
+        })
+        .catch(() => {
+          set({
+            config: {
+              configured: false,
+              endpoint: "",
+              key_id: "",
+              claude_configured: false,
+              claude_model: "claude-haiku-5-5",
+            },
+          });
+        });
       await Promise.all([loadConfig, useAccountStore.getState().init()]);
     })();
     return readyPromise;
@@ -132,13 +143,24 @@ export const useAiSearchStore = create<AiSearchState>()((set, get) => ({
   saveConfig: async (endpoint, keyId, keySecret) => {
     const config = await aiSearchApi.configure(endpoint, keyId, keySecret);
     lastWarm = 0;
-    set({ config, phase: "idle", error: null }); // drop any error from the old credentials
+    set({ config, phase: "idle", error: null });
   },
 
   clearConfig: async () => {
-    await aiSearchApi.clear();
-    latest++; // abandon anything still in flight against the old credentials
-    set({ config: { configured: false, endpoint: "", key_id: "" }, phase: "idle", hits: [], error: null, query: "" });
+    const config = await aiSearchApi.clear();
+    latest++;
+    set({ config, phase: "idle", hits: [], error: null, query: "" });
+  },
+
+  saveClaudeKey: async (apiKey: string, model?: string) => {
+    const config = await claudeApi.save(apiKey, model);
+    set({ config, phase: "idle", error: null });
+  },
+
+  clearClaudeKey: async () => {
+    const config = await claudeApi.clear();
+    latest++;
+    set({ config, phase: "idle", hits: [], error: null, query: "" });
   },
 
   reset: () => {
@@ -149,11 +171,15 @@ export const useAiSearchStore = create<AiSearchState>()((set, get) => ({
 
   warmUp: () => {
     const source = activeSource();
-    if (!source) return;
+    if (!source || source === "claude") return;
     if (Date.now() - lastWarm < WARM_INTERVAL_MS) return;
     lastWarm = Date.now();
-    runSearch(source, "").catch(() => {
-      lastWarm = 0; // failed; let the next open try again
-    });
+    runSearch(source, "")
+      .then(({ quota }) => {
+        if (quota) set({ quota });
+      })
+      .catch(() => {
+        lastWarm = 0;
+      });
   },
 }));

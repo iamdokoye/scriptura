@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { api } from "../../lib/tauri";
 import type { AiHit } from "../../lib/aiSearch";
 
-const keyOf = (h: { book: string; chapter: number; verse: number }) => `${h.book}|${h.chapter}|${h.verse}`;
+const keyOf = (h: { book: string; chapter: number; verse: number; endVerse?: number }) =>
+  `${h.book}|${h.chapter}|${h.verse}|${h.endVerse ?? ""}`;
 
 /**
  * Looks up each hit's text in the user's own Bible module. The search service only returns
@@ -36,8 +37,19 @@ export function useVerseTexts(hits: AiHit[], module: string | null) {
           setTexts((prev) => {
             const next = new Map(prev);
             for (const h of group) {
-              const t = byVerse.get(h.verse);
-              if (t !== undefined) next.set(keyOf(h), t);
+              if (h.endVerse && h.endVerse > h.verse) {
+                let combined = "";
+                for (let v = h.verse; v <= h.endVerse; v++) {
+                  const vt = byVerse.get(v);
+                  if (vt !== undefined) {
+                    combined += (combined ? " " : "") + `${v} ${vt}`;
+                  }
+                }
+                if (combined) next.set(keyOf(h), combined);
+              } else {
+                const t = byVerse.get(h.verse);
+                if (t !== undefined) next.set(keyOf(h), t);
+              }
             }
             return next;
           });

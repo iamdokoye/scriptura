@@ -54,3 +54,34 @@ export function findBooks(prefix: string): string[] {
 
   return prefixMatches;
 }
+
+const BOOK_ALIAS_MAP: Record<string, string> = {
+  psalm: "Psalms",
+  psalms: "Psalms",
+  songofsongs: "Song of Solomon",
+  songofsolomon: "Song of Solomon",
+  canticles: "Song of Solomon",
+  revelations: "Revelation",
+  revelation: "Revelation",
+};
+
+/**
+ * Normalizes user- or AI-provided book names (like "Psalm", "Song of Songs",
+ * "Revelations", "1Cor", etc.) into canonical KJV book names.
+ */
+export function normalizeBookName(raw: string): string | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  const lower = s.toLowerCase();
+  const compact = lower.replace(/[^a-z0-9]/g, "");
+  if (BOOK_ALIAS_MAP[compact]) return BOOK_ALIAS_MAP[compact];
+  for (const b of BIBLE_BOOKS) {
+    if (b.toLowerCase() === lower || b.toLowerCase().replace(/[^a-z0-9]/g, "") === compact) {
+      return b;
+    }
+  }
+  const matches = findBooks(s);
+  if (matches.length === 1) return matches[0];
+  return null;
+}
+
