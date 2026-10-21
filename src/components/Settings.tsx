@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAppStore, type DisplayPrefs } from "../store/app";
 import { api, type Preferences } from "../lib/tauri";
@@ -7,7 +7,7 @@ import { checkForUpdate, downloadAndInstall, getVersion } from "../lib/updater";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { ACCENTS, isAccentId } from "../lib/accents";
 import ClaudeSettingsForm from "./aiSearch/ClaudeSettingsForm";
-import AccountSettingsRow from "./account/AccountSettingsRow";
+import AccountPanel from "./account/AccountPanel";
 import { useAccountStore } from "../store/accountStore";
 
 const FONT_SIZE_PRESETS = [14, 16, 32, 48, 64, 72, 98];
@@ -48,6 +48,9 @@ const FONTS: { id: DisplayPrefs["fontFamily"]; label: string }[] = [
 
 export default function Settings() {
   const accountStatus = useAccountStore((s) => s.status);
+  const planId = useAccountStore((s) => s.summary?.plan);
+  const [active, setActive] = useState("account");
+  const [appVersion, setAppVersion] = useState("");
   const {
     settingsOpen, setSettingsOpen,
     setTheme, setAccent, setShowStrongs, setReadingFontSize,
@@ -65,6 +68,8 @@ export default function Settings() {
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const rafRef = useRef<number | null>(null);
+
+  useEffect(() => { getVersion().then(setAppVersion).catch(() => {}); }, []);
 
   useEffect(() => {
     if (settingsOpen) {
@@ -113,31 +118,77 @@ export default function Settings() {
 
   const isOpen = (id: string) => openSections.has(id);
 
+  const nav = [
+    { id: "account", icon: "account_circle", label: "Account", show: accountStatus !== "unavailable" },
+    { id: "general", icon: "tune", label: "General", show: true },
+    { id: "appearance", icon: "palette", label: "Appearance", show: true },
+    { id: "study", icon: "school", label: "Study Tools", show: true },
+    { id: "presentation", icon: "slideshow", label: "Presentation", show: true },
+    { id: "ai-search", icon: "auto_awesome", label: "AI Scripture Search", show: true },
+    { id: "sync", icon: "sync", label: "Sync & Backup", show: true },
+    { id: "help", icon: "help", label: "Help", show: true },
+    { id: "about", icon: "info", label: "About", show: true },
+  ].filter((n) => n.show);
+  const current = nav.some((n) => n.id === active) ? active : nav[0].id;
+  const currentLabel = nav.find((n) => n.id === current)?.label ?? "Settings";
+  const planLabel = `${(planId ?? "free").charAt(0).toUpperCase()}${(planId ?? "free").slice(1)} Plan`;
+
   return createPortal(
-    <div className="fixed inset-0 z-[60]" onClick={() => setSettingsOpen(false)}>
+    <ActiveSectionContext.Provider value={current}>
+    <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setSettingsOpen(false)}>
       <div
-        className={`absolute bottom-3 left-3 right-3 glass glass-strong rounded-3xl transition-all duration-300 ease-out flex flex-col ${
-          visible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+        className={`w-full max-w-[1000px] h-[min(700px,88vh)] glass glass-strong rounded-3xl overflow-hidden flex transition-all duration-200 ease-out ${
+          visible ? "opacity-100 scale-100" : "opacity-0 scale-[0.98]"
         }`}
-        style={{ maxHeight: "52vh" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-b border-outline-variant shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[18px] text-secondary">settings</span>
-            <span className="font-headline-sm text-headline-sm text-on-surface">Settings</span>
-          </div>
-          <div className="flex items-center gap-3">
-            {saving && <span className="font-metadata-mono text-[11px] text-secondary">Saving…</span>}
-            <button onClick={() => setSettingsOpen(false)} className="text-secondary hover:text-primary transition-colors">
-              <span className="material-symbols-outlined text-[20px]">close</span>
+        {/* Section list */}
+        <nav className="w-[230px] shrink-0 flex flex-col border-r border-outline-variant bg-surface-container-lowest/40">
+          <h2 className="px-6 pt-6 pb-4 font-headline-sm text-headline-sm text-on-surface">Settings</h2>
+          <ul className="flex-1 min-h-0 overflow-y-auto px-3 space-y-0.5">
+            {nav.map((n) => (
+              <li key={n.id}>
+                <button
+                  onClick={() => setActive(n.id)}
+                  aria-current={current === n.id ? "page" : undefined}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left font-body-ui text-[14px] transition-colors ${
+                    current === n.id ? "row-selected text-primary font-semibold" : "text-on-surface hover:bg-surface-container-low"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[20px]">{n.icon}</span>
+                  {n.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="p-4 space-y-2 border-t border-outline-variant">
+            <button
+              onClick={() => accountStatus !== "unavailable" && setActive("account")}
+              className="w-full rounded-xl border border-outline-variant px-3 py-2 text-left font-body-ui text-[13px] font-semibold text-on-surface hover:bg-surface-container-low transition-colors"
+              title="View your plan"
+            >
+              {planLabel}
             </button>
+            {appVersion && <p className="text-center font-metadata-mono text-[11px] text-on-surface-variant">version {appVersion}</p>}
           </div>
-        </div>
+        </nav>
 
-        {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 divide-y divide-outline-variant">
+        {/* Selected section */}
+        <section className="flex-1 min-w-0 flex flex-col">
+          <header className="flex items-center justify-between px-8 py-5 border-b border-outline-variant shrink-0">
+            <h3 className="font-headline-sm text-headline-sm text-on-surface">{currentLabel}</h3>
+            <div className="flex items-center gap-3">
+              {saving && <span className="font-metadata-mono text-[11px] text-secondary">Saving…</span>}
+              <button onClick={() => setSettingsOpen(false)} className="text-secondary hover:text-primary transition-colors" aria-label="Close settings">
+                <span className="material-symbols-outlined text-[22px]">close</span>
+              </button>
+            </div>
+          </header>
+
+          <div className="flex-1 min-h-0 overflow-y-auto">
 
           {/* ── Workspace ────────────────────────────────────────────── */}
           {/* Kept outside the accordions, always visible — this is the one
@@ -145,6 +196,7 @@ export default function Settings() {
               detail to dig for. Presentation tools (service queue, Live
               Show, presentation themes) genuinely don't exist in Study —
               switching here is what turns them on, not just reorders them. */}
+          <Pane id="general">
           <div className="px-6 py-4">
             <SubRow label="Workspace" description="Study keeps things focused on personal Bible study. Presentation adds the live-show tools — service queue, Live Show console, presentation themes — on top.">
               <div className="flex gap-1.5">
@@ -159,12 +211,10 @@ export default function Settings() {
               </div>
             </SubRow>
           </div>
+          </Pane>
 
           {/* ── Appearance ───────────────────────────────────────────── */}
-          <AccordionSection
-            id="appearance" icon="palette" label="Appearance"
-            open={isOpen("appearance")} onToggle={() => toggleSection("appearance")}
-          >
+          <Pane id="appearance">
             {/* Text Settings sub-section */}
             <AccordionSection
               id="text-settings" icon="format_size" label="Text Settings"
@@ -310,13 +360,10 @@ export default function Settings() {
                 ))}
               </div>
             </SubRow>
-          </AccordionSection>
+          </Pane>
 
           {/* ── Study Tools ──────────────────────────────────────────── */}
-          <AccordionSection
-            id="study" icon="school" label="Study Tools"
-            open={isOpen("study")} onToggle={() => toggleSection("study")}
-          >
+          <Pane id="study">
             <SubRow label="Show Strong's numbers">
               <Toggle value={prefs.show_strongs} onChange={(v) => save({ show_strongs: v })} />
             </SubRow>
@@ -353,13 +400,10 @@ export default function Settings() {
                 ))}
               </div>
             </SubRow>
-          </AccordionSection>
+          </Pane>
 
           {/* ── Presentation ─────────────────────────────────────────── */}
-          <AccordionSection
-            id="presentation" icon="slideshow" label="Presentation"
-            open={isOpen("presentation")} onToggle={() => toggleSection("presentation")}
-          >
+          <Pane id="presentation">
             <SubRow label="Verse context" description="Ctrl+1–4 to switch live. Controls how many verses appear on screen.">
               <div className="flex gap-1.5 flex-wrap">
                 {([
@@ -384,35 +428,20 @@ export default function Settings() {
             >
               <Toggle value={displayPrefs.splitLongVerses} onChange={(v) => setDisplayPrefs({ splitLongVerses: v })} />
             </SubRow>
-          </AccordionSection>
+          </Pane>
 
           {/* ── Account ──────────────────────────────────────────────── */}
-          {accountStatus !== "unavailable" && (
-            <AccordionSection
-              id="account" icon="account_circle" label="Account"
-              open={isOpen("account")} onToggle={() => toggleSection("account")}
-            >
-              <div className="px-6 py-4">
-                <AccountSettingsRow />
-              </div>
-            </AccordionSection>
-          )}
+          <Pane id="account"><AccountPanel /></Pane>
 
           {/* ── AI Scripture Search ──────────────────────────────────── */}
-          <AccordionSection
-            id="ai-search" icon="auto_awesome" label="AI Scripture Search"
-            open={isOpen("ai-search")} onToggle={() => toggleSection("ai-search")}
-          >
+          <Pane id="ai-search">
             <div className="px-6 py-4">
               <ClaudeSettingsForm />
             </div>
-          </AccordionSection>
+          </Pane>
 
           {/* ── Sync & Backup ────────────────────────────────────────── */}
-          <AccordionSection
-            id="sync" icon="sync" label="Sync & Backup"
-            open={isOpen("sync")} onToggle={() => toggleSection("sync")}
-          >
+          <Pane id="sync">
             <div className="flex items-start gap-3 px-6 py-3">
               <span className="material-symbols-outlined text-on-surface-variant text-[18px] mt-0.5">cloud_off</span>
               <div>
@@ -422,13 +451,10 @@ export default function Settings() {
                 </p>
               </div>
             </div>
-          </AccordionSection>
+          </Pane>
 
           {/* ── Help ─────────────────────────────────────────────────── */}
-          <AccordionSection
-            id="help" icon="help" label="Help"
-            open={isOpen("help")} onToggle={() => toggleSection("help")}
-          >
+          <Pane id="help">
             {/* Tutorial / Shortcuts */}
             <SubRow label="Tutorial" description="Onboarding walkthrough — coming soon.">
               <button
@@ -482,15 +508,10 @@ export default function Settings() {
                 Email us
               </button>
             </SubRow>
-          </AccordionSection>
-
-          {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
+          </Pane>
 
           {/* ── About ────────────────────────────────────────────────── */}
-          <AccordionSection
-            id="about" icon="info" label="About"
-            open={isOpen("about")} onToggle={() => toggleSection("about")}
-          >
+          <Pane id="about">
             <div className="px-6 py-3 font-body-ui text-[13px] text-on-surface-variant space-y-1.5">
               <p>Scriptura — open-source desktop Bible study</p>
               <p className="text-[12px] leading-relaxed text-on-surface-variant/80">
@@ -499,13 +520,27 @@ export default function Settings() {
               </p>
             </div>
             <SheetUpdateChecker />
-          </AccordionSection>
+          </Pane>
 
-        </div>
+          </div>
+        </section>
       </div>
-    </div>,
+      {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
+    </div>
+    </ActiveSectionContext.Provider>,
     document.body,
   );
+}
+
+// ── Section panes ─────────────────────────────────────────────────────────────
+
+const ActiveSectionContext = createContext("");
+
+/** One page of Settings: shown only while it's the section selected in the sidebar. */
+function Pane({ id, children }: { id: string; children: React.ReactNode }) {
+  const active = useContext(ActiveSectionContext);
+  if (active !== id) return null;
+  return <div className="divide-y divide-outline-variant">{children}</div>;
 }
 
 // ── Accordion section ─────────────────────────────────────────────────────────

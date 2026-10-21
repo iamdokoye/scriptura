@@ -6,10 +6,12 @@ interface Props {
   children?: ReactNode;
   /** Called after the person signs out or their account has been deleted. */
   onGone?: () => void;
+  /** Leave out the email line when the caller already shows it. */
+  hideEmail?: boolean;
 }
 
 /** The signed-in account: who it is, sign out, and delete account (with a confirmation step). */
-export default function AccountDetails({ children, onGone }: Props) {
+export default function AccountDetails({ children, onGone, hideEmail }: Props) {
   const { email, signOut, deleteAccount } = useAccountStore();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -29,7 +31,7 @@ export default function AccountDetails({ children, onGone }: Props) {
 
   return (
     <div className="space-y-2">
-      <p className="font-body-ui text-[13px] text-on-surface break-all">{email}</p>
+      {!hideEmail && <p className="font-body-ui text-[13px] text-on-surface break-all">{email}</p>}
       {children}
 
       {confirmDelete ? (

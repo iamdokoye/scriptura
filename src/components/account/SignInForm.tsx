@@ -91,7 +91,8 @@ export default function SignInForm({
       ) : (
         <>
           <p className="font-body-ui text-[12px] text-on-surface-variant leading-relaxed">
-            We sent a code to <span className="text-on-surface">{email.trim()}</span>. Enter it below.
+            We sent a 6-digit code to <span className="text-on-surface">{email.trim()}</span>. Enter it below.
+            It can take a minute; check your spam folder if it doesn't arrive.
           </p>
           <label className="block">
             <span className="field-label">Code</span>

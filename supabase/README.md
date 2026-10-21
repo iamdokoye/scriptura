@@ -231,6 +231,11 @@ limit 20;
 
 ## Troubleshooting
 
+- **No sign-in code arrives, or the email has a link and no code**:
+  1. **Template.** The email only contains a code if the template shows `{{ .Token }}`. Open Dashboard → **Authentication → Emails** and paste `supabase/templates/magic_link.html` into **Magic Link** and `supabase/templates/confirmation.html` into **Confirm signup**. Existing people get the first, brand-new people get the second, so both need it. Save each.
+  2. **Built-in sender limits.** Without custom SMTP, Supabase only emails addresses that belong to your own Supabase team and caps it at about 2 emails an hour. Anyone else gets nothing or an error. Set up **Custom SMTP** (above) with a verified sender domain.
+  3. **Spam folder and delay.** Codes can take a minute. Check spam, then use "Resend code" in the app (one request per address per minute).
+  4. **Look at the log.** Dashboard → **Logs → Auth** shows each attempt with the exact reason it failed (rate limit, SMTP error, address not authorized).
 - **User receives 401 Unauthorized**:
   - The JWT session has expired or is invalid. The app prompts the user to re-authenticate.
 - **User receives 429 Limit Exceeded**:

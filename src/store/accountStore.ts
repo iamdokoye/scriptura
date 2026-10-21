@@ -15,9 +15,22 @@ export type AccountStatus =
   | "signedOut"
   | "signedIn";
 
+/** What the server knows about the signed-in account, for display. null until loaded. */
+export interface AccountSummary {
+  /** Plan id, e.g. "free". */
+  plan: string;
+  /** Searches allowed per day on this plan. */
+  dailyLimit: number | null;
+  /** Searches used so far today (UTC day). */
+  usedToday: number;
+}
+
 interface AccountState {
   status: AccountStatus;
   email: string | null;
+  summary: AccountSummary | null;
+  /** Reload the plan and today's usage from the server. Fails quietly: it's only for display. */
+  refreshSummary: () => Promise<void>;
   /** The sign-in / account window (opened from the top bar or Settings). */
   modalOpen: boolean;
   openModal: () => void;
@@ -36,6 +49,7 @@ let initPromise: Promise<void> | null = null;
 export const useAccountStore = create<AccountState>()((set) => ({
   status: "unknown",
   email: null,
+  summary: null,
   modalOpen: false,
   openModal: () => set({ modalOpen: true }),
   closeModal: () => set({ modalOpen: false }),
@@ -54,10 +68,35 @@ export const useAccountStore = create<AccountState>()((set) => ({
         set({ status: "signedOut", email: null });
       }
       supabase.auth.onAuthStateChange((_event, session) => {
-        set({ status: session ? "signedIn" : "signedOut", email: session?.user.email ?? null });
+        set({ status: session ? "signedIn" : "signedOut", email: session?.user.email ?? null, ...(session ? {} : { summary: null }) });
       });
     })();
     return initPromise;
+  },
+
+  refreshSummary: async () => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const uid = sessionData.session?.user.id;
+      if (!uid) { set({ summary: null }); return; }
+      const today = new Date().toISOString().slice(0, 10);
+      const [profile, usage] = await Promise.all([
+        supabase.from("profiles").select("plan, plans(daily_searches)").eq("id", uid).maybeSingle(),
+        supabase.from("search_usage").select("searches").eq("user_id", uid).eq("day", today).maybeSingle(),
+      ]);
+      const row = profile.data as { plan?: string; plans?: { daily_searches?: number } | null } | null;
+      set({
+        summary: {
+          plan: row?.plan ?? "free",
+          dailyLimit: row?.plans?.daily_searches ?? null,
+          usedToday: (usage.data as { searches?: number } | null)?.searches ?? 0,
+        },
+      });
+    } catch {
+      // Display only; the Account page falls back to "Free" and no usage line.
+    }
   },
 
   sendCode: async (email) => {
@@ -100,11 +139,18 @@ export const useAccountStore = create<AccountState>()((set) => ({
 /** Supabase's messages are written for developers; say what the person should do. */
 function friendlyAuthError(message: string): string {
   const m = message.toLowerCase();
+  // Most specific first: "email address ... is invalid" must not read as a bad code.
+  if (m.includes("not authorized"))
+    return "This address can't receive sign-in emails yet. The project's email sending isn't set up for it.";
+  if (m.includes("signups not allowed") || m.includes("signup is disabled"))
+    return "New sign-ups are turned off.";
+  if (m.includes("error sending") || m.includes("sending") && m.includes("email"))
+    return "We couldn't send the email. Please try again in a few minutes.";
   if (m.includes("rate limit") || m.includes("security purposes") || m.includes("too many"))
     return "Too many attempts. Wait a minute and try again.";
+  if (m.includes("valid email") || (m.includes("email address") && m.includes("invalid")))
+    return "Enter a valid email address.";
   if (m.includes("expired") || m.includes("invalid"))
     return "That code didn't work. It may have expired. Request a new one.";
-  if (m.includes("valid email") || m.includes("email address"))
-    return "Enter a valid email address.";
   return message || "Something went wrong. Please try again.";
 }

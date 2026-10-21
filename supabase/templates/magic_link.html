@@ -1,0 +1,7 @@
+<!-- Supabase Auth → Emails → "Magic Link" template.
+     Scriptura signs people in with a code typed into the app, so this email must show
+     {{ .Token }}. Do not use {{ .ConfirmationURL }}: a link can't open a desktop app. -->
+<h2>Your Scriptura sign-in code</h2>
+<p>Enter this code in the Scriptura app:</p>
+<p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:16px 0;">{{ .Token }}</p>
+<p>It expires in one hour. If you didn't ask for it, you can ignore this email.</p>
