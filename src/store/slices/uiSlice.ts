@@ -16,7 +16,7 @@ export interface UiSlice {
 export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
   theme: "light",
   setTheme: (theme) => set({ theme }),
-  accent: "indigo",
+  accent: "ink",
   setAccent: (accent) => set({ accent }),
   isFullscreen: false,
   setIsFullscreen: (isFullscreen) => set({ isFullscreen }),

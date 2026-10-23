@@ -4,6 +4,10 @@ All notable changes to Scriptura are listed here, newest first.
 
 ## [0.1.35] - 2026-10-21
 
+### Changed
+- **New default look: Ink.** The default accent is now a warm near-black (warm off-white in dark mode), with cream and soft-charcoal surfaces. Indigo and the other accents are still available under Settings, Appearance. Existing installs keep their saved accent.
+- **Sign-in and welcome emails** use the same cream and ink palette.
+
 ### Added
 - **Settings redesigned** as a centred window with a section list on the left (Account, General, Appearance, Study Tools, Presentation, AI Scripture Search, Sync & Backup, Help, About) and one section at a time on the right. The Account section shows sign in or out, your current plan, today's Ask Scripture usage and a license key field (not active yet).
 - **Account button and sign-in window**: a Sign in button in the top bar (your initial once signed in) opens a window where you enter your email and the code we send you. It also shows who you're signed in as, with Sign out and Delete account. There is an Account row in Settings too, and the Ask Scripture panel uses the same sign-in form.

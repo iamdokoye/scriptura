@@ -1,6 +1,7 @@
 /** App accent presets. Colours themselves live in styles/accents.css (keyed by
- *  `data-accent` on <html>); indigo is the built-in default and needs no rule. */
+ *  `data-accent` on <html>); ink is the built-in default and needs no rule. */
 export const ACCENTS = [
+  { id: "ink",    label: "Ink",    swatch: "#1c1b19" },
   { id: "indigo", label: "Indigo", swatch: "#5b5bf0" },
   { id: "blue",   label: "Blue",   swatch: "#2563eb" },
   { id: "teal",   label: "Teal",   swatch: "#0f766e" },
@@ -19,6 +20,6 @@ export function isAccentId(v: unknown): v is AccentId {
 /** Sets or clears the root attribute the accent CSS keys off. */
 export function applyAccent(id: string) {
   const root = document.documentElement;
-  if (isAccentId(id) && id !== "indigo") root.setAttribute("data-accent", id);
+  if (isAccentId(id) && id !== "ink") root.setAttribute("data-accent", id);
   else root.removeAttribute("data-accent");
 }

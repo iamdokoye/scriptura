@@ -11,47 +11,47 @@
   <meta name="supported-color-schemes" content="light dark">
   <title>Your Scriptura sign-in code</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f3f4fa;">
+<body style="margin:0;padding:0;background-color:#f7f4ee;">
   <!-- Preview text shown next to the subject in the inbox -->
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
     Your Scriptura sign-in code is {{ .Token }}. It expires in one hour.
   </div>
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f3f4fa;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f7f4ee;">
     <tr>
       <td align="center" style="padding:40px 16px;">
 
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
           <!-- Wordmark -->
           <tr>
-            <td align="center" style="padding:0 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;font-weight:700;letter-spacing:0.2px;color:#5b5bf0;">
+            <td align="center" style="padding:0 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;font-weight:700;letter-spacing:0.2px;color:#1c1b19;">
               Scriptura
             </td>
           </tr>
 
           <!-- Card -->
           <tr>
-            <td style="background-color:#ffffff;border:1px solid #e3e4f2;border-radius:16px;padding:36px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-              <h1 style="margin:0 0 12px 0;font-size:20px;line-height:28px;font-weight:700;color:#1c1d2e;">Your sign-in code</h1>
-              <p style="margin:0 0 24px 0;font-size:15px;line-height:24px;color:#4a4b63;">Enter this code in the Scriptura app to sign in.</p>
+            <td style="background-color:#fffdf9;border:1px solid #e6e2da;border-radius:16px;padding:36px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <h1 style="margin:0 0 12px 0;font-size:20px;line-height:28px;font-weight:700;color:#1c1b19;">Your sign-in code</h1>
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:24px;color:#5a564f;">Enter this code in the Scriptura app to sign in.</p>
 
               <!-- The code -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td align="center" style="background-color:#eeeefe;border:1px solid #d7d7fb;border-radius:12px;padding:20px 12px;">
-                    <span style="font-family:'SF Mono',SFMono-Regular,Menlo,Consolas,'Courier New',monospace;font-size:34px;line-height:40px;font-weight:700;letter-spacing:10px;color:#3736a7;">{{ .Token }}</span>
+                  <td align="center" style="background-color:#ebe7df;border:1px solid #d9d4c9;border-radius:12px;padding:20px 12px;">
+                    <span style="font-family:'SF Mono',SFMono-Regular,Menlo,Consolas,'Courier New',monospace;font-size:34px;line-height:40px;font-weight:700;letter-spacing:10px;color:#1c1b19;">{{ .Token }}</span>
                   </td>
                 </tr>
               </table>
 
-              <p style="margin:24px 0 0 0;font-size:14px;line-height:22px;color:#4a4b63;">This code expires in one hour and works once.</p>
-              <p style="margin:8px 0 0 0;font-size:14px;line-height:22px;color:#4a4b63;">If you didn&rsquo;t ask to sign in, you can safely ignore this email.</p>
+              <p style="margin:24px 0 0 0;font-size:14px;line-height:22px;color:#5a564f;">This code expires in one hour and works once.</p>
+              <p style="margin:8px 0 0 0;font-size:14px;line-height:22px;color:#5a564f;">If you didn&rsquo;t ask to sign in, you can safely ignore this email.</p>
             </td>
           </tr>
 
           <!-- Footer -->
           <tr>
-            <td align="center" style="padding:20px 8px 0 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8a8ba3;">
+            <td align="center" style="padding:20px 8px 0 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8f8a80;">
               Never share this code. Scriptura will never ask you for it.<br>
               Sent to {{ .Email }}
             </td>

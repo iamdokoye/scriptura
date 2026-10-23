@@ -1537,7 +1537,7 @@ mod tests {
         // No row yet — falls back to Preferences::default() rather than erroring.
         let defaults = db.get_preferences().unwrap();
         assert_eq!(defaults.theme, Preferences::default().theme);
-        assert_eq!(defaults.accent, "indigo");
+        assert_eq!(defaults.accent, "ink");
 
         db.update_preferences(&serde_json::json!({
             "theme": "dark",

@@ -1,5 +1,37 @@
-/* Accent presets — generated; each overrides the indigo primary tokens in globals.css.
-   Applied with <html data-accent="blue"> etc.; indigo is the default and needs no attribute. */
+/* Accent presets — each overrides the primary tokens in globals.css (ink is the default
+   and needs no attribute). Applied with <html data-accent="blue"> etc. */
+
+[data-accent="indigo"] {
+  --col-primary: 91 91 240;
+  --col-on-primary: 255 255 255;
+  --col-primary-container: 238 238 254;
+  --col-on-primary-container: 55 54 167;
+  --col-primary-fixed: 226 223 255;
+  --col-primary-fixed-dim: 193 193 255;
+  --col-on-primary-fixed: 10 0 107;
+  --col-on-primary-fixed-variant: 55 54 167;
+  --col-secondary-container: 236 236 254;
+  --col-on-secondary-container: 55 54 167;
+  --col-surface-tint: 91 91 240;
+  --col-inverse-primary: 139 140 255;
+  --blob-1: rgba(91, 91, 240, 0.14);
+}
+
+.dark[data-accent="indigo"] {
+  --col-primary: 139 140 255;
+  --col-on-primary: 14 17 22;
+  --col-primary-container: 139 140 255;
+  --col-on-primary-container: 30 25 145;
+  --col-primary-fixed: 55 54 167;
+  --col-primary-fixed-dim: 80 80 192;
+  --col-on-primary-fixed: 226 223 255;
+  --col-on-primary-fixed-variant: 193 193 255;
+  --col-secondary-container: 38 40 79;
+  --col-on-secondary-container: 193 193 255;
+  --col-surface-tint: 193 193 255;
+  --col-inverse-primary: 80 80 192;
+  --blob-1: rgba(91, 91, 240, 0.16);
+}
 
 [data-accent="blue"] {
   --col-primary: 37 99 235;

@@ -24,59 +24,59 @@
 :root {
   /* Calm Editorial Precision (see docs/DESIGN.md) — flat surfaces with hairline
      borders; translucent glass only for floating chrome. */
-  --hairline:     rgba(20, 24, 31, 0.08);
-  --glass-bg:     rgba(255, 255, 255, 0.72);
+  --hairline:     rgba(28, 27, 25, 0.08);
+  --glass-bg:     rgba(255, 253, 249, 0.72);
   --glass-border: rgba(255, 255, 255, 0.8);
-  --glass-shadow: 0 8px 32px -4px rgba(15, 20, 40, 0.12);
-  --blob-1: rgba(91, 91, 240, 0.14);
+  --glass-shadow: 0 8px 32px -4px rgba(28, 27, 25, 0.12);
+  --blob-1: rgba(120, 110, 95, 0.10);
   --blob-2: rgba(46, 184, 134, 0.12);
   --blob-3: rgba(184, 137, 43, 0.10);
-  --glass-strong-bg: rgba(255, 255, 255, 0.97);
+  --glass-strong-bg: rgba(255, 253, 249, 0.97);
   --live-gradient: linear-gradient(135deg, #e5484d, #c43a3f);
 
   /* Surfaces: background = window canvas, surface = elevated flat layer */
-  --col-background:                246 247 249;  /* #f6f7f9 */
-  --col-surface:                   255 255 255;
-  --col-surface-variant:           229 232 237;
-  --col-surface-dim:               238 240 244;
-  --col-surface-bright:            255 255 255;
-  --col-surface-container-lowest:  255 255 255;
-  --col-surface-container-low:     250 251 252;
-  --col-surface-container:         243 244 247;
-  --col-surface-container-high:    236 238 242;
-  --col-surface-container-highest: 229 232 237;
-  --col-surface-tint:              91 91 240;
+  --col-background:                247 244 238;  /* #f7f4ee cream */
+  --col-surface:                   255 253 249;
+  --col-surface-variant:           230 226 218;
+  --col-surface-dim:               240 236 229;
+  --col-surface-bright:            255 253 249;
+  --col-surface-container-lowest:  255 253 249;
+  --col-surface-container-low:     251 249 244;
+  --col-surface-container:         244 241 234;
+  --col-surface-container-high:    237 233 225;
+  --col-surface-container-highest: 230 226 218;
+  --col-surface-tint:              28 27 25;
 
-  --col-on-surface:                20 24 31;     /* #14181f */
-  --col-on-surface-variant:        93 102 117;   /* #5d6675 */
-  --col-on-background:             20 24 31;
+  --col-on-surface:                28 27 25;     /* #1c1b19 warm ink */
+  --col-on-surface-variant:        106 102 94;   /* #6a665e */
+  --col-on-background:             28 27 25;
 
-  --col-outline:                   150 158 172;
-  --col-outline-variant:           230 232 236;  /* hairline */
+  --col-outline:                   158 153 144;
+  --col-outline-variant:           230 226 218;  /* hairline */
 
-  --col-inverse-surface:           20 24 31;
-  --col-inverse-on-surface:        236 239 244;
-  --col-inverse-primary:           139 140 255;
+  --col-inverse-surface:           28 27 25;
+  --col-inverse-on-surface:        240 236 229;
+  --col-inverse-primary:           236 232 223;
 
-  /* Primary (indigo) */
-  --col-primary:                   91 91 240;    /* #5b5bf0 */
-  --col-on-primary:                255 255 255;
-  --col-primary-container:         238 238 254;
-  --col-on-primary-container:      55 54 167;
-  --col-primary-fixed:             226 223 255;
-  --col-primary-fixed-dim:         193 193 255;
-  --col-on-primary-fixed:          10 0 107;
-  --col-on-primary-fixed-variant:  55 54 167;
+  /* Primary (ink — the default accent; other accents override these in accents.css) */
+  --col-primary:                   28 27 25;    /* #1c1b19 ink */
+  --col-on-primary:                247 244 238;
+  --col-primary-container:         235 231 223;
+  --col-on-primary-container:      28 27 25;
+  --col-primary-fixed:             226 222 213;
+  --col-primary-fixed-dim:         196 191 181;
+  --col-on-primary-fixed:          28 27 25;
+  --col-on-primary-fixed-variant:  70 67 62;
 
   /* Secondary = muted ink; container = accent-tinted selected state */
-  --col-secondary:                 93 102 117;
+  --col-secondary:                 106 102 94;
   --col-on-secondary:              255 255 255;
-  --col-secondary-container:       236 236 254;
-  --col-on-secondary-container:    55 54 167;
-  --col-secondary-fixed:           236 238 242;
-  --col-secondary-fixed-dim:       210 214 222;
-  --col-on-secondary-fixed:        20 24 31;
-  --col-on-secondary-fixed-variant: 70 78 92;
+  --col-secondary-container:       235 231 223;
+  --col-on-secondary-container:    28 27 25;
+  --col-secondary-fixed:           237 233 225;
+  --col-secondary-fixed-dim:       212 208 199;
+  --col-on-secondary-fixed:        28 27 25;
+  --col-on-secondary-fixed-variant: 84 80 73;
 
   /* Tertiary = soft jade (installed / synced) */
   --col-tertiary:                  46 184 134;
@@ -100,54 +100,54 @@
 
 .dark {
   --hairline:     rgba(255, 255, 255, 0.07);
-  --glass-bg:     rgba(21, 26, 34, 0.72);
+  --glass-bg:     rgba(26, 26, 25, 0.72);
   --glass-border: rgba(255, 255, 255, 0.10);
   --glass-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.36);
-  --glass-strong-bg: rgba(21, 26, 34, 0.97);
-  --blob-1: rgba(91, 91, 240, 0.16);
+  --glass-strong-bg: rgba(26, 26, 25, 0.97);
+  --blob-1: rgba(200, 190, 170, 0.08);
   --blob-2: rgba(46, 184, 134, 0.12);
   --blob-3: rgba(184, 137, 43, 0.10);
 
-  --col-background:                14 17 22;     /* #0e1116 */
-  --col-surface:                   21 26 34;     /* #151a22 */
-  --col-surface-variant:           50 53 58;
-  --col-surface-dim:               14 17 22;
-  --col-surface-bright:            54 57 63;
-  --col-surface-container-lowest:  11 14 19;
-  --col-surface-container-low:     25 28 33;
-  --col-surface-container:         29 32 37;
-  --col-surface-container-high:    39 42 48;
-  --col-surface-container-highest: 50 53 58;
-  --col-surface-tint:              193 193 255;
+  --col-background:                18 17 16;     /* #121110 */
+  --col-surface:                   26 26 25;
+  --col-surface-variant:           52 51 48;
+  --col-surface-dim:               18 17 16;
+  --col-surface-bright:            56 55 52;
+  --col-surface-container-lowest:  13 13 12;
+  --col-surface-container-low:     23 22 21;
+  --col-surface-container:         30 29 28;
+  --col-surface-container-high:    40 39 37;
+  --col-surface-container-highest: 52 51 48;
+  --col-surface-tint:              236 232 223;
 
-  --col-on-surface:                236 239 244;  /* #eceff4 */
-  --col-on-surface-variant:        143 153 170;  /* #8f99aa */
-  --col-on-background:             236 239 244;
+  --col-on-surface:                236 232 223;  /* #ece8df */
+  --col-on-surface-variant:        154 149 140;
+  --col-on-background:             236 232 223;
 
-  --col-outline:                   145 143 158;
-  --col-outline-variant:           35 41 50;     /* hairline */
+  --col-outline:                   150 145 136;
+  --col-outline-variant:           42 41 38;     /* hairline */
 
-  --col-inverse-surface:           236 239 244;
-  --col-inverse-on-surface:        14 17 22;
-  --col-inverse-primary:           80 80 192;
+  --col-inverse-surface:           236 232 223;
+  --col-inverse-on-surface:        18 17 16;
+  --col-inverse-primary:           28 27 25;
 
-  --col-primary:                   139 140 255; /* #8b8cff */
-  --col-on-primary:                14 17 22;
-  --col-primary-container:         139 140 255;
-  --col-on-primary-container:      30 25 145;
-  --col-primary-fixed:             55 54 167;
-  --col-primary-fixed-dim:         80 80 192;
-  --col-on-primary-fixed:          226 223 255;
-  --col-on-primary-fixed-variant:  193 193 255;
+  --col-primary:                   236 232 223; /* #ece8df */
+  --col-on-primary:                18 17 16;
+  --col-primary-container:         236 232 223;
+  --col-on-primary-container:      40 38 34;
+  --col-primary-fixed:             58 56 52;
+  --col-primary-fixed-dim:         84 81 75;
+  --col-on-primary-fixed:          236 232 223;
+  --col-on-primary-fixed-variant:  200 195 185;
 
-  --col-secondary:                 143 153 170;
-  --col-on-secondary:              14 17 22;
-  --col-secondary-container:       38 40 79;
-  --col-on-secondary-container:    193 193 255;
-  --col-secondary-fixed:           50 53 58;
-  --col-secondary-fixed-dim:       70 75 85;
-  --col-on-secondary-fixed:        236 239 244;
-  --col-on-secondary-fixed-variant: 199 197 213;
+  --col-secondary:                 154 149 140;
+  --col-on-secondary:              18 17 16;
+  --col-secondary-container:       46 45 42;
+  --col-on-secondary-container:    236 232 223;
+  --col-secondary-fixed:           52 51 48;
+  --col-secondary-fixed-dim:       72 70 66;
+  --col-on-secondary-fixed:        236 232 223;
+  --col-on-secondary-fixed-variant: 210 205 196;
 
   --col-tertiary:                  92 221 168;
   --col-on-tertiary:               0 56 37;
@@ -267,7 +267,7 @@ html, body {
   /* Drawers and sheets that sit over busy content: same glass, firmer fill */
   .glass-strong { background: var(--glass-strong-bg); }
 
-  /* Soft indigo / jade / gold blooms behind the glass. Peripheral only:
+  /* Soft sand / jade / gold blooms behind the glass. Peripheral only:
      scripture is always on a solid surface, never on this. */
   .ambient {
     background:

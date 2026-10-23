@@ -40,7 +40,7 @@ export default function App() {
     }
   }, [presenting, view, setView]);
 
-  // Accent colour preset (indigo = no attribute)
+  // Accent colour preset (ink = no attribute)
   useEffect(() => { applyAccent(accent); }, [accent]);
 
   // Apply theme class to root element

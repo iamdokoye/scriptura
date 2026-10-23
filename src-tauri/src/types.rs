@@ -253,7 +253,7 @@ pub struct Preferences {
     /// so each part fits the presentation screen at the configured font size
     /// without excessive shrinking.
     pub split_long_verses: bool,
-    /// App accent colour preset ("indigo", "blue", "teal", "green", "gold",
+    /// App accent colour preset ("ink", "indigo", "blue", "teal", "green", "gold",
     /// "orange" or "rose") — see src/lib/accents.ts and styles/accents.css.
     pub accent: String,
 }
@@ -411,7 +411,7 @@ impl Default for Preferences {
             default_lexicon_source: "ours".into(),
             workspace: "study".into(),
             split_long_verses: false,
-            accent: "indigo".into(),
+            accent: "ink".into(),
         }
     }
 }
