@@ -9,6 +9,8 @@ import { ACCENTS, isAccentId } from "../lib/accents";
 import AccountPanel from "./account/AccountPanel";
 import { useAccountStore } from "../store/accountStore";
 
+const EXIT_MS = 180;
+
 const FONT_SIZE_PRESETS = [14, 16, 32, 48, 64, 72, 98];
 
 const DEFAULT_PREFS: Preferences = {
@@ -63,6 +65,9 @@ export default function Settings() {
 
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
   const [saving, setSaving] = useState(false);
+  // `mounted` outlives `settingsOpen` by the exit duration so the close
+  // animation can play; `visible` drives the CSS transition itself.
+  const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -70,15 +75,24 @@ export default function Settings() {
 
   useEffect(() => { getVersion().then(setAppVersion).catch(() => {}); }, []);
 
+  // Load saved preferences up front so the first open never flashes defaults.
+  useEffect(() => { api.getPreferences().then(setPrefs).catch(() => {}); }, []);
+
   useEffect(() => {
     if (settingsOpen) {
       api.getPreferences().then(setPrefs).catch(() => {});
-      rafRef.current = requestAnimationFrame(() => setVisible(true));
-    } else {
-      setVisible(false);
-      setOpenSections(new Set());
+      setMounted(true);
+      // Two frames: the closed styles must be committed before flipping to
+      // the open ones, or the browser skips the transition.
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = requestAnimationFrame(() => setVisible(true));
+      });
+      return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
     }
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+    setVisible(false);
+    setOpenSections(new Set());
+    const t = window.setTimeout(() => setMounted(false), EXIT_MS);
+    return () => window.clearTimeout(t);
   }, [settingsOpen]);
 
   useEffect(() => {
@@ -113,7 +127,7 @@ export default function Settings() {
     }
   }
 
-  if (!settingsOpen) return null;
+  if (!mounted) return null;
 
   const isOpen = (id: string) => openSections.has(id);
 
@@ -133,13 +147,20 @@ export default function Settings() {
 
   return createPortal(
     <ActiveSectionContext.Provider value={current}>
-    <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setSettingsOpen(false)}>
+    <div
+      className={`fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6 transition-opacity ease-out motion-reduce:transition-none ${
+        visible ? "opacity-100 duration-200" : "opacity-0 duration-[180ms] pointer-events-none"
+      }`}
+      onClick={() => setSettingsOpen(false)}
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Settings"
-        className={`w-full max-w-[1000px] h-[min(700px,88vh)] glass glass-strong rounded-3xl overflow-hidden flex transition-all duration-200 ease-out ${
-          visible ? "opacity-100 scale-100" : "opacity-0 scale-[0.98]"
+        className={`w-full max-w-[1000px] h-[min(700px,88vh)] glass glass-strong rounded-3xl overflow-hidden flex will-change-transform transition-[opacity,transform] motion-reduce:transition-none ${
+          visible
+            ? "opacity-100 translate-y-0 scale-100 duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            : "opacity-0 translate-y-2 scale-[0.97] duration-[180ms] ease-in"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -447,7 +468,7 @@ export default function Settings() {
           {/* ── Help ─────────────────────────────────────────────────── */}
           <Pane id="help">
             {/* Tutorial / Shortcuts */}
-            <SubRow label="Tutorial" description="Onboarding walkthrough — coming soon.">
+            <SubRow label="Keyboard shortcuts" description="Every shortcut in one list. An onboarding tutorial is coming soon.">
               <button
                 onClick={() => setShortcutsOpen(true)}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-body-ui ctl text-on-surface-variant transition-colors"
@@ -487,9 +508,10 @@ export default function Settings() {
             <SubRow label="Send feedback" description="Report a bug or suggest a feature.">
               <button
                 onClick={() => {
-                  const subject = encodeURIComponent("Feedback regarding Scriptura v0.1.0");
+                  const version = appVersion || "unknown";
+                  const subject = encodeURIComponent(`Feedback regarding Scriptura v${version}`);
                   const body = encodeURIComponent(
-                    "Hi,\n\nI have the following question or comment:\n\n\n\n---\nScriptura v0.1.0 · macOS"
+                    `Hi,\n\nI have the following question or comment:\n\n\n\n---\nScriptura v${version}`
                   );
                   shellOpen(`mailto:okkodann@gmail.com?subject=${subject}&body=${body}`).catch(() => {});
                 }}
@@ -531,7 +553,7 @@ const ActiveSectionContext = createContext("");
 function Pane({ id, children }: { id: string; children: React.ReactNode }) {
   const active = useContext(ActiveSectionContext);
   if (active !== id) return null;
-  return <div className="divide-y divide-outline-variant">{children}</div>;
+  return <div className="settings-pane-in divide-y divide-outline-variant">{children}</div>;
 }
 
 // ── Accordion section ─────────────────────────────────────────────────────────
