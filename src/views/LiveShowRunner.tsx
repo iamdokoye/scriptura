@@ -15,7 +15,6 @@ import type { PresentState } from "../lib/presentation";
 import PresentationSearchBar, { type PresentationSearchBarHandle } from "../components/PresentationSearchBar";
 import { ResizeHandle, useResizable } from "../hooks/useResizable";
 import AiSearchDock from "../components/aiSearch/AiSearchDock";
-import { useAiSearchStore } from "../store/aiSearchStore";
 
 function verseText(chapterVerses: { verse: number; spans: { text: string }[] }[] | undefined, verse: number): string {
   return chapterVerses?.find((v) => v.verse === verse)?.spans.map((s) => s.text).join("") ?? "";
@@ -126,12 +125,6 @@ export default function LiveShowRunner() {
     storageKey: "scriptura.live.bottomHeight", initial: Math.round(window.innerHeight * 0.38), min: 200, axis: "y", invert: true,
     max: () => window.innerHeight - 260,
   });
-
-  // The Ask Scripture panel sits beside the verse list and needs more height than the
-  // library's default; make room when it opens (not saved as the user's chosen size).
-  const aiOpen = useAiSearchStore((s) => s.open);
-  const growLibrary = bottomH.growTo;
-  useEffect(() => { if (aiOpen) growLibrary(Math.round(window.innerHeight * 0.55)); }, [aiOpen, growLibrary]);
 
   usePresentationSync({
     presentationActive, primaryModule, currentRef, parallelModule, parallelMode,
@@ -921,34 +914,35 @@ export default function LiveShowRunner() {
 
       <ResizeHandle axis="y" label="library" dragging={bottomH.dragging} handleProps={bottomH.handleProps} />
 
-      {/* ── Library: reference bar + verse list ── */}
-      <div style={{ height: bottomH.size }} className="shrink-0 panel rounded-3xl flex flex-col overflow-hidden">
-        <div className="shrink-0 flex items-center gap-3 px-3.5 py-2">
-          {primaryModule && (
-            <span className="font-metadata-mono text-[11px] font-bold text-on-surface-variant field px-2.5 py-1 rounded-lg shrink-0">
-              {primaryModule}
-            </span>
-          )}
-          <span className="font-body-ui text-[13px] font-semibold text-on-surface shrink-0">{rangeCitation}</span>
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => stepChapter(-1)} className="p-1 rounded-md ctl text-on-surface-variant" title="Previous chapter (Ctrl+P)">
-              <span className="material-symbols-outlined text-[16px]">chevron_left</span>
-            </button>
-            <button onClick={() => stepChapter(1)} className="p-1 rounded-md ctl text-on-surface-variant" title="Next chapter (Ctrl+N)">
-              <span className="material-symbols-outlined text-[16px]">chevron_right</span>
-            </button>
+      {/* ── Library: reference bar + verse list + Ask Scripture ── */}
+      <div style={{ height: bottomH.size }} className="shrink-0 panel rounded-3xl flex overflow-hidden">
+        {/* Left column: reference bar + verses list */}
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <div className="shrink-0 h-[49px] flex items-center gap-3 px-3.5 py-2 border-b border-outline-variant/40">
+            {primaryModule && (
+              <span className="font-metadata-mono text-[11px] font-bold text-on-surface-variant field px-2.5 py-1 rounded-lg shrink-0">
+                {primaryModule}
+              </span>
+            )}
+            <span className="font-body-ui text-[13px] font-semibold text-on-surface shrink-0">{rangeCitation}</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => stepChapter(-1)} className="p-1 rounded-md ctl text-on-surface-variant" title="Previous chapter (Ctrl+P)">
+                <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+              </button>
+              <button onClick={() => stepChapter(1)} className="p-1 rounded-md ctl text-on-surface-variant" title="Next chapter (Ctrl+N)">
+                <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+              </button>
+            </div>
+            <div className="w-px h-4 bg-outline-variant shrink-0" />
+            <div className="flex-1 min-w-0 max-w-xl">
+              <PresentationSearchBar
+                ref={searchBarRef}
+                baseRef={previewRef}
+                onNavigate={navigatePreview}
+              />
+            </div>
           </div>
-          <div className="w-px h-4 bg-outline-variant shrink-0" />
-          <div className="flex-1 min-w-0 max-w-xl">
-            <PresentationSearchBar
-              ref={searchBarRef}
-              baseRef={previewRef}
-              onNavigate={navigatePreview}
-            />
-          </div>
-        </div>
 
-        <div className="flex-1 min-h-0 flex overflow-hidden">
           <div ref={verseListRef} className="flex-1 min-w-0 overflow-y-auto px-2 py-2">
             {(previewChapter?.verses ?? []).map((v) => {
               const text = v.spans.map((s) => s.text).join("");
@@ -1078,9 +1072,10 @@ export default function LiveShowRunner() {
               );
             })}
           </div>
-
-          <AiSearchDock onNavigate={navigatePreview} activeRef={previewRef} />
         </div>
+
+        {/* ── Ask Scripture Dock (uses full height of library panel) ── */}
+        <AiSearchDock onNavigate={navigatePreview} activeRef={previewRef} />
       </div>
 
       <StrongsSheet />

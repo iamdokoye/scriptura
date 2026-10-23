@@ -55,7 +55,7 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="shrink-0 flex items-center gap-2 px-3.5 py-2.5 border-b border-outline-variant">
+      <div className="shrink-0 h-[49px] flex items-center gap-2 px-3.5 py-2 border-b border-outline-variant">
         <span className="material-symbols-outlined text-[18px] text-primary">auto_awesome</span>
         <h2 className="flex-1 font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide">
           Ask Scripture
@@ -81,10 +81,10 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
       </div>
 
       {!isSignedIn ? (
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col justify-center">
-          <div className="space-y-3 p-4 rounded-2xl bg-surface-container-low border border-outline-variant">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col">
+          <div className="my-auto space-y-3 p-3.5 rounded-2xl bg-surface-container-low border border-outline-variant">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px] text-primary">auto_awesome</span>
+              <span className="material-symbols-outlined text-[18px] text-primary">auto_awesome</span>
               <h3 className="font-body-ui text-[13px] font-bold text-on-surface">Sign in to Ask Scripture</h3>
             </div>
             <SignInForm
