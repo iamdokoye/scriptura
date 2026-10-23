@@ -28,7 +28,7 @@ import type { PresentationItemOverride } from "../lib/tauri";
 
 // ── Shared types (used by more than one slice, or by consumers outside the store) ──
 
-export type View = "reading" | "search" | "modules" | "bookmarks" | "notes" | "history" | "customize" | "live";
+export type View = "reading" | "search" | "modules" | "bookmarks" | "notes" | "history" | "customize" | "live" | "songs";
 export type Theme = "light" | "dark" | "system";
 export type SearchMode = "word" | "scripture";
 export type FontFamily = "system" | "serif" | "times" | "mono";

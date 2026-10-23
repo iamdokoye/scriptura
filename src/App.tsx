@@ -11,6 +11,7 @@ import ModuleManager from "./views/ModuleManager";
 import SearchResults from "./views/SearchResults";
 import SearchHistory from "./views/SearchHistory";
 import BookmarksNotes from "./views/BookmarksNotes";
+import SongsView from "./features/songs/SongsView";
 import ServiceOrderPanel from "./components/ServiceOrderPanel";
 import ErrorBoundary from "./components/ErrorBoundary";
 import CustomizationStudio from "./views/CustomizationStudio";
@@ -35,7 +36,7 @@ export default function App() {
   // flips while one is already open, get out of it immediately rather than
   // leaving the user stranded on a screen Study mode says shouldn't exist.
   useEffect(() => {
-    if (!presenting && (view === "live" || view === "customize")) {
+    if (!presenting && (view === "live" || view === "customize" || view === "songs")) {
       setView("reading");
     }
   }, [presenting, view, setView]);
@@ -211,6 +212,11 @@ export default function App() {
           {presenting && view === "customize" && (
             <ErrorBoundary label="Customization Studio" onReset={() => setView("reading")} resetLabel="Go to Reading">
               <CustomizationStudio />
+            </ErrorBoundary>
+          )}
+          {presenting && view === "songs" && (
+            <ErrorBoundary label="Songs" onReset={() => setView("reading")} resetLabel="Go to Reading">
+              <SongsView />
             </ErrorBoundary>
           )}
           {presenting && view === "live" && (

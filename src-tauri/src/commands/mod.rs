@@ -21,6 +21,7 @@ mod presentation_themes;
 mod search;
 mod search_history;
 mod service_order;
+mod songs;
 
 // Glob re-exports, not named ones: #[tauri::command] generates hidden sibling
 // items alongside each function (__cmd__foo, __tauri_command_name_foo) that
@@ -38,6 +39,7 @@ pub use preferences::*;
 pub use presentation::*;
 pub use presentation_themes::*;
 pub use search::*;
+pub use songs::*;
 pub use search_history::*;
 pub use service_order::*;
 

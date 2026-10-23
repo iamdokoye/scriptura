@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod markup;
 mod modules;
+mod songs;
 mod sword;
 mod types;
 mod versification;
@@ -30,6 +31,9 @@ pub fn run() {
             // to move into tokio::task::spawn_blocking — see commands/mod.rs — instead
             // of the raw-pointer-cast pattern that used to bypass the borrow checker.
             app.manage(Arc::new(db));
+
+            // Separate file + connection: a song-library failure stays inside the Songs view.
+            app.manage(songs::SongStore::open(&data_dir.join("songs.db")));
 
             let modules_dir = data_dir.join("modules");
             std::fs::create_dir_all(&modules_dir)?;
@@ -139,6 +143,12 @@ pub fn run() {
             commands::add_bookmark,
             commands::remove_bookmark,
             commands::list_bookmarks,
+            commands::list_songs,
+            commands::get_song,
+            commands::save_song,
+            commands::delete_song,
+            commands::parse_song_import,
+            commands::import_songs,
             commands::add_note,
             commands::update_note,
             commands::delete_note,
