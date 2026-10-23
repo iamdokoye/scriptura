@@ -22,7 +22,7 @@ export default function SlidesPane({ slides, selected, onSelect, copyright }: {
           aria-current={i === selected}
           className={`block w-full text-left rounded-lg overflow-hidden border-2 transition-colors ${i === selected ? "border-primary" : "border-transparent hover:border-outline-variant"}`}
         >
-          <div className="flex items-center gap-2 px-2 py-1 text-white font-body-ui text-[12px]" style={{ background: sectionColor(s.sectionKey) }}>
+          <div className="flex items-center gap-2 px-2 py-1 text-white font-body-ui text-[12px]" style={{ background: sectionColor(s.label) }}>
             <span className="font-metadata-mono opacity-80">{i + 1}</span>
             <span className="font-semibold truncate">{s.label}{s.parts > 1 ? ` · ${s.part}/${s.parts}` : ""}</span>
           </div>

@@ -42,13 +42,12 @@ pub fn parse_song_file(file_name: &str, content: &str) -> Result<Vec<Song>> {
 /// (prefix used in keys, canonical name, regex alternatives)
 const KINDS: &[(&str, &str, &[&str])] = &[
     ("v", "Verse", &["verse", "v"]),
-    ("c", "Chorus", &["chorus", "ch", "c"]),
+    ("c", "Chorus", &["chorus", "refrain", "ref", "ch", "c", "r"]),
     ("p", "Pre-Chorus", &["pre-chorus", "pre chorus", "prechorus", "pre", "pc", "p"]),
     ("b", "Bridge", &["bridge", "b"]),
     ("t", "Tag", &["tag", "t"]),
     ("i", "Intro", &["intro", "i"]),
     ("o", "Outro", &["outro", "ending", "end", "e", "o"]),
-    ("r", "Refrain", &["refrain", "r"]),
     ("n", "Interlude", &["interlude", "instrumental", "n"]),
 ];
 
@@ -133,6 +132,115 @@ fn take_footer(blocks: &mut Vec<Vec<String>>) -> Footer {
     footer
 }
 
+/// A section's place in the play order, resolved once every section is known.
+enum Entry {
+    Key(String),
+    /// "Play the chorus here" — resolved to the first section of that kind (key prefix).
+    Kind(String),
+}
+
+/// "1 text", "2. text", "3) text" — a verse number starting a line.
+static NUMBERED_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(\d{1,2})(?:[.):]\s*|\s+)(.*)$").unwrap());
+static BARE_NUMBER_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(\d{1,2})\s*[.):]?\s*$").unwrap());
+/// A repeat marker closing a line: "[Refrain]", "(Chorus x2)", "[repeat chorus]".
+static TRAILING_REPEAT_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)\s*[\[\(]\s*(?:repeat\s+|x\d+\s+)?(refrain|chorus|bridge|tag|pre-?chorus|ref)\b[^\]\)]*[\]\)]\s*$").unwrap()
+});
+
+enum Line {
+    Header { key: String, label: String, rest: String, number: Option<u32> },
+    Content(String),
+}
+
+fn kind_prefix(word: &str) -> Option<&'static str> {
+    let w = word.to_lowercase().replace("prechorus", "pre-chorus");
+    KINDS.iter().find(|(_, _, alts)| alts.contains(&w.as_str())).map(|(p, _, _)| *p)
+}
+
+fn classify(line: &str, numbered_mode: bool, last_num: u32) -> Line {
+    if let Some((key, label)) = parse_label(line) {
+        return Line::Header { key, label, rest: String::new(), number: None };
+    }
+    // "Refrain: I am bound…" — a label, a colon, then the first line of text.
+    if let Some((head, tail)) = line.split_once(':') {
+        if !tail.trim().is_empty() {
+            if let Some((key, label)) = parse_label(&format!("{}:", head.trim())) {
+                return Line::Header { key, label, rest: tail.trim().to_string(), number: None };
+            }
+        }
+    }
+    if numbered_mode {
+        let hit = BARE_NUMBER_RE
+            .captures(line)
+            .map(|c| (c[1].to_string(), String::new()))
+            .or_else(|| NUMBERED_RE.captures(line).map(|c| (c[1].to_string(), c[2].trim().to_string())));
+        if let Some((n, rest)) = hit {
+            let n: u32 = n.parse().unwrap_or(0);
+            if n == 1 || (n > 1 && n == last_num + 1) {
+                return Line::Header { key: format!("v{n}"), label: format!("Verse {n}"), rest, number: Some(n) };
+            }
+        }
+    }
+    Line::Content(line.to_string())
+}
+
+/// Remove a trailing repeat marker from a lyric line, returning the cleaned line
+/// and the kind it pointed at.
+fn strip_repeat(line: &str) -> (String, Option<&'static str>) {
+    match TRAILING_REPEAT_RE.captures(line) {
+        Some(c) => {
+            let kind = kind_prefix(&c[1]);
+            (line[..c.get(0).unwrap().start()].trim_end().to_string(), kind)
+        }
+        None => (line.trim_end().to_string(), None),
+    }
+}
+
+struct Current {
+    key: String,
+    label: String,
+    labelled: bool,
+    lines: Vec<String>,
+    after: Vec<&'static str>,
+}
+
+struct Builder {
+    sections: Vec<SongSection>,
+    order: Vec<Entry>,
+    verse_count: u32,
+}
+
+impl Builder {
+    fn finish(&mut self, cur: Current) {
+        let lyrics = cur.lines.join("\n");
+        if lyrics.trim().is_empty() {
+            // A bare "Chorus" line is a repeat marker for a section already defined.
+            if cur.labelled {
+                match find_section(&self.sections, &cur.key) {
+                    Some(k) => self.order.push(Entry::Key(k)),
+                    None => self.order.push(Entry::Kind(cur.key.chars().take_while(|c| c.is_alphabetic()).collect())),
+                }
+            }
+        } else if let Some(existing) = self.sections.iter().find(|s| normalise_lyrics(&s.lyrics) == normalise_lyrics(&lyrics)) {
+            // The same lyrics written out again re-use the first copy.
+            self.order.push(Entry::Key(existing.key.clone()));
+        } else {
+            let mut key = cur.key;
+            let base = key.clone();
+            let mut n = 2;
+            while self.sections.iter().any(|s| s.key == key) {
+                key = format!("{base}_{n}");
+                n += 1;
+            }
+            self.order.push(Entry::Key(key.clone()));
+            self.sections.push(SongSection { key, label: cur.label, lyrics });
+        }
+        for kind in cur.after {
+            self.order.push(Entry::Kind(kind.to_string()));
+        }
+    }
+}
+
 pub fn parse_plain_text(content: &str, fallback_title: &str) -> Song {
     let text = content.replace("\r\n", "\n").replace('\r', "\n");
     let mut blocks: Vec<Vec<String>> = Vec::new();
@@ -152,66 +260,71 @@ pub fn parse_plain_text(content: &str, fallback_title: &str) -> Song {
 
     let footer = take_footer(&mut blocks);
 
-    // A leading single-line block that isn't a section label, followed by a
-    // labelled block, is the title.
+    // Verse numbers only count as headings when the song actually starts with "1".
+    let numbered_mode = blocks.iter().flatten().any(|l| {
+        NUMBERED_RE.captures(l).map_or(false, |c| &c[1] == "1" && !c[2].trim().is_empty())
+            || BARE_NUMBER_RE.captures(l).map_or(false, |c| &c[1] == "1")
+    });
+
+    // A leading single-line block that isn't a heading, followed by a heading, is the title.
+    let is_heading = |l: &str| !matches!(classify(l, numbered_mode, 0), Line::Content(_));
     let mut title = String::new();
-    if blocks.len() > 1
-        && blocks[0].len() == 1
-        && parse_label(&blocks[0][0]).is_none()
-        && parse_label(&blocks[1][0]).is_some()
-    {
+    if blocks.len() > 1 && blocks[0].len() == 1 && !is_heading(&blocks[0][0]) && is_heading(&blocks[1][0]) {
         title = blocks.remove(0).remove(0).trim().to_string();
     }
     if title.is_empty() {
         title = fallback_title.trim().to_string();
     }
 
-    let mut sections: Vec<SongSection> = Vec::new();
-    let mut arrangement: Vec<String> = Vec::new();
-    let mut verse_count = 0;
+    let mut b = Builder { sections: Vec::new(), order: Vec::new(), verse_count: 0 };
+    let mut last_num = 0u32;
 
-    for mut block in blocks {
-        let header = parse_label(&block[0]);
-        if header.is_some() {
-            block.remove(0);
-        }
-        let lyrics = block.join("\n");
-
-        if lyrics.trim().is_empty() {
-            // A bare "Chorus" line is a repeat marker for a section already defined.
-            if let Some((key, _)) = &header {
-                if let Some(existing) = find_section(&sections, key) {
-                    arrangement.push(existing);
+    for block in blocks {
+        let mut current: Option<Current> = None;
+        for line in &block {
+            match classify(line, numbered_mode, last_num) {
+                Line::Header { key, label, rest, number } => {
+                    if let Some(c) = current.take() {
+                        b.finish(c);
+                    }
+                    if let Some(n) = number {
+                        last_num = n;
+                        b.verse_count = b.verse_count.max(n);
+                    }
+                    let mut c = Current { key, label, labelled: true, lines: Vec::new(), after: Vec::new() };
+                    if !rest.is_empty() {
+                        add_line(&mut c, &rest);
+                    }
+                    current = Some(c);
+                }
+                Line::Content(l) => {
+                    let c = current.get_or_insert_with(|| {
+                        b.verse_count += 1;
+                        Current {
+                            key: format!("v{}", b.verse_count),
+                            label: format!("Verse {}", b.verse_count),
+                            labelled: false,
+                            lines: Vec::new(),
+                            after: Vec::new(),
+                        }
+                    });
+                    add_line(c, &l);
                 }
             }
-            continue;
         }
-
-        // The same lyrics written out again re-use the first copy.
-        let norm = normalise_lyrics(&lyrics);
-        if let Some(existing) = sections.iter().find(|s| normalise_lyrics(&s.lyrics) == norm) {
-            arrangement.push(existing.key.clone());
-            continue;
+        if let Some(c) = current.take() {
+            b.finish(c);
         }
-
-        let (mut key, label) = match header {
-            Some(h) => h,
-            None => {
-                verse_count += 1;
-                (format!("v{verse_count}"), format!("Verse {verse_count}"))
-            }
-        };
-        // Unlabelled/duplicate keys must stay unique.
-        let base = key.clone();
-        let mut n = 2;
-        while sections.iter().any(|s| s.key == key) {
-            key = format!("{base}_{n}");
-            n += 1;
-        }
-        arrangement.push(key.clone());
-        sections.push(SongSection { key, label, lyrics });
     }
 
+    let Builder { sections, order, .. } = b;
+    let arrangement: Vec<String> = order
+        .into_iter()
+        .filter_map(|e| match e {
+            Entry::Key(k) => Some(k),
+            Entry::Kind(p) => sections.iter().find(|s| s.key.starts_with(&p)).map(|s| s.key.clone()),
+        })
+        .collect();
     let default_order: Vec<&String> = sections.iter().map(|s| &s.key).collect();
     let arrangement = if arrangement.iter().collect::<Vec<_>>() == default_order { Vec::new() } else { arrangement };
 
@@ -223,6 +336,17 @@ pub fn parse_plain_text(content: &str, fallback_title: &str) -> Song {
         arrangement,
         sections,
         ..Default::default()
+    }
+}
+
+/// Add a lyric line to a section, peeling off any trailing "[Refrain]" marker.
+fn add_line(c: &mut Current, line: &str) {
+    let (clean, kind) = strip_repeat(line);
+    if let Some(k) = kind {
+        c.after.push(k);
+    }
+    if !clean.trim().is_empty() {
+        c.lines.push(clean);
     }
 }
 
@@ -395,6 +519,28 @@ CCLI License # 12345
         assert_eq!(s.title, "My Song");
         assert_eq!(s.sections.len(), 2);
         assert_eq!(s.arrangement, ["v1", "v2", "v1"]);
+    }
+
+    #[test]
+    fn numbered_verses_with_refrain() {
+        let s = parse_plain_text(
+            "1 On Jordan's stormy banks I stand,\nand cast a wishful eye\nto Canaan's fair and happy land,\nwhere my possessions lie.\nRefrain:\nI am bound for the promised land,\nI am bound for the promised land;\noh, who will come and go with me?\nI am bound for the promised land.\n2 O'er all those wide extended plains\nshines one eternal day;\nthere God the Son forever reigns,\nand scatters night away. [Refrain]\n",
+            "",
+        );
+        let keys: Vec<_> = s.sections.iter().map(|x| (x.key.as_str(), x.label.as_str())).collect();
+        assert_eq!(keys, [("v1", "Verse 1"), ("c", "Chorus"), ("v2", "Verse 2")]);
+        assert_eq!(s.sections[0].lyrics.lines().next().unwrap(), "On Jordan's stormy banks I stand,");
+        assert!(s.sections[1].lyrics.starts_with("I am bound"));
+        assert!(!s.sections[2].lyrics.contains('['));
+        assert_eq!(s.arrangement, ["v1", "c", "v2", "c"]);
+        assert_eq!(s.title, "");
+    }
+
+    #[test]
+    fn numbers_inside_lyrics_are_left_alone() {
+        let s = parse_plain_text("Ten thousand reasons\n10,000 years\nstill singing", "T");
+        assert_eq!(s.sections.len(), 1);
+        assert_eq!(s.sections[0].lyrics.lines().count(), 3);
     }
 
     #[test]

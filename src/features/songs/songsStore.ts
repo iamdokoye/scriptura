@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { emptySong, songsApi, type Song, type SongSummary } from "./api";
+import { newSection, SECTION_KINDS } from "./sections";
 
 function msg(e: unknown): string {
   return e instanceof Error ? e.message : typeof e === "string" ? e : "Something went wrong";
@@ -90,7 +91,8 @@ export const useSongsStore = create<SongsState>((set, get) => ({
   },
 
   newSong: () => {
-    const song = emptySong();
+    // A new song always starts with an empty first verse to type into.
+    const song = { ...emptySong(), sections: [newSection(SECTION_KINDS[0], [])] };
     set({ editing: true, draft: song, baseline: JSON.stringify(song), draftKey: get().draftKey + 1, saveError: null });
   },
 

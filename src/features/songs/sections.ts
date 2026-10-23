@@ -12,16 +12,23 @@ export const SECTION_KINDS = [
 
 export type SectionKind = (typeof SECTION_KINDS)[number];
 
-/** A blank section of the given kind, with a key and label unused by `existing`. */
+/**
+ * A blank section of the given kind. The number comes from the labels in use, not
+ * the keys: if "Verse 2" was renamed "Chorus", the next verse is "Verse 2" again.
+ * The key only has to be unique.
+ */
 export function newSection(kind: SectionKind, existing: SongSection[]): SongSection {
   const keys = new Set(existing.map((s) => s.key));
-  const labels = new Set(existing.map((s) => s.label));
+  const labels = new Set(existing.map((s) => s.label.trim().toLowerCase()));
   let n = 1;
   for (;;) {
     const unnumbered = !kind.numbered && n === 1;
-    const key = unnumbered ? kind.prefix : `${kind.prefix}${n}`;
     const label = unnumbered ? kind.name : `${kind.name} ${n}`;
-    if (!keys.has(key) && !labels.has(label)) return { key, label, lyrics: "" };
+    if (!labels.has(label.toLowerCase())) {
+      let key = unnumbered ? kind.prefix : `${kind.prefix}${n}`;
+      for (let k = 2; keys.has(key); k++) key = `${unnumbered ? kind.prefix : `${kind.prefix}${n}`}_${k}`;
+      return { key, label, lyrics: "" };
+    }
     n += 1;
   }
 }
@@ -34,11 +41,21 @@ export function cloneSection(src: SongSection, existing: SongSection[]): SongSec
   return { key: `${src.key}_${n}`, label: `${src.label} (copy)`, lyrics: src.lyrics };
 }
 
-/** Label-bar colours, by section kind (the key's leading letter). */
-export function sectionColor(key: string): string {
-  switch (key.charAt(0).toLowerCase()) {
+/** Which kind a typed section name belongs to ("Refrain 2" -> chorus), or "other". */
+export function sectionKind(label: string): string {
+  const w = label.trim().toLowerCase();
+  if (/^(verse|v)\b|^v\d/.test(w)) return "v";
+  if (/^(chorus|refrain|ref|ch|c)\b|^c\d/.test(w)) return "c";
+  if (/^(pre[- ]?chorus|pre|pc|p)\b/.test(w)) return "p";
+  if (/^(bridge|b)\b|^b\d/.test(w)) return "b";
+  return "other";
+}
+
+/** Label-bar colour for a section name. Follows the name as it is typed. */
+export function sectionColor(label: string): string {
+  switch (sectionKind(label)) {
     case "v": return "rgb(59 91 182)";   // verse: blue
-    case "c": return "rgb(150 52 74)";   // chorus: crimson
+    case "c": return "rgb(150 52 74)";   // chorus / refrain: crimson
     case "b": return "rgb(46 125 90)";   // bridge: green
     case "p": return "rgb(122 78 160)";  // pre-chorus: violet
     default: return "rgb(110 110 118)";  // tag / intro / outro / other

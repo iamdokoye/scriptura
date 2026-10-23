@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SongSummary } from "./api";
+import { openHymnarySearch } from "./hymnary";
 import { useSongsLive } from "./liveStore";
 import { useSongsStore } from "./songsStore";
 
@@ -138,6 +139,7 @@ export default function SongList({ onImport }: { onImport: () => void }) {
         count={rows.length}
         selected={selected}
         onNew={newSong}
+        onHymnary={() => void openHymnarySearch(query)}
         onImport={onImport}
         onEdit={() => selected && void openEditor(selected.id)}
         onFavourite={() => selected && void toggleFavourite(selected.id)}
@@ -170,9 +172,9 @@ function Row({ song, selected, onSelect, onOpen }: { song: SongSummary; selected
   );
 }
 
-function Footer({ count, selected, onNew, onImport, onEdit, onFavourite, onDelete }: {
+function Footer({ count, selected, onNew, onHymnary, onImport, onEdit, onFavourite, onDelete }: {
   count: number; selected: SongSummary | null;
-  onNew: () => void; onImport: () => void; onEdit: () => void; onFavourite: () => void; onDelete: () => void;
+  onNew: () => void; onHymnary: () => void; onImport: () => void; onEdit: () => void; onFavourite: () => void; onDelete: () => void;
 }) {
   const [menu, setMenu] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -201,6 +203,7 @@ function Footer({ count, selected, onNew, onImport, onEdit, onFavourite, onDelet
         {menu && (
           <div role="menu" className="absolute bottom-full left-0 mb-1 w-52 glass glass-strong rounded-xl py-1 z-10">
             <MenuItem icon="upload_file" onClick={() => { setMenu(false); onImport(); }}>Import songs…</MenuItem>
+            <MenuItem icon="open_in_new" onClick={() => { setMenu(false); onHymnary(); }}>Find lyrics on Hymnary…</MenuItem>
             <MenuItem icon="edit" disabled={!selected} onClick={() => { setMenu(false); onEdit(); }}>Edit selected</MenuItem>
             <MenuItem icon="star" disabled={!selected} onClick={() => { setMenu(false); onFavourite(); }}>
               {selected?.favourite ? "Remove favourite" : "Add to favourites"}
