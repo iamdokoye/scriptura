@@ -33,3 +33,14 @@ export function cloneSection(src: SongSection, existing: SongSection[]): SongSec
   while (keys.has(`${src.key}_${n}`)) n += 1;
   return { key: `${src.key}_${n}`, label: `${src.label} (copy)`, lyrics: src.lyrics };
 }
+
+/** Label-bar colours, by section kind (the key's leading letter). */
+export function sectionColor(key: string): string {
+  switch (key.charAt(0).toLowerCase()) {
+    case "v": return "rgb(59 91 182)";   // verse: blue
+    case "c": return "rgb(150 52 74)";   // chorus: crimson
+    case "b": return "rgb(46 125 90)";   // bridge: green
+    case "p": return "rgb(122 78 160)";  // pre-chorus: violet
+    default: return "rgb(110 110 118)";  // tag / intro / outro / other
+  }
+}

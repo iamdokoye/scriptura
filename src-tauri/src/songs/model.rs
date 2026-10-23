@@ -35,7 +35,9 @@ pub struct SongSummary {
     pub id: i64,
     pub title: String,
     pub author: String,
+    pub copyright: String,
     pub ccli_number: String,
+    pub tags: Vec<String>,
     pub favourite: bool,
     pub updated_at: i64,
 }

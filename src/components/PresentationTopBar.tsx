@@ -25,7 +25,7 @@ export default function PresentationTopBar() {
   const output = usePresentationOutput();
   const [outputsOpen, setOutputsOpen] = useState(false);
 
-  const activeTab: PresentationTab = "scriptures";
+  const activeTab: PresentationTab = view === "songs" ? "songs" : "scriptures";
   const cleared = !liveBlack && !liveEmergency;
 
   // "System" resolves to whatever the OS is currently using, so the button
@@ -132,7 +132,7 @@ export default function PresentationTopBar() {
       <nav className="flex items-center gap-1 shrink-0">
         <TabButton label="Scriptures" active={activeTab === "scriptures"} onClick={() => setView("live")} />
         <TabButton label="Slides" active={false} disabled className="hidden min-[1100px]:block" />
-        <TabButton label="Songs" active={false} disabled className="hidden min-[1100px]:block" />
+        <TabButton label="Songs" active={activeTab === "songs"} onClick={() => setView("songs")} />
       </nav>
 
       <div className="flex-1 min-w-0 flex items-center justify-center gap-1.5 min-[1100px]:gap-2">

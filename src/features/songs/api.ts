@@ -27,7 +27,9 @@ export interface SongSummary {
   id: number;
   title: string;
   author: string;
+  copyright: string;
   ccli_number: string;
+  tags: string[];
   favourite: boolean;
   updated_at: number;
 }

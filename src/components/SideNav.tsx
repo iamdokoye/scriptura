@@ -23,7 +23,7 @@ const NAV_ITEMS: Record<View, NavItem> = {
 // reordered lower. Choosing Presentation adds them on top of everything
 // Study already has (see Preferences.workspace, src-tauri/src/types.rs).
 const STUDY_ORDER: View[] = ["reading", "bookmarks", "search", "history", "modules", "notes"];
-const PRESENTATION_ORDER: View[] = ["live", "reading", "songs", "customize", "search", "modules", "bookmarks", "notes", "history"];
+const PRESENTATION_ORDER: View[] = ["live", "reading", "customize", "search", "modules", "bookmarks", "notes", "history"];
 
 interface Props {
   // "icon-rail" = 64px collapsed with hover-expand (reading contexts)

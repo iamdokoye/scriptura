@@ -102,9 +102,11 @@ impl SongDb {
                 ccli_number: r.get(3)?,
                 favourite: r.get::<_, i64>(4)? != 0,
                 updated_at: r.get(5)?,
+                copyright: r.get(6)?,
+                tags: serde_json::from_str(&r.get::<_, String>(7)?).unwrap_or_default(),
             })
         };
-        let cols = "s.id, s.title, s.author, s.ccli_number, s.favourite, s.updated_at";
+        let cols = "s.id, s.title, s.author, s.ccli_number, s.favourite, s.updated_at, s.copyright, s.tags";
         let rows = match query.and_then(fts_query) {
             Some(q) => {
                 let mut stmt = conn.prepare(&format!(
@@ -269,6 +271,8 @@ impl SongDb {
                 id,
                 title: song.title.clone(),
                 author: song.author.clone(),
+                copyright: song.copyright.clone(),
+                tags: song.tags.clone(),
                 ccli_number: song.ccli_number.clone(),
                 favourite: song.favourite,
                 updated_at: now_millis(),
