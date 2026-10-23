@@ -2,6 +2,16 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
+## [0.1.36] - 2026-10-23
+
+### Added
+- **Songs.** A new Songs tab in the Presentation workspace with a song library (title, author and copyright columns, search over lyrics, favourites and collections), a Song Editor (Words and Slides tabs, live slide preview, play order, Apply / OK / Cancel) and importers for plain text, CCLI SongSelect text and OpenLyrics files. Long sections split into evenly sized slides, with a lines-per-slide setting.
+- **Song schedule, preview and live.** The Songs tab mirrors the Scriptures screen: Schedule, Preview and Live across the top, the library below. Double-click a song to add it to the schedule; Go Live sends slides to the output window, styled by your presentation theme. BLACK and CLEAR work on songs too. PageDown / PageUp step the live slide.
+
+### Changed
+- **Settings** fade and slide in and out, sections fade in as you switch, saved preferences load before the first open, and the feedback email uses the real app version.
+- The Ask Scripture panel header lines up with the library's reference bar in the Live Show console.
+
 ## [0.1.35] - 2026-10-21
 
 ### Changed
