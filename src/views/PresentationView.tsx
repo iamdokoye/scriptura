@@ -5,6 +5,7 @@ import StrongsSheet from "../components/StrongsSheet";
 import { useShrinkToFit } from "../hooks/useShrinkToFit";
 import { useAppStore, type DisplayPrefs } from "../store/app";
 import { liveDisplayPrefs, liveFontSize, liveSafeMargin } from "../lib/liveText";
+import SongSlideStage from "../features/songs/SongSlideStage";
 import { PART_LABELS, measureVersePartsDOM, type MeasureTextStyle } from "../lib/verseSplit";
 
 const FONT_FAMILY_CSS: Record<string, string> = {
@@ -160,6 +161,7 @@ export function PresentationStage({ state, chapter, parallelChapter, withStrongs
   parallelChapter: ChapterText | null;
   withStrongsSheet?: boolean;
 }) {
+  const stage = useStage();
   // Emergency overrides everything (including black) — a fixed, theme-independent
   // screen so it stays reliable even if a theme or chapter fetch is broken. Checked
   // before the "waiting for state" fallback too: an operator hitting emergency
@@ -171,6 +173,13 @@ export function PresentationStage({ state, chapter, parallelChapter, withStrongs
         <p className="font-body-ui text-[15px] text-white/35 tracking-wide">One moment please</p>
       </div>
     );
+  }
+
+  // A song slide replaces scripture entirely, so it doesn't wait on a chapter.
+  if (state?.slide) {
+    return state.black
+      ? <div className="h-full bg-black" />
+      : <SongSlideStage slide={state.slide} theme={state.presentationTheme} stage={stage} />;
   }
 
   if (!state || !chapter) {

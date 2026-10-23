@@ -47,6 +47,8 @@ export const songsApi = {
   parseImport: (fileName: string, content: string) =>
     invoke<Song[]>("parse_song_import", { fileName, content }),
   importSongs: (songs: Song[]) => invoke<ImportSummary>("import_songs", { songs }),
+  schedule: () => invoke<SongSummary[]>("get_song_schedule"),
+  setSchedule: (ids: number[]) => invoke<void>("set_song_schedule", { ids }),
 };
 
 export function emptySong(): Song {

@@ -25,6 +25,17 @@ export interface PresentState {
    * more than one part at the active font size.
    */
   versePart?: number;
+  /**
+   * A song slide to show instead of scripture. When set, the output renders
+   * this text (styled by the active theme) and ignores the verse fields.
+   */
+  slide?: SongSlidePayload;
+}
+
+export interface SongSlidePayload {
+  text: string;
+  label: string;
+  copyright?: string;
 }
 
 declare global {

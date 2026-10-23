@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS song_sections (
     lyrics   TEXT NOT NULL,
     PRIMARY KEY (song_id, position)
 );
+CREATE TABLE IF NOT EXISTS song_schedule (
+    song_id  INTEGER PRIMARY KEY REFERENCES songs(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_songs_title ON songs(title COLLATE NOCASE);
 CREATE VIRTUAL TABLE IF NOT EXISTS songs_fts USING fts5(
     title, author, lyrics, tokenize = 'unicode61 remove_diacritics 2'
@@ -125,6 +129,51 @@ impl SongDb {
             }
         };
         Ok(rows)
+    }
+
+    /// The service schedule: songs in running order. Rows vanish with their song.
+    pub fn schedule(&self) -> Result<Vec<SongSummary>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT s.id, s.title, s.author, s.ccli_number, s.favourite, s.updated_at, s.copyright, s.tags
+             FROM song_schedule q JOIN songs s ON s.id = q.song_id ORDER BY q.position",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(SongSummary {
+                    id: r.get(0)?,
+                    title: r.get(1)?,
+                    author: r.get(2)?,
+                    ccli_number: r.get(3)?,
+                    favourite: r.get::<_, i64>(4)? != 0,
+                    updated_at: r.get(5)?,
+                    copyright: r.get(6)?,
+                    tags: serde_json::from_str(&r.get::<_, String>(7)?).unwrap_or_default(),
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// Replace the whole schedule with `ids` in order (unknown ids and repeats are dropped).
+    pub fn set_schedule(&self, ids: &[i64]) -> Result<()> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM song_schedule", [])?;
+        let mut seen = std::collections::HashSet::new();
+        let mut pos = 0i64;
+        for id in ids {
+            if !seen.insert(*id) {
+                continue;
+            }
+            let n = tx.execute(
+                "INSERT INTO song_schedule (song_id, position) SELECT id, ?2 FROM songs WHERE id = ?1",
+                params![id, pos],
+            )?;
+            pos += n as i64;
+        }
+        tx.commit()?;
+        Ok(())
     }
 
     pub fn get(&self, id: i64) -> Result<Song> {
@@ -361,6 +410,18 @@ mod tests {
         assert_eq!(db.list(Some("different")).unwrap().len(), 1);
         db.delete(id).unwrap();
         assert!(db.list(None).unwrap().is_empty());
+    }
+
+    #[test]
+    fn schedule_orders_dedupes_and_follows_deletes() {
+        let db = temp_db();
+        let a = db.save(&song("A", "a")).unwrap().id.unwrap();
+        let b = db.save(&song("B", "b")).unwrap().id.unwrap();
+        db.set_schedule(&[b, a, b, 999]).unwrap();
+        let titles: Vec<_> = db.schedule().unwrap().into_iter().map(|s| s.title).collect();
+        assert_eq!(titles, ["B", "A"]);
+        db.delete(b).unwrap();
+        assert_eq!(db.schedule().unwrap().len(), 1);
     }
 
     #[test]

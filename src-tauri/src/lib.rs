@@ -149,6 +149,8 @@ pub fn run() {
             commands::delete_song,
             commands::parse_song_import,
             commands::import_songs,
+            commands::get_song_schedule,
+            commands::set_song_schedule,
             commands::add_note,
             commands::update_note,
             commands::delete_note,

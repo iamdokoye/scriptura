@@ -34,3 +34,13 @@ pub fn parse_song_import(file_name: String, content: String) -> Result<Vec<Song>
 pub fn import_songs(songs: Vec<Song>, store: State<SongStore>) -> Result<ImportSummary> {
     store.db()?.import(&songs)
 }
+
+#[tauri::command]
+pub fn get_song_schedule(store: State<SongStore>) -> Result<Vec<SongSummary>> {
+    store.db()?.schedule()
+}
+
+#[tauri::command]
+pub fn set_song_schedule(ids: Vec<i64>, store: State<SongStore>) -> Result<()> {
+    store.db()?.set_schedule(&ids)
+}

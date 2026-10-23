@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SongSummary } from "./api";
+import { useSongsLive } from "./liveStore";
 import { useSongsStore } from "./songsStore";
 
 type SortKey = "title" | "author" | "copyright";
@@ -50,7 +51,7 @@ export default function SongList({ onImport }: { onImport: () => void }) {
     const i = rows.findIndex((r) => r.id === selectedId);
     if (e.key === "ArrowDown") { e.preventDefault(); selectRow(rows[Math.min(rows.length - 1, i + 1)].id); }
     else if (e.key === "ArrowUp") { e.preventDefault(); selectRow(rows[Math.max(0, i - 1)].id); }
-    else if (e.key === "Enter" && selectedId !== null) { e.preventDefault(); void openEditor(selectedId); }
+    else if (e.key === "Enter" && selectedId !== null) { e.preventDefault(); void useSongsLive.getState().addToSchedule(selectedId); }
   }
 
   const selected = rows.find((r) => r.id === selectedId) ?? null;
@@ -128,7 +129,7 @@ export default function SongList({ onImport }: { onImport: () => void }) {
                   : "No songs yet. Use + to add one, or the gear to import from a file or pasted text."}
               </p>
             )}
-            {rows.map((s) => <Row key={s.id} song={s} selected={s.id === selectedId} onSelect={() => selectRow(s.id)} onOpen={() => void openEditor(s.id)} />)}
+            {rows.map((s) => <Row key={s.id} song={s} selected={s.id === selectedId} onSelect={() => selectRow(s.id)} onOpen={() => void useSongsLive.getState().addToSchedule(s.id)} />)}
           </div>
         </div>
       </div>
@@ -156,6 +157,7 @@ function Row({ song, selected, onSelect, onOpen }: { song: SongSummary; selected
       aria-selected={selected}
       onClick={onSelect}
       onDoubleClick={onOpen}
+      title="Double-click to add to the schedule"
       className={`${GRID} cursor-default select-none ${selected ? "row-selected" : "hover:bg-surface-container-low"}`}
     >
       <span className="px-3 py-2 font-body-ui text-[13px] text-on-surface truncate flex items-center gap-1.5">
@@ -187,6 +189,9 @@ function Footer({ count, selected, onNew, onImport, onEdit, onFavourite, onDelet
     <div className="h-11 shrink-0 flex items-center gap-1 px-3 border-t border-outline-variant bg-surface-container-lowest/40">
       <button onClick={onNew} title="New song" aria-label="New song" className="ghost p-1.5 rounded-md text-on-surface">
         <span className="material-symbols-outlined text-[20px]">add</span>
+      </button>
+      <button onClick={onEdit} disabled={!selected} title="Edit song" aria-label="Edit song" className="ghost p-1.5 rounded-md text-on-surface disabled:opacity-30 disabled:pointer-events-none">
+        <span className="material-symbols-outlined text-[20px]">edit</span>
       </button>
       <div ref={wrap} className="relative">
         <button onClick={() => { setMenu((m) => !m); setConfirm(false); }} title="More" aria-label="More actions" aria-expanded={menu} className="ghost p-1.5 rounded-md text-secondary flex items-center">
