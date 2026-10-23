@@ -8,9 +8,6 @@ interface Props {
   intro?: string;
   /** Called once the code is accepted, so the caller can carry on (e.g. send a waiting question). */
   onSignedIn?: () => void;
-  /** Alternatives to an account, offered as small links. Omit them where they don't apply. */
-  onUseOwnServer?: () => void;
-  onUseClaudeKey?: () => void;
   /** Layout classes for the form wrapper. */
   className?: string;
 }
@@ -24,7 +21,7 @@ function messageOf(e: unknown): string {
 
 /** Email → one-time code. No password: the code is the whole sign-in. */
 export default function SignInForm({
-  intro = DEFAULT_INTRO, onSignedIn, onUseOwnServer, onUseClaudeKey, className = "flex-1 min-h-0 overflow-y-auto p-3 space-y-3",
+  intro = DEFAULT_INTRO, onSignedIn, className = "flex-1 min-h-0 overflow-y-auto p-3 space-y-3",
 }: Props) {
   const { sendCode, verifyCode } = useAccountStore();
   const [step, setStep] = useState<"email" | "code">("email");
@@ -124,19 +121,6 @@ export default function SignInForm({
           </>
         )}
       </div>
-
-      {(onUseClaudeKey || onUseOwnServer) && <div className="pt-2 flex flex-col items-start gap-1">
-        {onUseClaudeKey && (
-          <button type="button" onClick={onUseClaudeKey} className="font-body-ui text-[11px] text-on-surface-variant underline underline-offset-2 hover:text-primary">
-            Bring my own Claude API key instead
-          </button>
-        )}
-        {onUseOwnServer && (
-          <button type="button" onClick={onUseOwnServer} className="font-body-ui text-[11px] text-on-surface-variant underline underline-offset-2 hover:text-primary">
-            Use my own search server instead
-          </button>
-        )}
-      </div>}
     </form>
   );
 }

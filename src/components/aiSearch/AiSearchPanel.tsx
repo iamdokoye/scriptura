@@ -1,13 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppStore, type VerseRef } from "../../store/app";
-import { useAiSearchStore, activeSource, resumePendingQuestion } from "../../store/aiSearchStore";
+import { useAiSearchStore, resumePendingQuestion } from "../../store/aiSearchStore";
 import { useAccountStore } from "../../store/accountStore";
 import type { AiHit } from "../../lib/aiSearch";
 import { useVerseTexts } from "./useVerseTexts";
 import SignInForm from "../account/SignInForm";
-import CustomServerForm from "./CustomServerForm";
-import ClaudeSettingsForm from "./ClaudeSettingsForm";
-import ConnectionSettings from "./ConnectionSettings";
 
 const EXAMPLES = [
   "man and woman that lied in church and died for it",
@@ -24,30 +21,21 @@ interface Props {
   onClose: () => void;
 }
 
-/** Natural-language scripture search: describe a passage, click a result to preview it. */
+/** Natural-language scripture search powered by Supabase & Claude: describe a passage, click a result to preview it. */
 export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props) {
-  const { config, phase, query, hits, error, quota, ask, ensureReady, warmUp } = useAiSearchStore();
+  const { phase, query, hits, error, quota, ask, ensureReady } = useAiSearchStore();
   const accountStatus = useAccountStore((s) => s.status);
+  const email = useAccountStore((s) => s.email);
+  const openAccountModal = useAccountStore((s) => s.openModal);
   const primaryModule = useAppStore((s) => s.primaryModule);
-
   const [draft, setDraft] = useState(query);
-  const [view, setView] = useState<"main" | "settings">("main");
-  const [ownOption, setOwnOption] = useState<"server" | "claude" | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     ensureReady();
   }, [ensureReady]);
 
-  const source = activeSource();
-  const loaded = config !== null && accountStatus !== "unknown";
-  const needsConnection = loaded && !source;
-
-  useEffect(() => {
-    if (source === "account" || source === "custom") {
-      warmUp();
-    }
-  }, [source, warmUp]);
+  const isSignedIn = accountStatus === "signedIn";
 
   // `ask` from the search bar's "?" prefix changes the stored query; show it here.
   useEffect(() => {
@@ -55,10 +43,8 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
   }, [query]);
 
   useEffect(() => {
-    if (source && view === "main") {
-      inputRef.current?.focus();
-    }
-  }, [source, view]);
+    if (isSignedIn) inputRef.current?.focus();
+  }, [isSignedIn]);
 
   const { texts, missing, keyOf } = useVerseTexts(hits, primaryModule);
   const visible = hits.filter((h) => !missing.has(keyOf(h)));
@@ -74,19 +60,19 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
         <h2 className="flex-1 font-body-ui text-[13px] font-bold text-on-surface uppercase tracking-wide">
           Ask Scripture
         </h2>
-        {source && (
+        {isSignedIn && (
           <button
-            onClick={() => setView((v) => (v === "settings" ? "main" : "settings"))}
-            className="p-1 rounded-md ghost text-on-surface-variant hover:text-on-surface"
-            title="Account & connections"
-            aria-label="Account & connections"
+            onClick={openAccountModal}
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-metadata-mono ctl text-on-surface-variant max-w-[140px] truncate"
+            title={`Signed in as ${email}. Click to view account.`}
           >
-            <span className="material-symbols-outlined text-[16px]">settings</span>
+            <span className="material-symbols-outlined text-[14px]">account_circle</span>
+            <span className="truncate">{email?.split("@")[0]}</span>
           </button>
         )}
         <button
           onClick={onClose}
-          className="p-1 rounded-md ghost text-on-surface-variant hover:text-on-surface"
+          className="p-1 rounded-md ghost text-on-surface-variant"
           title="Close"
           aria-label="Close Ask Scripture"
         >
@@ -94,25 +80,20 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
         </button>
       </div>
 
-      {!loaded ? null : needsConnection ? (
-        ownOption === "server" ? (
-          <div className="flex-1 min-h-0 overflow-y-auto p-3.5">
-            <CustomServerForm canCancel onDone={() => setOwnOption(null)} />
+      {!isSignedIn ? (
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col justify-center">
+          <div className="space-y-3 p-4 rounded-2xl bg-surface-container-low border border-outline-variant">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[20px] text-primary">auto_awesome</span>
+              <h3 className="font-body-ui text-[13px] font-bold text-on-surface">Sign in to Ask Scripture</h3>
+            </div>
+            <SignInForm
+              intro="Sign in with your email to search scriptures using natural language. No password needed — we'll email you a one-time code."
+              onSignedIn={resumePendingQuestion}
+              className="space-y-3"
+            />
           </div>
-        ) : ownOption === "claude" ? (
-          <div className="flex-1 min-h-0 overflow-y-auto p-3.5">
-            <ClaudeSettingsForm canCancel onDone={() => setOwnOption(null)} />
-          </div>
-        ) : (
-          <SignInForm
-            intro="Sign in to find verses by describing them. We'll email you a code. No password needed, and new accounts are created automatically."
-            onSignedIn={resumePendingQuestion}
-            onUseOwnServer={() => setOwnOption("server")}
-            onUseClaudeKey={() => setOwnOption("claude")}
-          />
-        )
-      ) : view === "settings" ? (
-        <ConnectionSettings onDone={() => setView("main")} />
+        </div>
       ) : (
         <>
           <div className="shrink-0 p-2.5 border-b border-outline-variant">
@@ -144,45 +125,39 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
                 <span className="material-symbols-outlined text-[16px]">arrow_upward</span>
               </button>
             </div>
-
-            {source === "account" && quota && (
+            {quota ? (
               <p
                 className={`mt-1.5 px-1 font-body-ui text-[11px] ${
-                  quota.remaining === 0 ? "text-error font-medium" : "text-on-surface-variant"
+                  quota.remaining === 0 ? "text-error" : "text-on-surface-variant"
                 }`}
               >
                 {quota.remaining} of {quota.limit} searches left today
               </p>
-            )}
-            {source === "claude" && (
+            ) : (
               <p className="mt-1.5 px-1 font-body-ui text-[11px] text-on-surface-variant flex items-center gap-1">
                 <span className="material-symbols-outlined text-[12px] text-primary">auto_awesome</span>
-                Using Claude ({config?.claude_model || "claude-haiku-5-5"}) · KJV
-              </p>
-            )}
-            {source === "custom" && (
-              <p className="mt-1.5 px-1 font-body-ui text-[11px] text-on-surface-variant truncate">
-                Server: {config?.endpoint}
+                Powered by Claude · KJV
               </p>
             )}
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto p-1.5">
-            {phase === "idle" && (
-              <Examples
-                onPick={(t) => {
-                  setDraft(t);
-                  ask(t);
-                }}
-              />
-            )}
+            {phase === "idle" && <Examples onPick={(t) => { setDraft(t); ask(t); }} />}
             {phase === "loading" && <Loading />}
             {phase === "error" && (
-              <ErrorNote message={error ?? "Something went wrong"} onRetry={() => ask(query)} />
+              <ErrorNote
+                message={error ?? "Something went wrong"}
+                onRetry={quota?.remaining === 0 ? undefined : () => ask(query)}
+              />
             )}
             {phase === "done" && visible.length === 0 && (
-              <p className="px-3 py-6 font-body-ui text-[12px] text-on-surface-variant text-center">
+              <p className="px-3 py-4 font-body-ui text-[12px] text-on-surface-variant text-center">
                 No confident match found{primaryModule ? ` in ${primaryModule}` : ""}. Try describing it differently, or search the text with / in the search bar.
+              </p>
+            )}
+            {phase === "done" && visible.some((h) => h.confidence === "unverified") && (
+              <p className="mx-1 mb-1.5 px-2.5 py-1.5 rounded-lg border border-error/40 font-body-ui text-[11px] text-error" role="note">
+                The accuracy check couldn't run, so these results are unchecked. Read each one before using it.
               </p>
             )}
             {phase === "done" && visible.length > 0 && (
@@ -192,11 +167,7 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
                     key={keyOf(h)}
                     hit={h}
                     text={texts.get(keyOf(h))}
-                    selected={
-                      h.book === activeRef.book &&
-                      h.chapter === activeRef.chapter &&
-                      h.verse === activeRef.verse
-                    }
+                    selected={h.book === activeRef.book && h.chapter === activeRef.chapter && h.verse === activeRef.verse}
                     onPick={() => onNavigate({ book: h.book, chapter: h.chapter, verse: h.verse })}
                   />
                 ))}
@@ -209,47 +180,31 @@ export default function AiSearchPanel({ onNavigate, activeRef, onClose }: Props)
   );
 }
 
-function ResultRow({
-  hit,
-  text,
-  selected,
-  onPick,
-}: {
-  hit: AiHit;
-  text: string | undefined;
-  selected: boolean;
-  onPick: () => void;
-}) {
-  const refLabel = `${hit.book} ${hit.chapter}:${hit.verse}${
-    hit.endVerse && hit.endVerse !== hit.verse ? `-${hit.endVerse}` : ""
-  }`;
+const CONFIDENCE_LABEL: Record<string, { text: string; className: string; title: string }> = {
+  match: { text: "Match", className: "bg-primary/15 text-primary", title: "Checked against the passage text: this is what you described" },
+  related: { text: "Related", className: "bg-on-surface/10 text-on-surface-variant", title: "Checked: same subject, but not exactly what you described" },
+  unverified: { text: "Unchecked", className: "border border-error/50 text-error", title: "The accuracy check couldn't run. Read the verse before using it" },
+};
 
+function ResultRow({ hit, text, selected, onPick }: { hit: AiHit; text: string | undefined; selected: boolean; onPick: () => void }) {
+  const badge = hit.confidence ? CONFIDENCE_LABEL[hit.confidence] : undefined;
+  const refLabel = `${hit.book} ${hit.chapter}:${hit.verse}${hit.endVerse && hit.endVerse !== hit.verse ? `-${hit.endVerse}` : ""}`;
   return (
     <li>
       <button
         onClick={onPick}
-        className={`w-full text-left p-2 rounded-lg transition-colors flex flex-col gap-1 ${
+        className={`w-full text-left p-2 rounded-lg transition-colors flex flex-col gap-0.5 ${
           selected
             ? "bg-primary/15 border border-primary/40"
             : "hover:bg-surface-container-high border border-transparent"
         }`}
       >
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 min-w-0">
             <span className="font-metadata-mono text-[12px] font-bold text-primary">{refLabel}</span>
-            {hit.confidence === "match" && (
-              <span className="px-1 py-0.2 rounded text-[9px] font-metadata-mono font-semibold bg-primary/15 text-primary border border-primary/30 uppercase tracking-wider">
-                Match
-              </span>
-            )}
-            {hit.confidence === "related" && (
-              <span className="px-1 py-0.2 rounded text-[9px] font-metadata-mono font-semibold bg-surface-container-highest text-on-surface-variant border border-outline-variant uppercase tracking-wider">
-                Related
-              </span>
-            )}
-            {hit.confidence === "unverified" && (
-              <span className="px-1 py-0.2 rounded text-[9px] font-metadata-mono font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase tracking-wider">
-                Unchecked
+            {badge && (
+              <span className={`text-[10px] font-body-ui font-medium px-1.5 py-0.5 rounded ${badge.className}`} title={badge.title}>
+                {badge.text}
               </span>
             )}
           </div>
@@ -291,10 +246,8 @@ function Examples({ onPick }: { onPick: (text: string) => void }) {
 function Loading() {
   return (
     <div className="p-6 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
-      <span className="material-symbols-outlined animate-spin text-[24px] text-primary">
-        progress_activity
-      </span>
-      <p className="font-body-ui text-[12px]">Searching scripture…</p>
+      <span className="material-symbols-outlined animate-spin text-[24px] text-primary">progress_activity</span>
+      <p className="font-body-ui text-[12px]">Searching scripture with Claude…</p>
     </div>
   );
 }

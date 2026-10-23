@@ -6,7 +6,6 @@ import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import { checkForUpdate, downloadAndInstall, getVersion } from "../lib/updater";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { ACCENTS, isAccentId } from "../lib/accents";
-import ClaudeSettingsForm from "./aiSearch/ClaudeSettingsForm";
 import AccountPanel from "./account/AccountPanel";
 import { useAccountStore } from "../store/accountStore";
 
@@ -35,7 +34,7 @@ const DEFAULT_PREFS: Preferences = {
   default_lexicon_source: "ours",
   workspace: "study",
   split_long_verses: false,
-  accent: "indigo",
+  accent: "ink",
 };
 
 const FONTS: { id: DisplayPrefs["fontFamily"]; label: string }[] = [
@@ -124,7 +123,6 @@ export default function Settings() {
     { id: "appearance", icon: "palette", label: "Appearance", show: true },
     { id: "study", icon: "school", label: "Study Tools", show: true },
     { id: "presentation", icon: "slideshow", label: "Presentation", show: true },
-    { id: "ai-search", icon: "auto_awesome", label: "AI Scripture Search", show: true },
     { id: "sync", icon: "sync", label: "Sync & Backup", show: true },
     { id: "help", icon: "help", label: "Help", show: true },
     { id: "about", icon: "info", label: "About", show: true },
@@ -432,13 +430,6 @@ export default function Settings() {
 
           {/* ── Account ──────────────────────────────────────────────── */}
           <Pane id="account"><AccountPanel /></Pane>
-
-          {/* ── AI Scripture Search ──────────────────────────────────── */}
-          <Pane id="ai-search">
-            <div className="px-6 py-4">
-              <ClaudeSettingsForm />
-            </div>
-          </Pane>
 
           {/* ── Sync & Backup ────────────────────────────────────────── */}
           <Pane id="sync">

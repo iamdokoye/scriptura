@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { BIBLE_BOOKS, normalizeBookName } from "../data/books";
 import type { VerseRef } from "../store/app";
 import { getSupabase } from "./supabase";
@@ -16,14 +15,6 @@ export interface AiHit extends VerseRef {
   endVerse?: number;
 }
 
-export interface AiSearchStatus {
-  configured: boolean;
-  endpoint?: string;
-  key_id?: string;
-  claude_configured: boolean;
-  claude_model: string;
-}
-
 /** What a search through a Scriptura account returns besides the verses. */
 export interface Quota {
   remaining: number;
@@ -39,7 +30,7 @@ export class AiSearchError extends Error {
 
 /**
  * Searches through the signed-in account's gateway (the Supabase Edge Function), which
- * enforces daily plan quotas and verifies passages with Claude Haiku 5.5.
+ * enforces daily plan quotas and uses Claude Haiku 5.5 to find and verify KJV passages.
  */
 export async function searchViaAccount(query: string, topK = 10): Promise<{ hits: unknown; quota?: Quota }> {
   const supabase = getSupabase();
@@ -63,7 +54,7 @@ export async function searchViaAccount(query: string, topK = 10): Promise<{ hits
           : undefined;
 
       if (ctx.status === 401) {
-        throw new AiSearchError("Your session has expired. Please sign in again.");
+        throw new AiSearchError("Please sign in to use Ask Scripture.");
       }
       if (ctx.status === 429) {
         const msg =
@@ -93,27 +84,6 @@ export async function searchViaAccount(query: string, topK = 10): Promise<{ hits
 
   return { hits: body.results, quota };
 }
-
-/** Self-hosted server: the Rust side holds the URL and token and makes the request. */
-export const aiSearchApi = {
-  status: () => invoke<AiSearchStatus>("ai_search_status"),
-  configure: (endpoint: string, keyId: string, keySecret: string) =>
-    invoke<AiSearchStatus>("ai_search_configure", { endpoint, keyId, keySecret }),
-  clear: () => invoke<AiSearchStatus>("ai_search_clear"),
-  /** An empty query is a warm-up ping that returns no hits. */
-  query: (query: string, topK = 10) =>
-    invoke<AiHit[]>("ai_search_query", { query, topK }),
-};
-
-/** Direct Anthropic key: user supplies their own Anthropic API key stored locally in Rust. */
-export const claudeApi = {
-  status: () => invoke<AiSearchStatus>("ai_search_status"),
-  save: (apiKey: string, model?: string) =>
-    invoke<AiSearchStatus>("claude_api_key_save", { apiKey, model: model ?? null }),
-  clear: () => invoke<AiSearchStatus>("claude_api_key_clear"),
-  query: (query: string) =>
-    invoke<AiHit[]>("claude_search_query", { query }),
-};
 
 const BOOK_SET = new Set(BIBLE_BOOKS);
 
@@ -162,7 +132,7 @@ export function sanitizeHits(raw: unknown): AiHit[] {
   return hits;
 }
 
-/** Tauri rejects with the error string; anything else gets a generic message. */
+/** Error message helper. */
 export function errorMessage(e: unknown): string {
   if (typeof e === "string" && e) return e;
   if (e instanceof Error && e.message) return e.message;

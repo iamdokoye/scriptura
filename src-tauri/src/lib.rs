@@ -37,7 +37,6 @@ pub fn run() {
             app.manage(commands::ChapterCache::new());
             app.manage(sword::file_cache::FileCache::new());
             app.manage(commands::PresentationState(std::sync::Mutex::new(None)));
-            app.manage(commands::AiSearchState::load(&data_dir));
 
             // Background startup thread: rebuild stale FTS indexes, then pre-warm
             // the chapter cache with the saved reading position so first render is instant.
@@ -170,14 +169,6 @@ pub fn run() {
             commands::set_service_order,
             commands::legacy_import_done,
             commands::import_legacy_local_storage,
-            commands::ai_search_status,
-            commands::ai_search_configure,
-            commands::ai_search_clear,
-            commands::ai_search_query,
-            commands::claude_api_key_status,
-            commands::claude_api_key_save,
-            commands::claude_api_key_clear,
-            commands::claude_search_query,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

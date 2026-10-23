@@ -9,7 +9,6 @@
 //! keep working exactly as before from lib.rs's perspective — the split is purely
 //! internal organization, not a change to the command names or wiring.
 
-mod ai_search;
 mod bible;
 mod bookmarks;
 mod legacy_import;
@@ -29,7 +28,6 @@ mod service_order;
 // A named `pub use module::{foo};` re-exports only `foo` itself and silently
 // leaves those hidden items unreachable through `commands::`, which fails to
 // compile with an opaque "could not find __cmd__foo in commands" error.
-pub use ai_search::*;
 pub use bible::*;
 pub use bookmarks::*;
 pub use legacy_import::*;
