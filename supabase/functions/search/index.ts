@@ -74,13 +74,14 @@ export const BIBLE_BOOKS = [
 ];
 
 const NOMINATE_SYSTEM =
-  "You help a Bible search tool. The user describes something in the Bible in their own words: " +
-  "a story, a person, a teaching, a quotation, a feeling. Reply with JSON only.\n" +
-  "- passages: up to 12 passages (King James Version numbering) the description most likely refers to, " +
-  "most likely first. Use exactly these book names: " + BIBLE_BOOKS.join(", ") + ". " +
-  "A passage is one chapter with verse_start and verse_end. Give the whole story or teaching, " +
-  "not a single verse. If you are not confident which passage is meant, return fewer, or none. " +
-  "Never guess.";
+  "You are a King James Version (KJV) Bible expert helping a scripture search tool. " +
+  "The user describes something in the Bible in their own words: a story, a person, a teaching, a verse quotation, or a topic. " +
+  "Reply with JSON only.\n" +
+  "- passages: up to 10 passages (King James Version numbering) most relevant to the description, most relevant first. " +
+  "Use canonical book names: " + BIBLE_BOOKS.join(", ") + ".\n" +
+  "- verse_start and verse_end: for a single verse set verse_end equal to verse_start; for a passage set the range (max 40 verses).\n" +
+  "- confidence: 'match' if the passage specifically contains or describes what was asked; 'related' if it is the same theme.\n" +
+  "Never guess. If you are not confident, return fewer passages.";
 
 const NOMINATE_SCHEMA = {
   type: "object",
@@ -94,14 +95,15 @@ const NOMINATE_SCHEMA = {
           chapter: { type: "integer" },
           verse_start: { type: "integer" },
           verse_end: { type: "integer" },
+          confidence: { type: "string" },
         },
         required: ["book", "chapter", "verse_start", "verse_end"],
-        additionalProperties: false,
+        additionalProperties: true,
       },
     },
   },
   required: ["passages"],
-  additionalProperties: false,
+  additionalProperties: true,
 };
 
 const VERIFY_SYSTEM =
@@ -147,6 +149,30 @@ function buildVerifyPrompt(query: string, candidates: ValidatedPassage[]): strin
     lines.push("");
   });
   return lines.join("\n");
+}
+
+function parseJsonSafe(text: string): any {
+  if (!text) return null;
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const cleaned = trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    try {
+      return JSON.parse(cleaned);
+    } catch {
+      const firstBrace = cleaned.indexOf("{");
+      const lastBrace = cleaned.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        try {
+          return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    }
+  }
 }
 
 const deps: Deps = {
@@ -303,7 +329,7 @@ const deps: Deps = {
     }
 
     const text = resp.content.find((b: any) => b.type === "text")?.text ?? "";
-    const parsed = JSON.parse(text);
+    const parsed = parseJsonSafe(text);
     const passages = Array.isArray(parsed?.passages) ? (parsed.passages as NominatedPassage[]) : [];
 
     return {
@@ -340,12 +366,7 @@ const deps: Deps = {
     }
 
     const text = resp.content.find((b: any) => b.type === "text")?.text ?? "";
-    let data: any = null;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = null;
-    }
+    const data: any = parseJsonSafe(text);
 
     const verdicts = new Map<number, "match" | "related" | "no">();
     if (Array.isArray(data?.verdicts)) {

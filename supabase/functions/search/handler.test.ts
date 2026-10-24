@@ -341,6 +341,38 @@ describe("Gateway handler unit tests", () => {
     assert.equal(validated[1].verse_end, 40);
   });
 
+  test("Unseeded database gracefully falls back and normalizes book names like Psalm -> Psalms", async () => {
+    const { deps } = createMockDeps({
+      async lookupChapterSpans() {
+        return new Map(); // database has 0 rows in kjv_verses
+      },
+      async fetchPassageTexts() {
+        return new Map(); // database has 0 texts in kjv_verses
+      },
+      async nominate() {
+        return {
+          passages: [
+            { book: "Psalm", chapter: 1, verse_start: 1, verse_end: 6, confidence: "match" },
+          ],
+          inputTokens: 100,
+          outputTokens: 20,
+        };
+      },
+    });
+
+    const req = makePostRequest({ query: "blessed is the man that walketh" }, "Bearer valid-token");
+    const res = await handle(req, deps);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.ok(Array.isArray(data.results));
+    assert.equal(data.results.length, 1);
+    assert.equal(data.results[0].book, "Psalms"); // normalized
+    assert.equal(data.results[0].chapter, 1);
+    assert.equal(data.results[0].verse, 1);
+    assert.equal(data.results[0].end_verse, 6);
+    assert.equal(data.results[0].confidence, "match");
+  });
+
   test("Optional Modal backend forwards to Modal when SEARCH_BACKEND=modal", async () => {
     let modalCalled = false;
     const { deps } = createMockDeps({

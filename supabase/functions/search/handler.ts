@@ -120,8 +120,68 @@ export const LIMIT_MESSAGES: Record<string, string> = {
 
 export const VERDICTS = new Set(["match", "related", "no"]);
 
+export const BIBLE_BOOKS = [
+  "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
+  "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel",
+  "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles",
+  "Ezra", "Nehemiah", "Esther", "Job", "Psalms", "Proverbs",
+  "Ecclesiastes", "Song of Solomon", "Isaiah", "Jeremiah",
+  "Lamentations", "Ezekiel", "Daniel", "Hosea", "Joel", "Amos",
+  "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah",
+  "Haggai", "Zechariah", "Malachi",
+  "Matthew", "Mark", "Luke", "John", "Acts", "Romans",
+  "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians",
+  "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians",
+  "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews",
+  "James", "1 Peter", "2 Peter", "1 John", "2 John", "3 John",
+  "Jude", "Revelation",
+] as const;
+
+export const BIBLE_CHAPTER_COUNTS: Record<string, number> = {
+  Genesis: 50, Exodus: 40, Leviticus: 27, Numbers: 36, Deuteronomy: 34,
+  Joshua: 24, Judges: 21, Ruth: 4, "1 Samuel": 31, "2 Samuel": 24,
+  "1 Kings": 22, "2 Kings": 25, "1 Chronicles": 29, "2 Chronicles": 36,
+  Ezra: 10, Nehemiah: 13, Esther: 10, Job: 42, Psalms: 150, Proverbs: 31,
+  Ecclesiastes: 12, "Song of Solomon": 8, Isaiah: 66, Jeremiah: 52,
+  Lamentations: 5, Ezekiel: 48, Daniel: 12, Hosea: 14, Joel: 3, Amos: 9,
+  Obadiah: 1, Jonah: 4, Micah: 7, Nahum: 3, Habakkuk: 3, Zephaniah: 3,
+  Haggai: 2, Zechariah: 14, Malachi: 4,
+  Matthew: 28, Mark: 16, Luke: 24, John: 21, Acts: 28, Romans: 16,
+  "1 Corinthians": 16, "2 Corinthians": 13, Galatians: 6, Ephesians: 6,
+  Philippians: 4, Colossians: 4, "1 Thessalonians": 5, "2 Thessalonians": 3,
+  "1 Timothy": 6, "2 Timothy": 4, Titus: 3, Philemon: 1, Hebrews: 13,
+  James: 5, "1 Peter": 5, "2 Peter": 3, "1 John": 5, "2 John": 1, "3 John": 1,
+  Jude: 1, Revelation: 22,
+};
+
+const BOOK_ALIAS_MAP: Record<string, string> = {
+  psalm: "Psalms",
+  psalms: "Psalms",
+  songofsongs: "Song of Solomon",
+  songofsolomon: "Song of Solomon",
+  canticles: "Song of Solomon",
+  revelations: "Revelation",
+  revelation: "Revelation",
+  actsoftheapostles: "Acts",
+};
+
+export function normalizeBook(raw: string): string | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  const lower = s.toLowerCase();
+  const compact = lower.replace(/[^a-z0-9]/g, "");
+  if (BOOK_ALIAS_MAP[compact]) return BOOK_ALIAS_MAP[compact];
+  for (const b of BIBLE_BOOKS) {
+    if (b.toLowerCase() === lower || b.toLowerCase().replace(/[^a-z0-9]/g, "") === compact) {
+      return b;
+    }
+  }
+  return null;
+}
+
 /**
- * Validates nominated passages against real chapter spans from kjv_verses.
+ * Validates nominated passages against real chapter spans or canonical KJV books.
+ * - Normalizes book names (e.g. "Psalm" -> "Psalms").
  * - Drops unknown books/chapters.
  * - Swaps reversed verse numbers.
  * - Clamps verse numbers into the real chapter.
@@ -131,45 +191,65 @@ export const VERDICTS = new Set(["match", "related", "no"]);
 export function validateNominatedPassages(
   nominations: NominatedPassage[],
   spans: Map<string, ChapterSpan>
-): Array<{ book: string; chapter: number; verse_start: number; verse_end: number }> {
-  const result: Array<{ book: string; chapter: number; verse_start: number; verse_end: number }> = [];
+): Array<{ book: string; chapter: number; verse_start: number; verse_end: number; confidence?: Confidence }> {
+  const result: Array<{ book: string; chapter: number; verse_start: number; verse_end: number; confidence?: Confidence }> = [];
   const seen = new Set<string>();
+  const dbHasSpans = spans.size > 0;
 
   for (const n of nominations) {
     if (!n || typeof n !== "object") continue;
-    const { book, chapter, verse_start, verse_end } = n;
-    if (typeof book !== "string" || !Number.isInteger(chapter) || chapter < 1) continue;
-    if (!Number.isInteger(verse_start) || !Number.isInteger(verse_end)) continue;
+    const { book: rawBook, chapter, verse_start, verse_end, confidence } = n as any;
+    if (typeof rawBook !== "string" || !Number.isInteger(chapter) || chapter < 1) continue;
+    if (!Number.isInteger(verse_start)) continue;
 
-    const spanKey = `${book}:${chapter}`;
+    const normBook = normalizeBook(rawBook);
+    if (!normBook) continue;
+
+    const maxChapters = BIBLE_CHAPTER_COUNTS[normBook];
+    if (!maxChapters || chapter > maxChapters) continue;
+
+    const spanKey = `${normBook}:${chapter}`;
     const span = spans.get(spanKey);
-    if (!span) {
-      // Unknown book or chapter does not exist in KJV
+
+    if (dbHasSpans && !span) {
+      // Database is populated and this chapter does not exist in KJV
       continue;
     }
 
     let start = verse_start;
-    let end = verse_end;
+    let end = Number.isInteger(verse_end) ? verse_end : verse_start;
     if (end < start) {
       const tmp = start;
       start = end;
       end = tmp;
     }
 
-    // Clamp into the real chapter
-    start = Math.max(span.minVerse, Math.min(span.maxVerse, start));
-    end = Math.max(span.minVerse, Math.min(span.maxVerse, end));
+    if (span) {
+      // Clamp into the real chapter from database
+      start = Math.max(span.minVerse, Math.min(span.maxVerse, start));
+      end = Math.max(span.minVerse, Math.min(span.maxVerse, end));
+    } else {
+      // Fallback bounds when database is unseeded
+      start = Math.max(1, Math.min(176, start));
+      end = Math.max(start, Math.min(176, end));
+    }
 
     // Cap at MAX_PASSAGE_VERSES (40)
     if (end - start + 1 > MAX_PASSAGE_VERSES) {
       end = start + MAX_PASSAGE_VERSES - 1;
     }
 
-    const passageKey = `${book}:${chapter}:${start}:${end}`;
+    const passageKey = `${normBook}:${chapter}:${start}:${end}`;
     if (seen.has(passageKey)) continue;
     seen.add(passageKey);
 
-    result.push({ book, chapter, verse_start: start, verse_end: end });
+    result.push({
+      book: normBook,
+      chapter,
+      verse_start: start,
+      verse_end: end,
+      confidence: confidence === "match" || confidence === "related" ? confidence : undefined,
+    });
     if (result.length >= MAX_NOMINATIONS) break;
   }
 
@@ -402,10 +482,15 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     return json(200, { results: [], limit: deps.userLimit, remaining: usage.remaining });
   }
 
-  // ── 3. Validate against real KJV database ──────────────────────────────────
+  // ── 3. Validate against real KJV database or canon ────────────────────────
   const t1 = Date.now();
   const candidatePairs = nomination.passages.map((p) => ({ book: p.book, chapter: p.chapter }));
-  const chapterSpans = await deps.lookupChapterSpans(candidatePairs);
+  let chapterSpans = new Map<string, ChapterSpan>();
+  try {
+    chapterSpans = await deps.lookupChapterSpans(candidatePairs);
+  } catch {
+    // Fail soft if DB span lookup has an issue
+  }
   const validatedSpans = validateNominatedPassages(nomination.passages, chapterSpans);
 
   if (validatedSpans.length === 0) {
@@ -423,7 +508,12 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
   }
 
   // ── 4. Read real text from database ───────────────────────────────────────
-  const textMap = await deps.fetchPassageTexts(validatedSpans);
+  let textMap = new Map<string, string>();
+  try {
+    textMap = await deps.fetchPassageTexts(validatedSpans);
+  } catch {
+    // Fail soft if DB text lookup has an issue
+  }
   dbLatency = Date.now() - t1;
 
   const validatedPassages: ValidatedPassage[] = [];
@@ -438,66 +528,86 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     }
   }
 
-  if (validatedPassages.length === 0) {
-    if (totalInputTokens > 0 || totalOutputTokens > 0) {
-      await deps.recordUsage(userId, totalInputTokens, totalOutputTokens);
+  // ── 5. Verify if texts are available in database ─────────────────────────
+  if (validatedPassages.length > 0) {
+    const t2 = Date.now();
+    let verification: VerificationResult;
+    try {
+      verification = await deps.verify(query, validatedPassages, AbortSignal.timeout(VERIFY_TIMEOUT_MS));
+      verifyLatency = Date.now() - t2;
+      totalInputTokens += verification.inputTokens;
+      totalOutputTokens += verification.outputTokens;
+    } catch {
+      // Fail soft: never fail the search if verify fails or times out; mark as unverified
+      verifyLatency = Date.now() - t2;
+      verification = { verdicts: null, inputTokens: 0, outputTokens: 0 };
     }
+
+    // ── 6. Apply verdicts and form results ───────────────────────────────────
+    const results = applyVerdicts(validatedPassages, verification.verdicts, topK);
+
+    if (totalInputTokens > 0 || totalOutputTokens > 0) {
+      try {
+        await deps.recordUsage(userId, totalInputTokens, totalOutputTokens);
+      } catch {}
+    }
+
     deps.log?.({
-      outcome: "no_text_found",
+      outcome: verification.verdicts ? (results.length > 0 ? "success" : "all_rejected") : "unverified",
+      results_count: results.length,
+      matches_count: results.filter((r) => r.confidence === "match").length,
+      related_count: results.filter((r) => r.confidence === "related").length,
+      latency_ms: {
+        total: Date.now() - startTime,
+        nominate: nominateLatency,
+        db_validate: dbLatency,
+        verify: verifyLatency,
+      },
+      tokens: {
+        input: totalInputTokens,
+        output: totalOutputTokens,
+      },
       user_id: userId,
-      latency_ms: { total: Date.now() - startTime, nominate: nominateLatency, db_validate: dbLatency },
-      tokens: { input: totalInputTokens, output: totalOutputTokens },
     });
-    return json(200, { results: [], limit: deps.userLimit, remaining: usage.remaining });
+
+    return json(200, {
+      results,
+      limit: deps.userLimit,
+      remaining: usage.remaining,
+    });
   }
 
-  // ── 5. Verify (Claude Haiku 5.5) ───────────────────────────────────────────
-  const t2 = Date.now();
-  let verification: VerificationResult;
-  try {
-    verification = await deps.verify(query, validatedPassages, AbortSignal.timeout(VERIFY_TIMEOUT_MS));
-    verifyLatency = Date.now() - t2;
-    totalInputTokens += verification.inputTokens;
-    totalOutputTokens += verification.outputTokens;
-  } catch {
-    // Fail soft: never fail the search if verify fails or times out; mark as unverified
-    verifyLatency = Date.now() - t2;
-    verification = { verdicts: null, inputTokens: 0, outputTokens: 0 };
-  }
+  // ── 6. Fallback when database has no text (unseeded kjv_verses) ───────────
+  // Form results directly from validated nominations so user gets their passages.
+  const fallbackResults: Hit[] = validatedSpans.slice(0, topK).map((p, rank) => ({
+    book: p.book,
+    chapter: p.chapter,
+    verse: p.verse_start,
+    end_verse: p.verse_end > p.verse_start ? p.verse_end : undefined,
+    score: Math.round((1 - rank * (0.8 / Math.max(topK, 1))) * 1000) / 1000,
+    confidence: (p.confidence as Confidence) ?? (rank === 0 ? "match" : "related"),
+  }));
 
-  // ── 6. Apply verdicts and form results ─────────────────────────────────────
-  const results = applyVerdicts(validatedPassages, verification.verdicts, topK);
-
-  // Record total token usage for the request
   if (totalInputTokens > 0 || totalOutputTokens > 0) {
     try {
       await deps.recordUsage(userId, totalInputTokens, totalOutputTokens);
-    } catch {
-      // Don't fail the response if usage recording had a hiccup
-    }
+    } catch {}
   }
 
-  // Structured logging (Never logs question text, model output, or secrets!)
   deps.log?.({
-    outcome: verification.verdicts ? (results.length > 0 ? "success" : "all_rejected") : "unverified",
-    results_count: results.length,
-    matches_count: results.filter((r) => r.confidence === "match").length,
-    related_count: results.filter((r) => r.confidence === "related").length,
+    outcome: "fallback_unseeded",
+    results_count: fallbackResults.length,
     latency_ms: {
       total: Date.now() - startTime,
       nominate: nominateLatency,
       db_validate: dbLatency,
-      verify: verifyLatency,
     },
-    tokens: {
-      input: totalInputTokens,
-      output: totalOutputTokens,
-    },
+    tokens: { input: totalInputTokens, output: totalOutputTokens },
     user_id: userId,
   });
 
   return json(200, {
-    results,
+    results: fallbackResults,
     limit: deps.userLimit,
     remaining: usage.remaining,
   });
