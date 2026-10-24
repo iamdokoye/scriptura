@@ -98,12 +98,12 @@ const NOMINATE_SCHEMA = {
           confidence: { type: "string" },
         },
         required: ["book", "chapter", "verse_start", "verse_end"],
-        additionalProperties: true,
+        additionalProperties: false,
       },
     },
   },
   required: ["passages"],
-  additionalProperties: true,
+  additionalProperties: false,
 };
 
 const VERIFY_SYSTEM =
@@ -173,6 +173,12 @@ function parseJsonSafe(text: string): any {
       return null;
     }
   }
+}
+
+/** Error details safe to log: never includes the user's query or any key. */
+function describeError(e: unknown): string {
+  const err = e as { status?: number; name?: string; message?: string };
+  return JSON.stringify({ name: err?.name, status: err?.status, message: err?.message });
 }
 
 const deps: Deps = {
@@ -304,7 +310,8 @@ const deps: Deps = {
       return await client.messages.create(
         {
           model: nominateModel,
-          max_tokens: 2000,
+          max_tokens: 4000,
+          thinking: { type: "disabled" },
           output_config: {
             effort: "low",
             format: { type: "json_schema", schema: NOMINATE_SCHEMA },
@@ -319,12 +326,19 @@ const deps: Deps = {
     let resp: Anthropic.Message;
     try {
       resp = await runCall();
-    } catch {
+    } catch (e) {
+      console.error("[search] nominate attempt 1 failed", describeError(e));
       // At most one retry on nominate
-      resp = await runCall();
+      try {
+        resp = await runCall();
+      } catch (e2) {
+        console.error("[search] nominate attempt 2 failed", describeError(e2));
+        throw e2;
+      }
     }
 
     if (resp.stop_reason === "refusal" || resp.stop_reason === "max_tokens") {
+      console.error("[search] nominate stop_reason", resp.stop_reason, JSON.stringify(resp.usage));
       throw new Error(`Nominate stopped unexpectedly: ${resp.stop_reason}`);
     }
 
@@ -346,7 +360,8 @@ const deps: Deps = {
     const resp = await client.messages.create(
       {
         model: verifyModel,
-        max_tokens: 4000,
+        max_tokens: 8000,
+        thinking: { type: "disabled" },
         output_config: {
           effort: "medium",
           format: { type: "json_schema", schema: VERIFY_SCHEMA },
@@ -358,6 +373,7 @@ const deps: Deps = {
     );
 
     if (resp.stop_reason === "refusal" || resp.stop_reason === "max_tokens") {
+      console.error("[search] verify stop_reason", resp.stop_reason, JSON.stringify(resp.usage));
       return {
         verdicts: null,
         inputTokens: resp.usage?.input_tokens ?? 0,

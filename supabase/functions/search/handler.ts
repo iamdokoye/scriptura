@@ -458,10 +458,11 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     nominateLatency = Date.now() - t0;
     totalInputTokens += nomination.inputTokens;
     totalOutputTokens += nomination.outputTokens;
-  } catch {
+  } catch (e) {
     await deps.refund(userId);
     deps.log?.({
       outcome: "nominate_failed",
+      error: (e as Error)?.message ?? String(e),
       user_id: userId,
       latency_ms: { total: Date.now() - startTime, nominate: Date.now() - t0 },
     });
@@ -532,12 +533,14 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
   if (validatedPassages.length > 0) {
     const t2 = Date.now();
     let verification: VerificationResult;
+    let verifyError: string | undefined;
     try {
       verification = await deps.verify(query, validatedPassages, AbortSignal.timeout(VERIFY_TIMEOUT_MS));
       verifyLatency = Date.now() - t2;
       totalInputTokens += verification.inputTokens;
       totalOutputTokens += verification.outputTokens;
-    } catch {
+    } catch (e) {
+      verifyError = (e as Error)?.message ?? String(e);
       // Fail soft: never fail the search if verify fails or times out; mark as unverified
       verifyLatency = Date.now() - t2;
       verification = { verdicts: null, inputTokens: 0, outputTokens: 0 };
@@ -554,6 +557,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
 
     deps.log?.({
       outcome: verification.verdicts ? (results.length > 0 ? "success" : "all_rejected") : "unverified",
+      verify_error: verifyError,
       results_count: results.length,
       matches_count: results.filter((r) => r.confidence === "match").length,
       related_count: results.filter((r) => r.confidence === "related").length,
