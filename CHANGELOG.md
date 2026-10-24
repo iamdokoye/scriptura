@@ -2,6 +2,11 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
+## [0.1.39] - 2026-10-24
+
+### Changed
+- **Ask Scripture is more accurate and faster.** Searches now use Claude Sonnet 5.5, and every result is checked against the real King James text before it is shown, so the Match and Related labels reflect an actual check. Loosely worded descriptions now return their best candidates instead of nothing, and searches typically finish in about 3 to 5 seconds.
+
 ## [0.1.38] - 2026-10-24
 
 ### Fixed
