@@ -450,7 +450,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
   let dbLatency = 0;
   let verifyLatency = 0;
 
-  // ── 2. Nominate (Claude Haiku 5.5) ─────────────────────────────────────────
+  // ── 2. Nominate (Claude) ─────────────────────────────────────────
   const t0 = Date.now();
   let nomination: NominationResult;
   try {
@@ -578,12 +578,17 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
       results,
       limit: deps.userLimit,
       remaining: usage.remaining,
+      timing_ms: { nominate: nominateLatency, db: dbLatency, verify: verifyLatency, total: Date.now() - startTime },
     });
   }
 
   // ── 6. Fallback when database has no text (unseeded kjv_verses) ───────────
   // Form results directly from validated nominations so user gets their passages.
-  const fallbackResults: Hit[] = validatedSpans.slice(0, topK).map((p, rank) => ({
+  const byConfidence = (p: { confidence?: string }) => (p.confidence === "related" ? 1 : 0);
+  const fallbackResults: Hit[] = [...validatedSpans]
+    .sort((a, b) => byConfidence(a) - byConfidence(b)) // stable: matches first, nomination order kept
+    .slice(0, topK)
+    .map((p, rank) => ({
     book: p.book,
     chapter: p.chapter,
     verse: p.verse_start,
