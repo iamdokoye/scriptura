@@ -2,6 +2,11 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
+## [0.1.38] - 2026-10-24
+
+### Fixed
+- **Ask Scripture search:** Searches through your account were failing with "The search service had a problem" because the gateway sent Claude a request it rejected. Searches work again, and the gateway now records the reason when a search fails.
+
 ## [0.1.37] - 2026-10-24
 
 ### Added
