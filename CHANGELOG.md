@@ -2,6 +2,15 @@
 
 All notable changes to Scriptura are listed here, newest first.
 
+## [0.1.37] - 2026-10-24
+
+### Added
+- **Song Editor Improvements:** Smarter lyric paste parsing with automatic section header detection, editor keyboard shortcuts, and live section indicator colours in presentation runner.
+
+### Fixed
+- **Ask Scripture Search Gateway:** Added canonical book normalization (e.g. "Psalm" -> "Psalms") and canonical KJV validation fallback so queries return accurate scripture passages consistently.
+- **Ask Scripture Modal Layout:** Aligned the Ask Scripture panel with the verse pane and removed the viewport jump behavior.
+
 ## [0.1.36] - 2026-10-23
 
 ### Added
